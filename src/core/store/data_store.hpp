@@ -52,11 +52,6 @@ private:
   std::map<Snowflake, User> users_;
 
   ObserverList<StoreObserver> observers_;
-
-  // Notification helpers (call WITHOUT holding the lock)
-  void notify_guilds_updated();
-  void notify_channels_updated(Snowflake guild_id);
-  void notify_messages_updated(Snowflake channel_id);
 };
 
 } // namespace kind

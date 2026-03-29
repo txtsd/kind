@@ -155,6 +155,30 @@ TEST(DataStoreTier2, AddMessagesBeforeInsertsAtFront) {
   EXPECT_EQ(result[2].content, "newest");
 }
 
+TEST(DataStoreTier2, AddMessagesBeforeAtCapacityRetainsHistory) {
+  kind::DataStore store(3);
+  store.add_message(make_message(4, 10, "d"));
+  store.add_message(make_message(5, 10, "e"));
+  store.add_message(make_message(6, 10, "f"));
+
+  // Channel is now at capacity (3 messages). Load history at the front.
+  std::vector<kind::Message> history;
+  history.push_back(make_message(1, 10, "a"));
+  history.push_back(make_message(2, 10, "b"));
+  history.push_back(make_message(3, 10, "c"));
+  store.add_messages_before(10, std::move(history));
+
+  // History should not be trimmed; all 6 messages are available.
+  auto result = store.messages(10);
+  ASSERT_EQ(result.size(), 6u);
+  EXPECT_EQ(result[0].content, "a");
+  EXPECT_EQ(result[1].content, "b");
+  EXPECT_EQ(result[2].content, "c");
+  EXPECT_EQ(result[3].content, "d");
+  EXPECT_EQ(result[4].content, "e");
+  EXPECT_EQ(result[5].content, "f");
+}
+
 TEST(DataStoreTier2, UpdateMessageReplacesCorrectOne) {
   kind::DataStore store;
   store.add_message(make_message(1, 10, "original"));
@@ -327,7 +351,7 @@ TEST(DataStoreTier3, ObserverSelfRemovesDuringNotification) {
   store.upsert_guild(make_guild(2));
 }
 
-TEST(DataStoreTier3, DuplicateMessageIdUsesUpdateSemantics) {
+TEST(DataStoreTier3, DuplicateMessageIdAppendsWithoutDedup) {
   kind::DataStore store;
   store.add_message(make_message(1, 10, "original"));
   store.add_message(make_message(1, 10, "duplicate"));

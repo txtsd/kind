@@ -65,15 +65,25 @@ void DataStore::set_current_user(User user) {
 
 void DataStore::upsert_guild(Guild guild) {
   Snowflake guild_id = guild.id;
+  std::vector<Guild> guild_snapshot;
   {
     std::unique_lock lock(mutex_);
-    guild_channels_[guild_id] = guild.channels;
+    if (!guild.channels.empty()) {
+      guild_channels_[guild_id] = std::move(guild.channels);
+    }
     guilds_[guild_id] = std::move(guild);
+    if (!observers_.empty()) {
+      guild_snapshot.reserve(guilds_.size());
+      for (const auto& [id, g] : guilds_) {
+        guild_snapshot.push_back(g);
+      }
+    }
   }
-  notify_guilds_updated();
+  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
 void DataStore::remove_guild(Snowflake id) {
+  std::vector<Guild> guild_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto it = guild_channels_.find(id);
@@ -84,12 +94,19 @@ void DataStore::remove_guild(Snowflake id) {
       guild_channels_.erase(it);
     }
     guilds_.erase(id);
+    if (!observers_.empty()) {
+      guild_snapshot.reserve(guilds_.size());
+      for (const auto& [gid, g] : guilds_) {
+        guild_snapshot.push_back(g);
+      }
+    }
   }
-  notify_guilds_updated();
+  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
 void DataStore::upsert_channel(Channel channel) {
   Snowflake guild_id = channel.guild_id;
+  std::vector<Channel> channel_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto& channels = guild_channels_[guild_id];
@@ -100,12 +117,17 @@ void DataStore::upsert_channel(Channel channel) {
     } else {
       channels.push_back(std::move(channel));
     }
+    if (!observers_.empty()) {
+      channel_snapshot = channels;
+    }
   }
-  notify_channels_updated(guild_id);
+  observers_.notify(
+      [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
 }
 
 void DataStore::remove_channel(Snowflake id) {
   Snowflake guild_id = 0;
+  std::vector<Channel> channel_snapshot;
   {
     std::unique_lock lock(mutex_);
     for (auto& [gid, channels] : guild_channels_) {
@@ -113,18 +135,23 @@ void DataStore::remove_channel(Snowflake id) {
       if (it != channels.end()) {
         guild_id = gid;
         channels.erase(it);
+        if (!observers_.empty()) {
+          channel_snapshot = channels;
+        }
         break;
       }
     }
     channel_messages_.erase(id);
   }
   if (guild_id != 0) {
-    notify_channels_updated(guild_id);
+    observers_.notify(
+        [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
   }
 }
 
 void DataStore::add_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
+  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
@@ -132,12 +159,17 @@ void DataStore::add_message(Message msg) {
     while (deque.size() > max_messages_per_channel_) {
       deque.pop_front();
     }
+    if (!observers_.empty()) {
+      message_snapshot.assign(deque.begin(), deque.end());
+    }
   }
-  notify_messages_updated(channel_id);
+  observers_.notify(
+      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
 void DataStore::update_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
+  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto it = channel_messages_.find(channel_id);
@@ -148,12 +180,17 @@ void DataStore::update_message(Message msg) {
           break;
         }
       }
+      if (!observers_.empty()) {
+        message_snapshot.assign(it->second.begin(), it->second.end());
+      }
     }
   }
-  notify_messages_updated(channel_id);
+  observers_.notify(
+      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
 void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
+  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto it = channel_messages_.find(channel_id);
@@ -162,23 +199,29 @@ void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
       deque.erase(
           std::remove_if(deque.begin(), deque.end(), [message_id](const Message& m) { return m.id == message_id; }),
           deque.end());
+      if (!observers_.empty()) {
+        message_snapshot.assign(deque.begin(), deque.end());
+      }
     }
   }
-  notify_messages_updated(channel_id);
+  observers_.notify(
+      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
 void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> msgs) {
+  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
     for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
       deque.push_front(std::move(*it));
     }
-    while (deque.size() > max_messages_per_channel_) {
-      deque.pop_front();
+    if (!observers_.empty()) {
+      message_snapshot.assign(deque.begin(), deque.end());
     }
   }
-  notify_messages_updated(channel_id);
+  observers_.notify(
+      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
 // --- Observer management ---
@@ -189,33 +232,6 @@ void DataStore::add_observer(StoreObserver* obs) {
 
 void DataStore::remove_observer(StoreObserver* obs) {
   observers_.remove(obs);
-}
-
-// --- Notification helpers ---
-
-void DataStore::notify_guilds_updated() {
-  if (observers_.empty()) {
-    return;
-  }
-  auto guild_list = guilds();
-  observers_.notify([&guild_list](StoreObserver* o) { o->on_guilds_updated(guild_list); });
-}
-
-void DataStore::notify_channels_updated(Snowflake guild_id) {
-  if (observers_.empty()) {
-    return;
-  }
-  auto channel_list = channels(guild_id);
-  observers_.notify([guild_id, &channel_list](StoreObserver* o) { o->on_channels_updated(guild_id, channel_list); });
-}
-
-void DataStore::notify_messages_updated(Snowflake channel_id) {
-  if (observers_.empty()) {
-    return;
-  }
-  auto message_list = messages(channel_id);
-  observers_.notify(
-      [channel_id, &message_list](StoreObserver* o) { o->on_messages_updated(channel_id, message_list); });
 }
 
 } // namespace kind
