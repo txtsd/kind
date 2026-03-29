@@ -46,10 +46,10 @@ void QtRestClient::send_request(HttpMethod method, std::string_view path, const 
     return;
   }
 
-  execute_request(request);
+  execute_request(std::move(request));
 }
 
-void QtRestClient::execute_request(const PendingRequest& request) {
+void QtRestClient::execute_request(PendingRequest request) {
   bool has_body = (request.method == HttpMethod::Post || request.method == HttpMethod::Patch);
   QNetworkRequest net_request = build_request(request.path, has_body);
   QNetworkReply* reply = nullptr;
@@ -78,14 +78,11 @@ void QtRestClient::execute_request(const PendingRequest& request) {
     return;
   }
 
-  // Capture request by value for the lambda since we need it in handle_response
-  PendingRequest captured_request{request.method, request.path, request.body, request.callback};
-
   connect(reply, &QNetworkReply::finished, this,
-          [this, reply, req = std::move(captured_request)]() { handle_response(reply, req); });
+          [this, reply, req = std::move(request)]() mutable { handle_response(reply, std::move(req)); });
 }
 
-void QtRestClient::handle_response(QNetworkReply* reply, const PendingRequest& request) {
+void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request) {
   reply->deleteLater();
 
   int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -111,8 +108,7 @@ void QtRestClient::handle_response(QNetworkReply* reply, const PendingRequest& r
       rate_limiter_.set_global_limit(duration);
     }
 
-    PendingRequest retry_request{request.method, request.path, request.body, request.callback};
-    schedule_retry(std::move(retry_request), duration);
+    schedule_retry(std::move(request), duration);
     return;
   }
 
@@ -158,8 +154,7 @@ void QtRestClient::update_rate_limits(QNetworkReply* reply, const std::string& r
 }
 
 void QtRestClient::schedule_retry(PendingRequest request, std::chrono::milliseconds delay) {
-  QTimer::singleShot(static_cast<int>(delay.count()), this,
-                     [this, req = std::move(request)]() { execute_request(req); });
+  QTimer::singleShot(delay, this, [this, req = std::move(request)]() mutable { execute_request(std::move(req)); });
 }
 
 QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body) const {

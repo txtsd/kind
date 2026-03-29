@@ -2,16 +2,17 @@
 #include "models/snowflake.hpp"
 
 #include <string>
+#include <string_view>
 
 namespace kind::endpoints {
 
-inline const std::string api_base = "https://discord.com/api/v10";
+inline constexpr std::string_view api_base = "https://discord.com/api/v10";
 
 // Auth
-inline const std::string login = "/auth/login";
+inline constexpr std::string_view login = "/auth/login";
 
 // Users
-inline const std::string users_me = "/users/@me";
+inline constexpr std::string_view users_me = "/users/@me";
 
 // Guilds
 inline std::string guild_channels(Snowflake guild_id) {
