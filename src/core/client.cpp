@@ -232,6 +232,15 @@ Client::Client(ConfigManager& config) : config_(config) {
   gw_config.max_retries = static_cast<int>(reconnect_retries);
   gateway_ = std::make_unique<QtGatewayClient>(nullptr, gw_config);
 
+  // clang-format off
+  constexpr uint32_t default_intents =
+      (1 << 0)  |  // GUILDS
+      (1 << 9)  |  // GUILD_MESSAGES
+      (1 << 12) |  // DIRECT_MESSAGES
+      (1 << 15);   // MESSAGE_CONTENT
+  // clang-format on
+  gateway_->set_intents(default_intents);
+
   store_ = std::make_unique<DataStore>(max_messages);
   auth_ = std::make_unique<AuthManager>(*rest_, *token_store_);
 
