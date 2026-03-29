@@ -1,35 +1,44 @@
-cmake_minimum_required(VERSION 3.19)
-project(kind LANGUAGES CXX)
+cmake_minimum_required(VERSION 4.0)
+project(kind VERSION 0.1.0 LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-qt_standard_project_setup()
+option(KIND_BUILD_GUI "Build the Qt6 GUI frontend" ON)
+option(KIND_BUILD_TUI "Build the FTXUI TUI frontend" ON)
+option(KIND_BUILD_TESTS "Build tests" ON)
+option(KIND_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(KIND_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(KIND_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
-qt_add_executable(kind
-    WIN32 MACOSX_BUNDLE
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    mainwindow.ui
-)
+if(KIND_ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address)
+endif()
+if(KIND_ENABLE_TSAN)
+  add_compile_options(-fsanitize=thread)
+  add_link_options(-fsanitize=thread)
+endif()
+if(KIND_ENABLE_UBSAN)
+  add_compile_options(-fsanitize=undefined)
+  add_link_options(-fsanitize=undefined)
+endif()
 
-target_link_libraries(kind
-    PRIVATE
-        Qt::Core
-        Qt::Widgets
-)
+include(cmake/dependencies.cmake)
 
-include(GNUInstallDirs)
+add_subdirectory(src/core)
 
-install(TARGETS kind
-    BUNDLE  DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+if(KIND_BUILD_GUI)
+  add_subdirectory(src/gui)
+endif()
 
-qt_generate_deploy_app_script(
-    TARGET kind
-    OUTPUT_SCRIPT deploy_script
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
-install(SCRIPT ${deploy_script})
+if(KIND_BUILD_TUI)
+  add_subdirectory(src/tui)
+endif()
+
+if(KIND_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
