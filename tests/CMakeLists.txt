@@ -4,6 +4,7 @@ add_executable(kind-tests
   placeholder_test.cpp
   core/models_test.cpp
   core/config_test.cpp
+  core/observer_test.cpp
 )
 
 target_link_libraries(kind-tests
