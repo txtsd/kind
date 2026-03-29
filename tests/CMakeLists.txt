@@ -6,6 +6,7 @@ add_executable(kind-tests
   core/config_test.cpp
   core/observer_test.cpp
   core/store_test.cpp
+  core/rest_test.cpp
 )
 
 target_link_libraries(kind-tests

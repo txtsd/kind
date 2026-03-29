@@ -5,6 +5,8 @@ target_sources(kind-core PRIVATE
   config/platform_paths.cpp
   config/config_manager.cpp
   store/data_store.cpp
+  rest/rate_limiter.cpp
+  rest/qt_rest_client.cpp
 )
 
 target_include_directories(kind-core

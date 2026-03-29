@@ -1,0 +1,30 @@
+#pragma once
+#include "models/snowflake.hpp"
+
+#include <string>
+
+namespace kind::endpoints {
+
+inline const std::string api_base = "https://discord.com/api/v10";
+
+// Auth
+inline const std::string login = "/auth/login";
+
+// Users
+inline const std::string users_me = "/users/@me";
+
+// Guilds
+inline std::string guild_channels(Snowflake guild_id) {
+  return "/guilds/" + std::to_string(guild_id) + "/channels";
+}
+
+// Channels
+inline std::string channel_messages(Snowflake channel_id) {
+  return "/channels/" + std::to_string(channel_id) + "/messages";
+}
+
+inline std::string channel_typing(Snowflake channel_id) {
+  return "/channels/" + std::to_string(channel_id) + "/typing";
+}
+
+} // namespace kind::endpoints
