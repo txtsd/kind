@@ -4,6 +4,7 @@ target_sources(kind-core PRIVATE
   placeholder.cpp
   config/platform_paths.cpp
   config/config_manager.cpp
+  store/data_store.cpp
 )
 
 target_include_directories(kind-core
