@@ -54,8 +54,7 @@ void Heartbeat::start(int interval_ms, SendCallback on_send, TimeoutCallback on_
   });
 
   // First heartbeat uses jitter: wait interval_ms * random(0,1)
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  static thread_local std::mt19937 gen{std::random_device{}()};
   std::uniform_real_distribution<double> dist(0.0, 1.0);
   int jitter_ms = static_cast<int>(interval_ms * dist(gen));
 

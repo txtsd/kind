@@ -9,12 +9,6 @@
 
 namespace kind {
 
-struct GatewayConfig {
-  int base_reconnect_delay_ms = 1000;
-  int max_reconnect_delay_ms = 30000;
-  int max_retries = 10;
-};
-
 class QtGatewayClient : public QObject, public GatewayClient {
   Q_OBJECT
 

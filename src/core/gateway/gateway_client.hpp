@@ -23,4 +23,10 @@ public:
   virtual void set_intents(uint32_t intents) = 0;
 };
 
+struct GatewayConfig {
+  int base_reconnect_delay_ms = 1000;
+  int max_reconnect_delay_ms = 30000;
+  int max_retries = 10;
+};
+
 } // namespace kind

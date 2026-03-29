@@ -218,8 +218,7 @@ void QtGatewayClient::handle_invalid_session(bool resumable) {
     sequence_.reset();
     resuming_ = false;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    static thread_local std::mt19937 gen{std::random_device{}()};
     std::uniform_int_distribution<int> dist(1000, 5000);
     int delay = dist(gen);
 
@@ -240,7 +239,13 @@ void QtGatewayClient::handle_heartbeat_ack() {
 
 void QtGatewayClient::send_identify() {
   QJsonObject properties;
+#if defined(_WIN32)
+  properties["os"] = "windows";
+#elif defined(__APPLE__)
+  properties["os"] = "macos";
+#else
   properties["os"] = "linux";
+#endif
   properties["browser"] = "kind";
   properties["device"] = "kind";
 
@@ -315,8 +320,7 @@ int QtGatewayClient::calculate_backoff_ms() const {
   int64_t delay = static_cast<int64_t>(base) * (1LL << shift);
 
   // Add jitter
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  static thread_local std::mt19937 gen{std::random_device{}()};
   std::uniform_int_distribution<int> jitter(0, base);
 
   delay += jitter(gen);
