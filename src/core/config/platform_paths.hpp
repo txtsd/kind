@@ -10,6 +10,6 @@ struct PlatformPaths {
   std::filesystem::path cache_dir;
 };
 
-PlatformPaths platform_paths();
+const PlatformPaths& platform_paths();
 
 } // namespace kind

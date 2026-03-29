@@ -92,7 +92,7 @@ TEST_F(ConfigTestFixture, MissingConfigFileCreatesDefaults) {
   EXPECT_EQ(cfg.get<std::string>("general.frontend"), "gui");
 }
 
-TEST_F(ConfigTestFixture, PartialConfigFillsMissingViaGetOr) {
+TEST_F(ConfigTestFixture, PartialConfigMergesDefaults) {
   // Write a partial config
   {
     std::ofstream out(config_path());
@@ -102,9 +102,9 @@ TEST_F(ConfigTestFixture, PartialConfigFillsMissingViaGetOr) {
   kind::ConfigManager cfg(config_path());
   // Existing key returns its value
   EXPECT_EQ(cfg.get<std::string>("general.frontend"), "tui");
-  // Missing key returns default via get_or
-  EXPECT_EQ(cfg.get_or<std::string>("general.log_level", "info"), "info");
-  EXPECT_EQ(cfg.get_or<int64_t>("behavior.max_messages_per_channel", 500), 500);
+  // Missing keys are filled from defaults
+  EXPECT_EQ(cfg.get<std::string>("general.log_level"), "info");
+  EXPECT_EQ(cfg.get<int64_t>("behavior.max_messages_per_channel"), 500);
 }
 
 TEST_F(ConfigTestFixture, GetThrowsOnMissingKey) {
@@ -135,8 +135,8 @@ TEST_F(ConfigTestFixture, EmptyConfigFile) {
   }
 
   kind::ConfigManager cfg(config_path());
-  // Should not crash, but keys won't exist
-  EXPECT_EQ(cfg.get_or<std::string>("general.frontend", "fallback"), "fallback");
+  // Should not crash; defaults are merged so keys exist
+  EXPECT_EQ(cfg.get<std::string>("general.frontend"), "gui");
 }
 
 TEST_F(ConfigTestFixture, BinaryGarbageConfigFile) {
@@ -222,6 +222,56 @@ TEST_F(ConfigTestFixture, ConcurrentReadsAndWrites) {
   // Should still be functional after concurrent access
   auto val = cfg.get<int64_t>("behavior.max_messages_per_channel");
   EXPECT_GE(val, 0);
+}
+
+TEST_F(ConfigTestFixture, UnknownKeysPreservedOnSaveReload) {
+  // Write a config with an unknown key
+  {
+    std::ofstream out(config_path());
+    out << "[general]\nfrontend = \"gui\"\n\n"
+        << "[custom_section]\nmy_key = \"my_value\"\n";
+  }
+
+  kind::ConfigManager cfg(config_path());
+  // Unknown key should be accessible
+  EXPECT_EQ(cfg.get<std::string>("custom_section.my_key"), "my_value");
+
+  cfg.save();
+  cfg.reload();
+
+  // Unknown key should still be there after save/reload
+  EXPECT_EQ(cfg.get<std::string>("custom_section.my_key"), "my_value");
+
+  // Default keys should also be present from merge
+  EXPECT_EQ(cfg.get<std::string>("general.log_level"), "info");
+}
+
+TEST_F(ConfigTestFixture, HundredThousandKeys) {
+  kind::ConfigManager cfg(config_path());
+
+  constexpr int count = 100000;
+  for (int i = 0; i < count; ++i) {
+    cfg.set<int64_t>("stress.key_" + std::to_string(i), static_cast<int64_t>(i));
+  }
+
+  for (int i = 0; i < count; ++i) {
+    ASSERT_EQ(cfg.get<int64_t>("stress.key_" + std::to_string(i)), static_cast<int64_t>(i));
+  }
+}
+
+TEST_F(ConfigTestFixture, FileDeletedBetweenReadAndWrite) {
+  kind::ConfigManager cfg(config_path());
+
+  // Verify the file exists after construction
+  ASSERT_TRUE(std::filesystem::exists(config_path()));
+
+  // Delete the file out from under the ConfigManager
+  std::filesystem::remove(config_path());
+  ASSERT_FALSE(std::filesystem::exists(config_path()));
+
+  // save() should recreate the file without crashing
+  EXPECT_NO_THROW(cfg.save());
+  EXPECT_TRUE(std::filesystem::exists(config_path()));
 }
 
 } // namespace

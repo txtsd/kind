@@ -29,7 +29,9 @@ std::filesystem::path env_or(const char* var, const std::filesystem::path& fallb
 
 } // namespace
 
-PlatformPaths platform_paths() {
+namespace {
+
+PlatformPaths compute_platform_paths() {
   PlatformPaths paths;
 
 #if defined(__linux__)
@@ -63,6 +65,13 @@ PlatformPaths platform_paths() {
 #error "Unsupported platform"
 #endif
 
+  return paths;
+}
+
+} // namespace
+
+const PlatformPaths& platform_paths() {
+  static const PlatformPaths paths = compute_platform_paths();
   return paths;
 }
 

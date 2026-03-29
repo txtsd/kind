@@ -1,6 +1,7 @@
 #include "config/config_manager.hpp"
 
 #include <fstream>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -8,6 +9,21 @@
 using namespace std::string_view_literals;
 
 namespace kind {
+
+namespace {
+
+void merge_defaults(toml::table& target, const toml::table& defaults) {
+  for (const auto& [key, value] : defaults) {
+    auto it = target.find(key);
+    if (it == target.end()) {
+      target.insert(key, value);
+    } else if (value.is_table() && it->second.is_table()) {
+      merge_defaults(*it->second.as_table(), *value.as_table());
+    }
+  }
+}
+
+} // namespace
 
 ConfigManager::ConfigManager(const std::filesystem::path& config_path) {
   if (config_path.empty()) {
@@ -25,10 +41,13 @@ ConfigManager::ConfigManager(const std::filesystem::path& config_path) {
   if (std::filesystem::exists(path_)) {
     try {
       table_ = toml::parse_file(path_.string());
-    } catch (const toml::parse_error&) {
-      // If the file is corrupt/unparseable, start with defaults
+    } catch (const toml::parse_error& e) {
+      spdlog::warn("Failed to parse config file: {}", e.what());
       table_ = default_config();
     }
+    // Merge defaults for any keys missing from the loaded config
+    auto defaults = default_config();
+    merge_defaults(table_, defaults);
   } else {
     table_ = default_config();
     save();
@@ -36,7 +55,7 @@ ConfigManager::ConfigManager(const std::filesystem::path& config_path) {
 }
 
 void ConfigManager::save() {
-  std::shared_lock lock(mutex_);
+  std::unique_lock lock(mutex_);
   auto parent = path_.parent_path();
   if (!parent.empty()) {
     std::filesystem::create_directories(parent);
@@ -53,8 +72,8 @@ void ConfigManager::reload() {
   if (std::filesystem::exists(path_)) {
     try {
       table_ = toml::parse_file(path_.string());
-    } catch (const toml::parse_error&) {
-      // Keep current table if reload fails
+    } catch (const toml::parse_error& e) {
+      spdlog::warn("Failed to reload config file: {}", e.what());
     }
   }
 }
@@ -64,23 +83,7 @@ std::filesystem::path ConfigManager::path() const {
 }
 
 toml::node* ConfigManager::navigate(std::string_view key) {
-  std::string key_str(key);
-  toml::table* current = &table_;
-  std::string::size_type start = 0;
-  std::string::size_type dot = key_str.find('.');
-
-  while (dot != std::string::npos) {
-    std::string segment = key_str.substr(start, dot - start);
-    auto* tbl = current->get(segment);
-    if (!tbl || !tbl->is_table()) {
-      return nullptr;
-    }
-    current = tbl->as_table();
-    start = dot + 1;
-    dot = key_str.find('.', start);
-  }
-
-  return current->get(key_str.substr(start));
+  return const_cast<toml::node*>(std::as_const(*this).navigate(key));
 }
 
 const toml::node* ConfigManager::navigate(std::string_view key) const {
