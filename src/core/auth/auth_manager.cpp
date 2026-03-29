@@ -1,0 +1,163 @@
+#include "auth/auth_manager.hpp"
+
+#include "rest/endpoints.hpp"
+#include "rest/rest_client.hpp"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <spdlog/spdlog.h>
+
+namespace kind {
+
+AuthManager::AuthManager(RestClient& rest_client, TokenStore& token_store)
+    : rest_(rest_client), token_store_(token_store) {}
+
+void AuthManager::login_with_token(std::string_view token, std::string_view token_type) {
+  {
+    std::lock_guard lock(mutex_);
+    token_ = std::string(token);
+    token_type_ = std::string(token_type);
+  }
+
+  rest_.set_token(token, token_type);
+  validate_token(std::string(token), std::string(token_type));
+}
+
+void AuthManager::login_with_credentials(std::string_view email, std::string_view password) {
+  QJsonObject body;
+  body["login"] = QString::fromUtf8(email.data(), static_cast<int>(email.size()));
+  body["password"] = QString::fromUtf8(password.data(), static_cast<int>(password.size()));
+  std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
+
+  rest_.post(endpoints::login, payload, [this](RestClient::Response response) {
+    if (!response) {
+      observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
+      return;
+    }
+
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    auto obj = doc.object();
+
+    if (obj.contains("token")) {
+      auto received_token = obj["token"].toString().toStdString();
+      login_with_token(received_token, "user");
+    } else if (obj.contains("mfa") || obj.contains("ticket")) {
+      {
+        std::lock_guard lock(mutex_);
+        if (obj.contains("ticket")) {
+          mfa_ticket_ = obj["ticket"].toString().toStdString();
+        }
+      }
+      observers_.notify([](AuthObserver* obs) { obs->on_mfa_required(); });
+    } else {
+      observers_.notify([](AuthObserver* obs) { obs->on_login_failure("Unexpected login response"); });
+    }
+  });
+}
+
+void AuthManager::submit_mfa_code(std::string_view code) {
+  std::string ticket;
+  {
+    std::lock_guard lock(mutex_);
+    ticket = mfa_ticket_;
+  }
+
+  QJsonObject body;
+  body["code"] = QString::fromUtf8(code.data(), static_cast<int>(code.size()));
+  body["ticket"] = QString::fromStdString(ticket);
+  std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
+
+  rest_.post("/auth/mfa/totp", payload, [this](RestClient::Response response) {
+    if (!response) {
+      observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
+      return;
+    }
+
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    auto obj = doc.object();
+
+    if (obj.contains("token")) {
+      auto received_token = obj["token"].toString().toStdString();
+      login_with_token(received_token, "user");
+    } else {
+      observers_.notify([](AuthObserver* obs) { obs->on_login_failure("MFA response missing token"); });
+    }
+  });
+}
+
+void AuthManager::logout() {
+  {
+    std::lock_guard lock(mutex_);
+    logged_in_ = false;
+    current_user_.reset();
+    token_.clear();
+    token_type_.clear();
+    mfa_ticket_.clear();
+  }
+
+  token_store_.clear_token();
+  observers_.notify([](AuthObserver* obs) { obs->on_logout(); });
+}
+
+bool AuthManager::is_logged_in() const {
+  std::lock_guard lock(mutex_);
+  return logged_in_;
+}
+
+std::optional<User> AuthManager::current_user() const {
+  std::lock_guard lock(mutex_);
+  return current_user_;
+}
+
+std::string AuthManager::token() const {
+  std::lock_guard lock(mutex_);
+  return token_;
+}
+
+std::string AuthManager::token_type() const {
+  std::lock_guard lock(mutex_);
+  return token_type_;
+}
+
+void AuthManager::add_observer(AuthObserver* obs) {
+  observers_.add(obs);
+}
+
+void AuthManager::remove_observer(AuthObserver* obs) {
+  observers_.remove(obs);
+}
+
+void AuthManager::validate_token(std::string token, std::string token_type) {
+  rest_.get(endpoints::users_me,
+            [this, token = std::move(token), token_type = std::move(token_type)](RestClient::Response response) {
+              if (!response) {
+                observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
+                return;
+              }
+
+              auto user = parse_user(response.value());
+              {
+                std::lock_guard lock(mutex_);
+                logged_in_ = true;
+                current_user_ = user;
+              }
+
+              token_store_.save_token(token, token_type);
+              observers_.notify([&](AuthObserver* obs) { obs->on_login_success(user); });
+            });
+}
+
+User AuthManager::parse_user(const std::string& json) {
+  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
+  auto obj = doc.object();
+
+  User user;
+  user.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  user.username = obj["username"].toString().toStdString();
+  user.discriminator = obj["discriminator"].toString().toStdString();
+  user.avatar_hash = obj["avatar"].toString().toStdString();
+  user.bot = obj["bot"].toBool(false);
+  return user;
+}
+
+} // namespace kind

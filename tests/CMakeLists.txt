@@ -8,6 +8,7 @@ add_executable(kind-tests
   core/store_test.cpp
   core/rest_test.cpp
   core/gateway_test.cpp
+  core/auth_test.cpp
 )
 
 target_link_libraries(kind-tests

@@ -2,6 +2,8 @@ add_library(kind-core STATIC)
 
 target_sources(kind-core PRIVATE
   placeholder.cpp
+  auth/auth_manager.cpp
+  auth/token_store.cpp
   config/platform_paths.cpp
   config/config_manager.cpp
   store/data_store.cpp
