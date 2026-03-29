@@ -42,9 +42,18 @@ std::optional<Guild> parse_guild(const QJsonObject& obj) {
 
   Guild guild;
   guild.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-  guild.name = obj["name"].toString().toStdString();
-  guild.icon_hash = obj["icon"].toString().toStdString();
-  guild.owner_id = static_cast<Snowflake>(obj["owner_id"].toString().toULongLong());
+
+  // User tokens nest guild metadata under "properties"; bot tokens use top-level fields
+  if (obj.contains("properties") && obj["properties"].isObject()) {
+    auto props = obj["properties"].toObject();
+    guild.name = props["name"].toString().toStdString();
+    guild.icon_hash = props["icon"].toString().toStdString();
+    guild.owner_id = static_cast<Snowflake>(props["owner_id"].toString().toULongLong());
+  } else {
+    guild.name = obj["name"].toString().toStdString();
+    guild.icon_hash = obj["icon"].toString().toStdString();
+    guild.owner_id = static_cast<Snowflake>(obj["owner_id"].toString().toULongLong());
+  }
 
   auto channels_array = obj["channels"].toArray();
   for (const auto& val : channels_array) {

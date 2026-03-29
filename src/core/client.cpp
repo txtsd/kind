@@ -39,7 +39,7 @@ public:
 
     auto gateway_url = client_.config_.get_or<std::string>("network.gateway_url", "");
     if (gateway_url.empty()) {
-      gateway_url = "wss://gateway.discord.gg/?v=10&encoding=json";
+      gateway_url = "wss://gateway.discord.gg/";
     }
     client_.gateway_->connect(gateway_url, token);
 
@@ -112,7 +112,11 @@ private:
     std::vector<Guild> guilds;
     auto guilds_array = obj["guilds"].toArray();
     for (const auto& val : guilds_array) {
-      auto guild = json_parse::parse_guild(val.toObject());
+      auto guild_obj = val.toObject();
+      if (guild_obj["unavailable"].toBool(false)) {
+        continue;
+      }
+      auto guild = json_parse::parse_guild(guild_obj);
       if (guild) {
         client_.store_->upsert_guild(*guild);
         guilds.push_back(std::move(*guild));

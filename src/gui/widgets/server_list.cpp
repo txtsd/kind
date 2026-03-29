@@ -3,8 +3,7 @@
 namespace kind::gui {
 
 ServerList::ServerList(QWidget* parent) : QListWidget(parent) {
-  setMaximumWidth(80);
-  setMinimumWidth(50);
+  setMinimumWidth(60);
   setIconSize(QSize(40, 40));
 
   connect(this, &QListWidget::currentItemChanged, this, &ServerList::on_selection_changed);
