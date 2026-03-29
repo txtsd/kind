@@ -10,6 +10,7 @@ inline constexpr std::string_view api_base = "https://discord.com/api/v10";
 
 // Auth
 inline constexpr std::string_view login = "/auth/login";
+inline constexpr std::string_view mfa_totp = "/auth/mfa/totp";
 
 // Users
 inline constexpr std::string_view users_me = "/users/@me";

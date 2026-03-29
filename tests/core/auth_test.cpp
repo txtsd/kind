@@ -297,7 +297,7 @@ TEST_F(AuthManagerTest, SubmitMfaCodeSuccess) {
 
   // Now set up MFA totp response
   std::string mfa_token_response = R"({"token":"mfa-validated-token"})";
-  ON_CALL(mock_rest_, post(::testing::Eq(std::string_view("/auth/mfa/totp")), ::testing::_, ::testing::_))
+  ON_CALL(mock_rest_, post(::testing::Eq(kind::endpoints::mfa_totp), ::testing::_, ::testing::_))
       .WillByDefault([&](std::string_view, const std::string&, kind::RestClient::Callback cb) {
         cb(kind::RestClient::Response(mfa_token_response));
       });
@@ -355,18 +355,17 @@ TEST_F(AuthManagerTest, LogoutWhileLoginInFlight) {
 
   EXPECT_FALSE(auth_->is_logged_in());
 
-  // Complete the in-flight request; the login success callback fires,
-  // but the manager should still update state
+  // Complete the in-flight request; the stale callback should be
+  // discarded by the generation check, keeping logout state intact
   if (stored_cb) {
     stored_cb(kind::RestClient::Response(valid_user_json));
   }
-  // After the stale callback, the user may appear logged in.
-  // This is acceptable behavior for a race condition scenario.
+  EXPECT_FALSE(auth_->is_logged_in());
 }
 
 TEST_F(AuthManagerTest, MfaCodeWithoutMfaRequest) {
   // Submit MFA code when no MFA was ever requested (ticket is empty)
-  ON_CALL(mock_rest_, post(::testing::Eq(std::string_view("/auth/mfa/totp")), ::testing::_, ::testing::_))
+  ON_CALL(mock_rest_, post(::testing::Eq(kind::endpoints::mfa_totp), ::testing::_, ::testing::_))
       .WillByDefault([](std::string_view, const std::string&, kind::RestClient::Callback cb) {
         cb(std::unexpected(kind::RestError{400, "No MFA session", "0"}));
       });

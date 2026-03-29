@@ -13,23 +13,39 @@ AuthManager::AuthManager(RestClient& rest_client, TokenStore& token_store)
     : rest_(rest_client), token_store_(token_store) {}
 
 void AuthManager::login_with_token(std::string_view token, std::string_view token_type) {
+  uint64_t gen;
   {
     std::lock_guard lock(mutex_);
+    ++login_generation_;
+    gen = login_generation_;
     token_ = std::string(token);
     token_type_ = std::string(token_type);
   }
 
   rest_.set_token(token, token_type);
-  validate_token(std::string(token), std::string(token_type));
+  validate_token(std::string(token), std::string(token_type), gen);
 }
 
 void AuthManager::login_with_credentials(std::string_view email, std::string_view password) {
+  uint64_t gen;
+  {
+    std::lock_guard lock(mutex_);
+    ++login_generation_;
+    gen = login_generation_;
+  }
+
   QJsonObject body;
   body["login"] = QString::fromUtf8(email.data(), static_cast<int>(email.size()));
   body["password"] = QString::fromUtf8(password.data(), static_cast<int>(password.size()));
   std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
 
-  rest_.post(endpoints::login, payload, [this](RestClient::Response response) {
+  rest_.post(endpoints::login, payload, [this, gen](RestClient::Response response) {
+    {
+      std::lock_guard lock(mutex_);
+      if (login_generation_ != gen) {
+        return;
+      }
+    }
     if (!response) {
       observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
       return;
@@ -56,9 +72,12 @@ void AuthManager::login_with_credentials(std::string_view email, std::string_vie
 }
 
 void AuthManager::submit_mfa_code(std::string_view code) {
+  uint64_t gen;
   std::string ticket;
   {
     std::lock_guard lock(mutex_);
+    ++login_generation_;
+    gen = login_generation_;
     ticket = mfa_ticket_;
   }
 
@@ -67,7 +86,13 @@ void AuthManager::submit_mfa_code(std::string_view code) {
   body["ticket"] = QString::fromStdString(ticket);
   std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
 
-  rest_.post("/auth/mfa/totp", payload, [this](RestClient::Response response) {
+  rest_.post(endpoints::mfa_totp, payload, [this, gen](RestClient::Response response) {
+    {
+      std::lock_guard lock(mutex_);
+      if (login_generation_ != gen) {
+        return;
+      }
+    }
     if (!response) {
       observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
       return;
@@ -88,6 +113,7 @@ void AuthManager::submit_mfa_code(std::string_view code) {
 void AuthManager::logout() {
   {
     std::lock_guard lock(mutex_);
+    ++login_generation_;
     logged_in_ = false;
     current_user_.reset();
     token_.clear();
@@ -127,9 +153,9 @@ void AuthManager::remove_observer(AuthObserver* obs) {
   observers_.remove(obs);
 }
 
-void AuthManager::validate_token(std::string token, std::string token_type) {
+void AuthManager::validate_token(std::string token, std::string token_type, uint64_t gen) {
   rest_.get(endpoints::users_me,
-            [this, token = std::move(token), token_type = std::move(token_type)](RestClient::Response response) {
+            [this, token = std::move(token), token_type = std::move(token_type), gen](RestClient::Response response) {
               if (!response) {
                 observers_.notify([&](AuthObserver* obs) { obs->on_login_failure(response.error().message); });
                 return;
@@ -138,6 +164,9 @@ void AuthManager::validate_token(std::string token, std::string token_type) {
               auto user = parse_user(response.value());
               {
                 std::lock_guard lock(mutex_);
+                if (login_generation_ != gen) {
+                  return;
+                }
                 logged_in_ = true;
                 current_user_ = user;
               }
@@ -150,6 +179,16 @@ void AuthManager::validate_token(std::string token, std::string token_type) {
 User AuthManager::parse_user(const std::string& json) {
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
   auto obj = doc.object();
+
+  if (!obj.contains("id")) {
+    spdlog::warn("User JSON missing 'id' field");
+  }
+  if (!obj.contains("username")) {
+    spdlog::warn("User JSON missing 'username' field");
+  }
+  if (!obj.contains("discriminator")) {
+    spdlog::warn("User JSON missing 'discriminator' field");
+  }
 
   User user;
   user.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());

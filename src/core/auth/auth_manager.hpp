@@ -5,6 +5,7 @@
 #include "interfaces/observer_list.hpp"
 #include "models/user.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -45,8 +46,9 @@ private:
   std::string token_;
   std::string token_type_;
   std::string mfa_ticket_;
+  uint64_t login_generation_{0};
 
-  void validate_token(std::string token, std::string token_type);
+  void validate_token(std::string token, std::string token_type, uint64_t gen);
   User parse_user(const std::string& json);
 };
 
