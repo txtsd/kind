@@ -33,6 +33,10 @@ public:
     client_.store_->set_current_user(user);
 
     auto token = client_.auth_->token();
+    auto token_type = client_.auth_->token_type();
+    bool is_bot = (token_type == "bot" || token_type == "Bot");
+    client_.gateway_->set_bot_mode(is_bot);
+
     auto gateway_url = client_.config_.get_or<std::string>("network.gateway_url", "");
     if (gateway_url.empty()) {
       gateway_url = "wss://gateway.discord.gg/?v=10&encoding=json";

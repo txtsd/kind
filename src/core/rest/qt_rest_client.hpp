@@ -47,7 +47,9 @@ private:
   std::string token_;
   std::string token_type_;
   std::string base_url_;
-  static constexpr const char* user_agent_ = "kind (https://github.com/txtsd/kind, 0.1.0)";
+  static constexpr const char* user_agent_ =
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 };
 
 } // namespace kind

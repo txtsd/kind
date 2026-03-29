@@ -22,6 +22,7 @@ public:
   void set_event_callback(EventCallback cb) override;
   bool is_connected() const override;
   void set_intents(uint32_t intents) override;
+  void set_bot_mode(bool is_bot) override;
 
 private:
   void on_connected();
@@ -52,6 +53,7 @@ private:
   std::string session_id_;
   std::string resume_gateway_url_;
   uint32_t intents_ = 0;
+  bool token_type_bot_ = true;
   std::optional<int64_t> sequence_;
   int reconnect_attempts_ = 0;
   bool connected_ = false;

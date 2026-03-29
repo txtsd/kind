@@ -69,6 +69,10 @@ void QtGatewayClient::set_intents(uint32_t intents) {
   intents_ = intents;
 }
 
+void QtGatewayClient::set_bot_mode(bool is_bot) {
+  token_type_bot_ = is_bot;
+}
+
 void QtGatewayClient::on_connected() {
   spdlog::info("Gateway: WebSocket connected, waiting for HELLO");
   connected_ = true;
@@ -240,19 +244,53 @@ void QtGatewayClient::handle_heartbeat_ack() {
 void QtGatewayClient::send_identify() {
   QJsonObject properties;
 #if defined(_WIN32)
-  properties["os"] = "windows";
+  properties["os"] = "Windows";
 #elif defined(__APPLE__)
-  properties["os"] = "macos";
+  properties["os"] = "Mac OS X";
 #else
-  properties["os"] = "linux";
+  properties["os"] = "Linux";
 #endif
-  properties["browser"] = "kind";
-  properties["device"] = "kind";
+  properties["browser"] = "Chrome";
+  properties["device"] = "";
+  properties["system_locale"] = "en-US";
+  properties["browser_user_agent"] =
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  properties["browser_version"] = "131.0.0.0";
+  properties["os_version"] = "";
+  properties["referrer"] = "";
+  properties["referring_domain"] = "";
+  properties["referrer_current"] = "";
+  properties["referring_domain_current"] = "";
+  properties["release_channel"] = "stable";
+  properties["client_build_number"] = 349382;
+  properties["client_event_source"] = QJsonValue::Null;
 
   QJsonObject d;
   d["token"] = QString::fromStdString(token_);
+  d["capabilities"] = 30717;
   d["properties"] = properties;
-  d["intents"] = static_cast<qint64>(intents_);
+  d["presence"] = QJsonObject{
+      {"status", "online"},
+      {"since", 0},
+      {"activities", QJsonArray()},
+      {"afk", false}};
+  d["compress"] = false;
+  d["client_state"] = QJsonObject{
+      {"guild_versions", QJsonObject()},
+      {"highest_last_message_id", "0"},
+      {"read_state_version", 0},
+      {"user_guild_settings_version", -1},
+      {"user_settings_version", -1},
+      {"private_channels_version", "0"},
+      {"api_code_version", 0}};
+
+  // Only send intents for bot tokens; user tokens don't use them
+  if (!token_type_bot_) {
+    // User token: no intents field
+  } else {
+    d["intents"] = static_cast<qint64>(intents_);
+  }
 
   QJsonObject payload;
   payload["op"] = static_cast<int>(gateway::Opcode::Identify);

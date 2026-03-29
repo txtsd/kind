@@ -168,7 +168,8 @@ QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body
     if (token_type_ == "bot" || token_type_ == "Bot") {
       auth = "Bot " + token_;
     } else {
-      auth = "Bearer " + token_;
+      // User tokens are sent raw, no prefix
+      auth = token_;
     }
     request.setRawHeader("Authorization", QByteArray::fromStdString(auth));
   }

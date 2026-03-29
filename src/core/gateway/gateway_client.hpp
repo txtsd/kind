@@ -19,8 +19,11 @@ public:
   virtual void set_event_callback(EventCallback cb) = 0;
   virtual bool is_connected() const = 0;
 
-  // Intent flags for IDENTIFY
+  // Intent flags for IDENTIFY (bot tokens only)
   virtual void set_intents(uint32_t intents) = 0;
+
+  // Set whether this is a bot token (affects IDENTIFY payload)
+  virtual void set_bot_mode(bool is_bot) = 0;
 };
 
 struct GatewayConfig {

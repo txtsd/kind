@@ -43,6 +43,7 @@ public:
   MOCK_METHOD(void, set_event_callback, (EventCallback), (override));
   MOCK_METHOD(bool, is_connected, (), (const, override));
   MOCK_METHOD(void, set_intents, (uint32_t), (override));
+  MOCK_METHOD(void, set_bot_mode, (bool), (override));
 };
 
 class MockAuthObserver : public kind::AuthObserver {
