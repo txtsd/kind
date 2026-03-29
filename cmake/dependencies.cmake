@@ -42,6 +42,9 @@ endif()
 
 # Qt6
 find_package(Qt6 6.10 REQUIRED COMPONENTS Core Network WebSockets)
+if(KIND_BUILD_TESTS)
+  find_package(Qt6 6.10 REQUIRED COMPONENTS Test)
+endif()
 if(KIND_BUILD_GUI)
   find_package(Qt6 6.10 REQUIRED COMPONENTS Widgets)
 endif()

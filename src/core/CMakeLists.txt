@@ -7,6 +7,8 @@ target_sources(kind-core PRIVATE
   store/data_store.cpp
   rest/rate_limiter.cpp
   rest/qt_rest_client.cpp
+  gateway/heartbeat.cpp
+  gateway/qt_gateway_client.cpp
 )
 
 target_include_directories(kind-core

@@ -7,6 +7,7 @@ add_executable(kind-tests
   core/observer_test.cpp
   core/store_test.cpp
   core/rest_test.cpp
+  core/gateway_test.cpp
 )
 
 target_link_libraries(kind-tests
@@ -14,6 +15,8 @@ target_link_libraries(kind-tests
     kind-core
     GTest::gtest_main
     GTest::gmock
+    Qt6::Core
+    Qt6::Test
 )
 
 gtest_discover_tests(kind-tests)
