@@ -165,7 +165,7 @@ QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body
 
   if (!token_.empty()) {
     std::string auth;
-    if (token_type_ == "Bot") {
+    if (token_type_ == "bot" || token_type_ == "Bot") {
       auth = "Bot " + token_;
     } else {
       auth = "Bearer " + token_;
