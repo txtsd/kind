@@ -24,6 +24,8 @@ private:
   QWidget* container_{};
   QVBoxLayout* layout_{};
 
+  static constexpr int max_messages_ = 500;
+
   void scroll_to_bottom();
   static QString format_message(const kind::Message& msg);
 };

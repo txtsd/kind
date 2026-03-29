@@ -18,6 +18,7 @@ public:
 
   void show_error(const QString& message);
   void show_mfa_input();
+  void enable_login();
 
 signals:
   void token_login_requested(QString token, QString token_type);

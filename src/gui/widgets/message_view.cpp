@@ -39,6 +39,14 @@ void MessageView::add_message(const kind::Message& msg) {
   label->setTextInteractionFlags(Qt::TextSelectableByMouse);
   layout_->insertWidget(layout_->count() - 1, label);
 
+  // Cap widget count to prevent unbounded memory growth.
+  // Layout has message widgets plus one trailing stretch item.
+  while (layout_->count() - 1 > max_messages_) {
+    auto* item = layout_->takeAt(0);
+    delete item->widget();
+    delete item;
+  }
+
   scroll_to_bottom();
 }
 

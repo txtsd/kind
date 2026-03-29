@@ -74,6 +74,11 @@ void LoginDialog::setup_connections() {
     auto type = token_type_combo_->currentData().toString();
     if (!token.isEmpty()) {
       status_label_->setVisible(false);
+      token_login_button_->setEnabled(false);
+      credential_login_button_->setEnabled(false);
+      status_label_->setStyleSheet("color: palette(text);");
+      status_label_->setText("Logging in...");
+      status_label_->setVisible(true);
       emit token_login_requested(token, type);
     }
   });
@@ -83,6 +88,11 @@ void LoginDialog::setup_connections() {
     auto password = password_input_->text();
     if (!email.isEmpty() && !password.isEmpty()) {
       status_label_->setVisible(false);
+      token_login_button_->setEnabled(false);
+      credential_login_button_->setEnabled(false);
+      status_label_->setStyleSheet("color: palette(text);");
+      status_label_->setText("Logging in...");
+      status_label_->setVisible(true);
       emit credential_login_requested(email, password);
     }
   });
@@ -97,13 +107,21 @@ void LoginDialog::setup_connections() {
 }
 
 void LoginDialog::show_error(const QString& message) {
+  status_label_->setStyleSheet("color: red;");
   status_label_->setText(message);
   status_label_->setVisible(true);
+  enable_login();
 }
 
 void LoginDialog::show_mfa_input() {
   mfa_widget_->setVisible(true);
   mfa_input_->setFocus();
+  enable_login();
+}
+
+void LoginDialog::enable_login() {
+  token_login_button_->setEnabled(true);
+  credential_login_button_->setEnabled(true);
 }
 
 } // namespace kind::gui

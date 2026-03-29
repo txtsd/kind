@@ -50,8 +50,9 @@ int main(int argc, char* argv[]) {
   // Login dialog
   kind::gui::LoginDialog login_dialog;
 
-  // Track the currently selected guild for channel filtering
+  // Track the currently selected guild and channel for filtering
   kind::Snowflake current_guild_id = 0;
+  kind::Snowflake current_channel_id = 0;
 
   // Wire login dialog signals to client actions
   QObject::connect(&login_dialog, &kind::gui::LoginDialog::token_login_requested,
@@ -87,12 +88,20 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
-  QObject::connect(&app, &kind::gui::App::messages_updated,
-                   [message_view](kind::Snowflake /*channel_id*/, const QVector<kind::Message>& messages) {
-                     message_view->set_messages(messages);
-                   });
+  QObject::connect(
+      &app, &kind::gui::App::messages_updated,
+      [message_view, &current_channel_id](kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
+        if (channel_id == current_channel_id) {
+          message_view->set_messages(messages);
+        }
+      });
 
-  QObject::connect(&app, &kind::gui::App::message_created, message_view, &kind::gui::MessageView::add_message);
+  QObject::connect(&app, &kind::gui::App::message_created,
+                   [message_view, &current_channel_id](const kind::Message& msg) {
+                     if (msg.channel_id == current_channel_id) {
+                       message_view->add_message(msg);
+                     }
+                   });
 
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
@@ -100,9 +109,6 @@ int main(int argc, char* argv[]) {
                      current_guild_id = guild_id;
                      client.select_guild(guild_id);
                    });
-
-  // Track the currently selected channel for message routing
-  kind::Snowflake current_channel_id = 0;
 
   QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected,
                    [&client, &current_channel_id](kind::Snowflake channel_id) {
