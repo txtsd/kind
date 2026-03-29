@@ -5,6 +5,7 @@ set_target_properties(kind-core PROPERTIES AUTOMOC ON)
 target_sources(kind-core PRIVATE
   placeholder.cpp
   client.cpp
+  json/parsers.cpp
   auth/auth_manager.cpp
   auth/token_store.cpp
   config/platform_paths.cpp

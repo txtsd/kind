@@ -3,6 +3,7 @@
 #include "rest/endpoints.hpp"
 #include "rest/rest_client.hpp"
 
+#include "json/parsers.hpp"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <spdlog/spdlog.h>
@@ -161,7 +162,12 @@ void AuthManager::validate_token(std::string token, std::string token_type, uint
                 return;
               }
 
-              auto user = parse_user(response.value());
+              auto parsed = json_parse::parse_user(response.value());
+              if (!parsed) {
+                observers_.notify([](AuthObserver* obs) { obs->on_login_failure("Failed to parse user data"); });
+                return;
+              }
+              auto user = std::move(*parsed);
               {
                 std::lock_guard lock(mutex_);
                 if (login_generation_ != gen) {
@@ -174,29 +180,6 @@ void AuthManager::validate_token(std::string token, std::string token_type, uint
               token_store_.save_token(token, token_type);
               observers_.notify([&](AuthObserver* obs) { obs->on_login_success(user); });
             });
-}
-
-User AuthManager::parse_user(const std::string& json) {
-  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
-  auto obj = doc.object();
-
-  if (!obj.contains("id")) {
-    spdlog::warn("User JSON missing 'id' field");
-  }
-  if (!obj.contains("username")) {
-    spdlog::warn("User JSON missing 'username' field");
-  }
-  if (!obj.contains("discriminator")) {
-    spdlog::warn("User JSON missing 'discriminator' field");
-  }
-
-  User user;
-  user.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-  user.username = obj["username"].toString().toStdString();
-  user.discriminator = obj["discriminator"].toString().toStdString();
-  user.avatar_hash = obj["avatar"].toString().toStdString();
-  user.bot = obj["bot"].toBool(false);
-  return user;
 }
 
 } // namespace kind

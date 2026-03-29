@@ -11,6 +11,7 @@
 #include "rest/rest_client.hpp"
 #include "store/data_store.hpp"
 
+#include "json/parsers.hpp"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -94,33 +95,53 @@ public:
 private:
   void handle_ready(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull()) {
+      spdlog::warn("Failed to parse READY JSON: document is null");
+      return;
+    }
+    if (!doc.isObject()) {
+      spdlog::warn("Failed to parse READY JSON: expected object");
+      return;
+    }
     auto obj = doc.object();
 
     std::vector<Guild> guilds;
     auto guilds_array = obj["guilds"].toArray();
     for (const auto& val : guilds_array) {
-      auto guild = parse_guild(val.toObject());
-      client_.store_->upsert_guild(guild);
-      guilds.push_back(std::move(guild));
+      auto guild = json_parse::parse_guild(val.toObject());
+      if (guild) {
+        client_.store_->upsert_guild(*guild);
+        guilds.push_back(std::move(*guild));
+      }
     }
 
     client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
   }
 
   void handle_message_create(const std::string& data_json) {
-    auto msg = parse_message(data_json);
-    client_.store_->add_message(msg);
-    client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_create(msg); });
+    auto msg = json_parse::parse_message(data_json);
+    if (!msg) {
+      return;
+    }
+    client_.store_->add_message(*msg);
+    client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_create(*msg); });
   }
 
   void handle_message_update(const std::string& data_json) {
-    auto msg = parse_message(data_json);
-    client_.store_->update_message(msg);
-    client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_update(msg); });
+    auto msg = json_parse::parse_message(data_json);
+    if (!msg) {
+      return;
+    }
+    client_.store_->update_message(*msg);
+    client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_update(*msg); });
   }
 
   void handle_message_delete(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) {
+      spdlog::warn("Failed to parse MESSAGE_DELETE JSON");
+      return;
+    }
     auto obj = doc.object();
     auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
     auto message_id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
@@ -131,20 +152,38 @@ private:
 
   void handle_guild_create(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
-    auto guild = parse_guild(doc.object());
-    client_.store_->upsert_guild(guild);
-    client_.gateway_observers_.notify([&guild](GatewayObserver* obs) { obs->on_guild_create(guild); });
+    if (doc.isNull() || !doc.isObject()) {
+      spdlog::warn("Failed to parse GUILD_CREATE JSON");
+      return;
+    }
+    auto guild = json_parse::parse_guild(doc.object());
+    if (!guild) {
+      return;
+    }
+    client_.store_->upsert_guild(*guild);
+    client_.gateway_observers_.notify([&guild](GatewayObserver* obs) { obs->on_guild_create(*guild); });
   }
 
   void handle_channel_update(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
-    auto channel = parse_channel(doc.object());
-    client_.store_->upsert_channel(channel);
-    client_.gateway_observers_.notify([&channel](GatewayObserver* obs) { obs->on_channel_update(channel); });
+    if (doc.isNull() || !doc.isObject()) {
+      spdlog::warn("Failed to parse CHANNEL_UPDATE JSON");
+      return;
+    }
+    auto channel = json_parse::parse_channel(doc.object());
+    if (!channel) {
+      return;
+    }
+    client_.store_->upsert_channel(*channel);
+    client_.gateway_observers_.notify([&channel](GatewayObserver* obs) { obs->on_channel_update(*channel); });
   }
 
   void handle_typing_start(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) {
+      spdlog::warn("Failed to parse TYPING_START JSON");
+      return;
+    }
     auto obj = doc.object();
     auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
     auto user_id = static_cast<Snowflake>(obj["user_id"].toString().toULongLong());
@@ -154,70 +193,16 @@ private:
 
   void handle_presence_update(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) {
+      spdlog::warn("Failed to parse PRESENCE_UPDATE JSON");
+      return;
+    }
     auto obj = doc.object();
     auto user_obj = obj["user"].toObject();
     auto user_id = static_cast<Snowflake>(user_obj["id"].toString().toULongLong());
     auto status = obj["status"].toString().toStdString();
     client_.gateway_observers_.notify(
-        [user_id, &status](GatewayObserver* obs) { obs->on_presence_update(user_id, status); });
-  }
-
-  static Guild parse_guild(const QJsonObject& obj) {
-    Guild guild;
-    guild.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-    guild.name = obj["name"].toString().toStdString();
-    guild.icon_hash = obj["icon"].toString().toStdString();
-    guild.owner_id = static_cast<Snowflake>(obj["owner_id"].toString().toULongLong());
-
-    auto channels_array = obj["channels"].toArray();
-    for (const auto& val : channels_array) {
-      guild.channels.push_back(parse_channel(val.toObject()));
-    }
-    return guild;
-  }
-
-  static Channel parse_channel(const QJsonObject& obj) {
-    Channel channel;
-    channel.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-    channel.guild_id = static_cast<Snowflake>(obj["guild_id"].toString().toULongLong());
-    channel.name = obj["name"].toString().toStdString();
-    channel.type = obj["type"].toInt();
-    channel.position = obj["position"].toInt();
-    if (obj.contains("parent_id") && !obj["parent_id"].isNull()) {
-      channel.parent_id = static_cast<Snowflake>(obj["parent_id"].toString().toULongLong());
-    }
-    return channel;
-  }
-
-  static User parse_user(const QJsonObject& obj) {
-    User user;
-    user.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-    user.username = obj["username"].toString().toStdString();
-    user.discriminator = obj["discriminator"].toString().toStdString();
-    user.avatar_hash = obj["avatar"].toString().toStdString();
-    user.bot = obj["bot"].toBool(false);
-    return user;
-  }
-
-  static Message parse_message(const std::string& json) {
-    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
-    auto obj = doc.object();
-
-    Message msg;
-    msg.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-    msg.channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
-    msg.content = obj["content"].toString().toStdString();
-    msg.timestamp = obj["timestamp"].toString().toStdString();
-    if (obj.contains("edited_timestamp") && !obj["edited_timestamp"].isNull()) {
-      msg.edited_timestamp = obj["edited_timestamp"].toString().toStdString();
-    }
-    msg.pinned = obj["pinned"].toBool(false);
-
-    if (obj.contains("author")) {
-      msg.author = parse_user(obj["author"].toObject());
-    }
-
-    return msg;
+        [user_id, status](GatewayObserver* obs) { obs->on_presence_update(user_id, status); });
   }
 
   Client& client_;
@@ -339,19 +324,22 @@ void Client::select_guild(Snowflake guild_id) {
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    if (doc.isNull()) {
+      spdlog::warn("Failed to parse guild channels JSON: document is null");
+      return;
+    }
+    if (!doc.isArray()) {
+      spdlog::warn("Failed to parse guild channels JSON: expected array");
+      return;
+    }
+
     auto arr = doc.array();
     for (const auto& val : arr) {
-      auto obj = val.toObject();
-      Channel channel;
-      channel.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-      channel.guild_id = guild_id;
-      channel.name = obj["name"].toString().toStdString();
-      channel.type = obj["type"].toInt();
-      channel.position = obj["position"].toInt();
-      if (obj.contains("parent_id") && !obj["parent_id"].isNull()) {
-        channel.parent_id = static_cast<Snowflake>(obj["parent_id"].toString().toULongLong());
+      auto channel = json_parse::parse_channel(val.toObject());
+      if (channel) {
+        channel->guild_id = guild_id;
+        store_->upsert_channel(*channel);
       }
-      store_->upsert_channel(channel);
     }
   });
 }
@@ -373,29 +361,24 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    if (doc.isNull()) {
+      spdlog::warn("Failed to parse message history JSON: document is null");
+      return;
+    }
+    if (!doc.isArray()) {
+      spdlog::warn("Failed to parse message history JSON: expected array");
+      return;
+    }
+
     auto arr = doc.array();
     std::vector<Message> messages;
     messages.reserve(arr.size());
     for (const auto& val : arr) {
-      auto obj = val.toObject();
-      Message msg;
-      msg.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
-      msg.channel_id = channel_id;
-      msg.content = obj["content"].toString().toStdString();
-      msg.timestamp = obj["timestamp"].toString().toStdString();
-      if (obj.contains("edited_timestamp") && !obj["edited_timestamp"].isNull()) {
-        msg.edited_timestamp = obj["edited_timestamp"].toString().toStdString();
+      auto msg = json_parse::parse_message(val.toObject());
+      if (msg) {
+        msg->channel_id = channel_id;
+        messages.push_back(std::move(*msg));
       }
-      msg.pinned = obj["pinned"].toBool(false);
-      if (obj.contains("author")) {
-        auto author_obj = obj["author"].toObject();
-        msg.author.id = static_cast<Snowflake>(author_obj["id"].toString().toULongLong());
-        msg.author.username = author_obj["username"].toString().toStdString();
-        msg.author.discriminator = author_obj["discriminator"].toString().toStdString();
-        msg.author.avatar_hash = author_obj["avatar"].toString().toStdString();
-        msg.author.bot = author_obj["bot"].toBool(false);
-      }
-      messages.push_back(std::move(msg));
     }
     store_->add_messages_before(channel_id, std::move(messages));
   });

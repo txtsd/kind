@@ -576,6 +576,26 @@ TEST_F(ClientTest, GatewayMessageUpdateUpdatesStore) {
   client_->remove_gateway_observer(&gw_obs);
 }
 
+TEST_F(ClientTest, GatewayDisconnectNotifiesObservers) {
+  MockGatewayObserver gw_obs;
+  EXPECT_CALL(gw_obs, on_gateway_disconnect(::testing::Eq("connection lost"))).Times(1);
+  client_->add_gateway_observer(&gw_obs);
+
+  fire_gateway_event("__DISCONNECT", "connection lost");
+
+  client_->remove_gateway_observer(&gw_obs);
+}
+
+TEST_F(ClientTest, GatewayReconnectingNotifiesObservers) {
+  MockGatewayObserver gw_obs;
+  EXPECT_CALL(gw_obs, on_gateway_reconnecting()).Times(1);
+  client_->add_gateway_observer(&gw_obs);
+
+  fire_gateway_event("__RECONNECTING", "");
+
+  client_->remove_gateway_observer(&gw_obs);
+}
+
 TEST_F(ClientTest, UnknownGatewayEventDoesNotCrash) {
   fire_gateway_event("UNKNOWN_EVENT_XYZ", "{}");
   SUCCEED();

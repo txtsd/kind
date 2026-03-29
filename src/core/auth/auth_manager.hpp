@@ -49,7 +49,6 @@ private:
   uint64_t login_generation_{0};
 
   void validate_token(std::string token, std::string token_type, uint64_t gen);
-  User parse_user(const std::string& json);
 };
 
 } // namespace kind
