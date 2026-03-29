@@ -4,6 +4,7 @@
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
+#include <spdlog/spdlog.h>
 #include <vector>
 
 namespace kind {
@@ -33,8 +34,10 @@ public:
     for (auto* observer : snapshot) {
       try {
         fn(observer);
+      } catch (const std::exception& e) {
+        spdlog::warn("Observer threw exception: {}", e.what());
       } catch (...) {
-        // Observer exceptions must not propagate
+        spdlog::warn("Observer threw non-std exception");
       }
     }
   }

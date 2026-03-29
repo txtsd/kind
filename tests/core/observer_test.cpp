@@ -226,6 +226,47 @@ TEST(ObserverListTier3, ConcurrentAddRemoveStress) {
 }
 
 // =============================================================================
+// Lifetime / ownership edge cases
+// =============================================================================
+
+TEST(ObserverListUnhinged, ObserverRemovedDuringNotifyStillCalledFromSnapshot) {
+  // Demonstrates a key consequence of snapshot-based iteration: removing an
+  // observer during a callback does NOT prevent it from being called in the
+  // current notify() pass, because the snapshot was taken before iteration
+  // began. The observer IS removed from the live list, so future notify()
+  // calls will not reach it.
+  //
+  // LIFETIME CONTRACT: Because the snapshot holds raw pointers, callers MUST
+  // ensure that observer objects outlive their registration. If observer1's
+  // callback were to both remove AND delete observer2, the snapshot would
+  // still hold observer2's (now dangling) pointer and call into freed memory,
+  // resulting in undefined behavior. Never delete an observer that might
+  // still appear in an in-progress notify() snapshot.
+  kind::ObserverList<kind::AuthObserver> list;
+
+  MockAuthObserver observer1;
+  MockAuthObserver observer2;
+
+  list.add(&observer1);
+  list.add(&observer2);
+
+  // observer1's callback removes observer2 from the live list, but observer2
+  // is still in the snapshot and will be called anyway.
+  EXPECT_CALL(observer1, on_logout()).WillOnce([&]() { list.remove(&observer2); });
+  EXPECT_CALL(observer2, on_logout()).Times(1);
+
+  list.notify([](kind::AuthObserver* o) { o->on_logout(); });
+
+  // observer2 was removed from the live list during the notify pass
+  EXPECT_EQ(list.size(), 1u);
+
+  // A subsequent notify does not reach observer2
+  EXPECT_CALL(observer1, on_logout()).Times(1);
+  EXPECT_CALL(observer2, on_logout()).Times(0);
+  list.notify([](kind::AuthObserver* o) { o->on_logout(); });
+}
+
+// =============================================================================
 // Verify GatewayObserver and StoreObserver interfaces compile and work
 // =============================================================================
 
