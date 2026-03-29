@@ -9,6 +9,7 @@ add_executable(kind-tests
   core/rest_test.cpp
   core/gateway_test.cpp
   core/auth_test.cpp
+  core/client_test.cpp
 )
 
 target_link_libraries(kind-tests
