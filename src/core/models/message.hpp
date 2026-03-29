@@ -1,11 +1,12 @@
 #pragma once
-#include <optional>
-#include <string>
-#include <vector>
 #include "models/attachment.hpp"
 #include "models/embed.hpp"
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
+
+#include <optional>
+#include <string>
+#include <vector>
 namespace kind {
 struct Message {
   Snowflake id{};
@@ -17,5 +18,7 @@ struct Message {
   bool pinned{false};
   std::vector<Attachment> attachments;
   std::vector<Embed> embeds;
+
+  bool operator==(const Message&) const = default;
 };
-}
+} // namespace kind

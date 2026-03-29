@@ -1,11 +1,3 @@
-#include <climits>
-#include <cstdint>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include <gtest/gtest.h>
-
 #include "models/attachment.hpp"
 #include "models/channel.hpp"
 #include "models/embed.hpp"
@@ -13,6 +5,13 @@
 #include "models/message.hpp"
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
+
+#include <climits>
+#include <cstdint>
+#include <gtest/gtest.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Tier 1: Normal usage
@@ -122,6 +121,71 @@ TEST(Message, MoveSemantics) {
 }
 
 // ---------------------------------------------------------------------------
+// Equality comparisons
+// ---------------------------------------------------------------------------
+
+TEST(User, EqualityEqual) {
+  kind::User a;
+  a.id = 42;
+  a.username = "alice";
+  a.discriminator = "1234";
+  a.avatar_hash = "abc";
+  a.bot = false;
+
+  kind::User b = a;
+  EXPECT_EQ(a, b);
+}
+
+TEST(User, EqualityNotEqual) {
+  kind::User a;
+  a.id = 42;
+  a.username = "alice";
+
+  kind::User b;
+  b.id = 43;
+  b.username = "bob";
+
+  EXPECT_NE(a, b);
+}
+
+TEST(Message, EqualityEqual) {
+  kind::Message a;
+  a.id = 1;
+  a.channel_id = 10;
+  a.content = "hello";
+  a.author.id = 42;
+  a.author.username = "alice";
+
+  kind::Message b = a;
+  EXPECT_EQ(a, b);
+}
+
+TEST(Message, EqualityNotEqual) {
+  kind::Message a;
+  a.id = 1;
+  a.content = "hello";
+
+  kind::Message b;
+  b.id = 2;
+  b.content = "world";
+
+  EXPECT_NE(a, b);
+}
+
+// ---------------------------------------------------------------------------
+// Self-referential / default author
+// ---------------------------------------------------------------------------
+
+TEST(Message, DefaultAuthorIdIsZero) {
+  kind::Message m;
+  m.id = 100;
+  m.content = "ghost message";
+  // author is default-constructed, so its id should be 0
+  EXPECT_EQ(m.author.id, 0u);
+  EXPECT_TRUE(m.author.username.empty());
+}
+
+// ---------------------------------------------------------------------------
 // Tier 2: Extensive edge cases
 // ---------------------------------------------------------------------------
 
@@ -208,8 +272,8 @@ TEST(Message, TenThousandAttachments) {
   kind::Message m;
   for (int i = 0; i < 10000; ++i) {
     m.attachments.push_back(kind::Attachment{
-      .id = static_cast<kind::Snowflake>(i),
-      .filename = "file_" + std::to_string(i) + ".bin",
+        .id = static_cast<kind::Snowflake>(i),
+        .filename = "file_" + std::to_string(i) + ".bin",
     });
   }
   ASSERT_EQ(m.attachments.size(), 10000u);

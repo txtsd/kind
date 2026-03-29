@@ -1,8 +1,9 @@
 #pragma once
-#include <string>
-#include <vector>
 #include "models/channel.hpp"
 #include "models/snowflake.hpp"
+
+#include <string>
+#include <vector>
 namespace kind {
 struct Guild {
   Snowflake id{};
@@ -10,5 +11,7 @@ struct Guild {
   std::string icon_hash;
   Snowflake owner_id{};
   std::vector<Channel> channels;
+
+  bool operator==(const Guild&) const = default;
 };
-}
+} // namespace kind

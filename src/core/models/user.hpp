@@ -1,6 +1,7 @@
 #pragma once
-#include <string>
 #include "models/snowflake.hpp"
+
+#include <string>
 namespace kind {
 struct User {
   Snowflake id{};
@@ -8,5 +9,7 @@ struct User {
   std::string discriminator;
   std::string avatar_hash;
   bool bot{false};
+
+  bool operator==(const User&) const = default;
 };
-}
+} // namespace kind

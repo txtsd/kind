@@ -1,8 +1,9 @@
 #pragma once
+#include "models/snowflake.hpp"
+
 #include <cstddef>
 #include <optional>
 #include <string>
-#include "models/snowflake.hpp"
 namespace kind {
 struct Attachment {
   Snowflake id{};
@@ -11,5 +12,7 @@ struct Attachment {
   std::size_t size{};
   std::optional<int> width;
   std::optional<int> height;
+
+  bool operator==(const Attachment&) const = default;
 };
-}
+} // namespace kind

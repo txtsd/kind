@@ -1,7 +1,8 @@
 #pragma once
+#include "models/snowflake.hpp"
+
 #include <optional>
 #include <string>
-#include "models/snowflake.hpp"
 namespace kind {
 struct Channel {
   Snowflake id{};
@@ -10,5 +11,7 @@ struct Channel {
   int type{};
   int position{};
   std::optional<Snowflake> parent_id;
+
+  bool operator==(const Channel&) const = default;
 };
-}
+} // namespace kind
