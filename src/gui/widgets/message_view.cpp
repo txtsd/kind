@@ -2,6 +2,7 @@
 
 #include "delegates/message_delegate.hpp"
 #include "models/message_model.hpp"
+#include "widgets/jump_pill.hpp"
 #include "workers/render_worker.hpp"
 
 #include <QResizeEvent>
@@ -24,6 +25,14 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     request_all_renders(model_->messages());
   });
 
+  jump_pill_ = new JumpPill(this);
+  connect(jump_pill_, &JumpPill::jump_requested, this, [this]() {
+    auto_scroll_ = true;
+    unread_count_ = 0;
+    jump_pill_->set_count(0);
+    scroll_to_bottom();
+  });
+
   setModel(model_);
   setItemDelegate(delegate_);
 
@@ -41,6 +50,11 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       return;
     }
     auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5);
+
+    if (auto_scroll_) {
+      unread_count_ = 0;
+      jump_pill_->set_count(0);
+    }
 
     // When scrolled to the very top, request older messages
     if (value == 0 && model_->rowCount() > 0) {
@@ -60,6 +74,9 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
+  unread_count_ = 0;
+  jump_pill_->set_count(0);
+
   save_scroll_state();
   current_channel_id_ = channel_id;
 
@@ -122,6 +139,12 @@ void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
   request_render(msg.id, msg);
   // auto_scroll_ is handled by the rowsInserted connection
+
+  if (!auto_scroll_) {
+    unread_count_++;
+    jump_pill_->set_count(unread_count_);
+    position_jump_pill();
+  }
 }
 
 void MessageView::update_message(const kind::Message& msg) {
@@ -167,9 +190,16 @@ void MessageView::request_all_renders(const std::vector<kind::Message>& messages
   }
 }
 
+void MessageView::position_jump_pill() {
+  int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
+  int pill_y = viewport()->height() - jump_pill_->height() - 8;
+  jump_pill_->move(pill_x, pill_y);
+}
+
 void MessageView::resizeEvent(QResizeEvent* event) {
   QListView::resizeEvent(event);
   resize_timer_->start();
+  position_jump_pill();
 }
 
 } // namespace kind::gui
