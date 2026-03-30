@@ -71,6 +71,13 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       scroll_to_bottom();
     }
   });
+
+  // Re-scroll when layout results arrive and change item heights
+  connect(model_, &QAbstractItemModel::dataChanged, this, [this]() {
+    if (auto_scroll_ && !mutating_) {
+      scroll_to_bottom();
+    }
+  });
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
