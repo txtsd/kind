@@ -33,10 +33,16 @@ namespace kind {
 DatabaseWriteWorker::DatabaseWriteWorker(const std::string& db_path, QObject* parent)
     : QObject(parent), db_path_(db_path) {}
 
-DatabaseWriteWorker::~DatabaseWriteWorker() {
+DatabaseWriteWorker::~DatabaseWriteWorker() = default;
+
+void DatabaseWriteWorker::close_db() {
   if (db_opened_) {
-    QSqlDatabase::database(connection_name_).close();
+    {
+      QSqlDatabase db = QSqlDatabase::database(connection_name_);
+      db.close();
+    }
     QSqlDatabase::removeDatabase(connection_name_);
+    db_opened_ = false;
   }
 }
 
@@ -334,6 +340,8 @@ DatabaseWriter::DatabaseWriter(const std::string& db_path, QObject* parent)
 
 DatabaseWriter::~DatabaseWriter() {
   flush_sync();
+  // Close the DB connection on the worker thread (where it was opened)
+  QMetaObject::invokeMethod(worker_, &DatabaseWriteWorker::close_db, Qt::BlockingQueuedConnection);
   thread_.quit();
   thread_.wait();
   delete worker_;
