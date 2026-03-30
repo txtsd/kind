@@ -90,10 +90,12 @@ public:
   void on_channel_update(const kind::Channel& /*channel*/) override {}
   void on_typing_start(kind::Snowflake /*channel_id*/, kind::Snowflake /*user_id*/) override {}
   void on_presence_update(kind::Snowflake /*user_id*/, std::string_view /*status*/) override {}
-  void on_gateway_disconnect(std::string_view /*reason*/) override {}
-  void on_gateway_reconnecting() override {}
+  void on_gateway_disconnect(std::string_view /*reason*/) override { disconnected = true; }
+  void on_gateway_reconnecting() override { reconnecting = true; }
 
   bool ready = false;
+  bool disconnected = false;
+  bool reconnecting = false;
   std::vector<kind::Guild> ready_guilds;
   std::vector<kind::Message> created_messages;
 };
@@ -285,6 +287,55 @@ TEST_F(IntegrationTest, InvalidTokenRejected) {
   EXPECT_FALSE(user.has_value());
 
   client_->remove_auth_observer(&auth_obs);
+}
+
+TEST_F(IntegrationTest, ReconnectionAfterDisconnect) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY event";
+
+  // Verify initial connection is established and guilds populated
+  auto guilds = client_->guilds();
+  ASSERT_EQ(guilds.size(), 2u);
+  EXPECT_EQ(server_->ws_connection_count(), 1);
+
+  // Force drop the WebSocket connection from the server side
+  server_->drop_ws_connection();
+
+  // Wait for the client to reconnect (a new WebSocket connection arrives)
+  ASSERT_TRUE(wait_until([&]() { return server_->ws_connection_count() >= 2; }))
+      << "Timed out waiting for client to reconnect";
+
+  // The client should send either RESUME or IDENTIFY on the new connection
+  ASSERT_TRUE(wait_until([&]() { return server_->resume_received() || server_->identify_received(); }))
+      << "Timed out waiting for RESUME or IDENTIFY on reconnection";
+
+  // Verify the client is still functional after reconnection by checking
+  // that it can receive gateway events on the new connection
+  std::string msg_json = R"({
+    "id": "801",
+    "channel_id": "42",
+    "content": "Post-reconnect message",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "100", "username": "testbot", "discriminator": "0001", "avatar": "abc123", "bot": false}
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE after reconnection";
+
+  EXPECT_EQ(gw_obs.created_messages[0].content, "Post-reconnect message");
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
 }
 
 int main(int argc, char* argv[]) {

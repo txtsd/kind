@@ -36,6 +36,7 @@ void MockDiscordServer::stop() {
   }
   ws_server_->close();
   http_server_->close();
+  http_buffers_.clear();
 }
 
 std::string MockDiscordServer::rest_base_url() const {
@@ -79,6 +80,12 @@ void MockDiscordServer::send_gateway_event(const std::string& event_name, const 
   ws_client_->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 }
 
+void MockDiscordServer::drop_ws_connection() {
+  if (ws_client_) {
+    ws_client_->abort();
+  }
+}
+
 std::vector<MockDiscordServer::ReceivedRequest> MockDiscordServer::received_requests() const {
   return received_requests_;
 }
@@ -87,29 +94,68 @@ std::vector<std::string> MockDiscordServer::sent_messages() const {
   return sent_messages_;
 }
 
+int MockDiscordServer::ws_connection_count() const {
+  return ws_connection_count_;
+}
+
+bool MockDiscordServer::resume_received() const {
+  return resume_received_;
+}
+
+bool MockDiscordServer::identify_received() const {
+  return identify_received_;
+}
+
 // HTTP handling
 
 void MockDiscordServer::on_http_connection() {
   while (auto* socket = http_server_->nextPendingConnection()) {
     connect(socket, &QTcpSocket::readyRead, this, [this, socket]() { on_http_ready_read(socket); });
-    connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+    connect(socket, &QTcpSocket::disconnected, this, [this, socket]() {
+      http_buffers_.remove(socket);
+      socket->deleteLater();
+    });
   }
 }
 
 void MockDiscordServer::on_http_ready_read(QTcpSocket* socket) {
-  QByteArray data = socket->readAll();
-  std::string raw = data.toStdString();
+  http_buffers_[socket].append(socket->readAll());
+  try_parse_http_buffer(socket);
+}
 
-  // Parse the HTTP request line and headers
+void MockDiscordServer::try_parse_http_buffer(QTcpSocket* socket) {
+  QByteArray& buf = http_buffers_[socket];
+  std::string raw = buf.toStdString();
+
+  // Wait until we have the full header section
   auto header_end = raw.find("\r\n\r\n");
   if (header_end == std::string::npos) {
     return;
   }
 
   std::string header_section = raw.substr(0, header_end);
+
+  // Parse Content-Length to know if the body is complete
+  std::size_t content_length = 0;
+  auto cl_pos = header_section.find("Content-Length: ");
+  if (cl_pos == std::string::npos) {
+    cl_pos = header_section.find("content-length: ");
+  }
+  if (cl_pos != std::string::npos) {
+    auto cl_line_end = header_section.find("\r\n", cl_pos);
+    std::string cl_value = header_section.substr(cl_pos + 16, cl_line_end - cl_pos - 16);
+    content_length = std::stoull(cl_value);
+  }
+
+  // Check if we have the complete body
+  std::size_t total_needed = header_end + 4 + content_length;
+  if (raw.size() < total_needed) {
+    return;
+  }
+
   std::string body;
-  if (header_end + 4 < raw.size()) {
-    body = raw.substr(header_end + 4);
+  if (content_length > 0) {
+    body = raw.substr(header_end + 4, content_length);
   }
 
   // Parse request line
@@ -138,9 +184,11 @@ void MockDiscordServer::on_http_ready_read(QTcpSocket* socket) {
     if (line.substr(0, 15) == "Authorization: ") {
       auth_header = line.substr(15);
     }
-    // Handle Content-Length for body reading if needed
     pos = line_end + 2;
   }
+
+  // Remove consumed bytes from the buffer
+  buf.remove(0, static_cast<int>(total_needed));
 
   received_requests_.push_back({method, route_path, body, auth_header});
   handle_http_request(socket, method, route_path, body, auth_header);
@@ -251,7 +299,17 @@ void MockDiscordServer::on_ws_new_connection() {
     return;
   }
 
+  // Close any existing connection before accepting the new one.
+  // This mock only supports one active WebSocket client at a time.
+  if (ws_client_ && ws_client_->state() != QAbstractSocket::UnconnectedState) {
+    ws_client_->close();
+  }
+
   ws_client_ = socket;
+  ws_connection_count_++;
+  resume_received_ = false;
+  identify_received_ = false;
+
   connect(ws_client_, &QWebSocket::textMessageReceived, this, &MockDiscordServer::on_ws_text_message);
   connect(ws_client_, &QWebSocket::disconnected, this, &MockDiscordServer::on_ws_disconnected);
 
@@ -279,8 +337,16 @@ void MockDiscordServer::on_ws_text_message(const QString& message) {
   }
   case 2: {
     // IDENTIFY
+    identify_received_ = true;
     QJsonDocument d_doc(obj.value("d").toObject());
     handle_identify(d_doc.toJson(QJsonDocument::Compact).toStdString());
+    break;
+  }
+  case 6: {
+    // RESUME
+    resume_received_ = true;
+    QJsonDocument d_doc(obj.value("d").toObject());
+    handle_resume(d_doc.toJson(QJsonDocument::Compact).toStdString());
     break;
   }
   default:
@@ -306,6 +372,11 @@ void MockDiscordServer::handle_identify(const std::string& payload) {
   }
 
   send_ready();
+}
+
+void MockDiscordServer::handle_resume(const std::string& /*payload*/) {
+  // Acknowledge the resume by sending a RESUMED dispatch event
+  send_resumed();
 }
 
 void MockDiscordServer::send_hello() {
@@ -347,6 +418,23 @@ void MockDiscordServer::send_ready() {
   payload["s"] = static_cast<qint64>(dispatch_sequence_);
   payload["t"] = "READY";
   payload["d"] = ready_data;
+
+  QJsonDocument doc(payload);
+  ws_client_->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+}
+
+void MockDiscordServer::send_resumed() {
+  if (!ws_client_) {
+    return;
+  }
+
+  ++dispatch_sequence_;
+
+  QJsonObject payload;
+  payload["op"] = 0;
+  payload["s"] = static_cast<qint64>(dispatch_sequence_);
+  payload["t"] = "RESUMED";
+  payload["d"] = QJsonObject();
 
   QJsonDocument doc(payload);
   ws_client_->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
