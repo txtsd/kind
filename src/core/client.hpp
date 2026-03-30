@@ -78,6 +78,7 @@ public:
   std::vector<Channel> channels(Snowflake guild_id) const;
   std::vector<Message> messages(Snowflake channel_id) const;
   std::optional<User> current_user() const;
+  std::vector<Snowflake> member_roles(Snowflake guild_id) const;
 
 private:
   void wire_bridges();

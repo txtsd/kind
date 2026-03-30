@@ -92,6 +92,22 @@ TEST(DataStoreTier1, SetAndRetrieveCurrentUser) {
   EXPECT_EQ(result->username, "alice");
 }
 
+TEST(DataStoreTier1, MemberRolesRoundTrip) {
+  kind::DataStore store;
+  store.set_member_roles(100, {10, 20, 30});
+  auto roles = store.member_roles(100);
+  ASSERT_EQ(roles.size(), 3u);
+  EXPECT_EQ(roles[0], 10u);
+  EXPECT_EQ(roles[1], 20u);
+  EXPECT_EQ(roles[2], 30u);
+}
+
+TEST(DataStoreTier1, MemberRolesEmptyForUnknownGuild) {
+  kind::DataStore store;
+  auto roles = store.member_roles(999);
+  EXPECT_TRUE(roles.empty());
+}
+
 TEST(DataStoreTier1, UpsertGuildUpdatesExisting) {
   kind::DataStore store;
   store.upsert_guild(make_guild(1, "Old Name"));

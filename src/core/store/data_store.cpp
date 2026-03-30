@@ -104,6 +104,22 @@ void DataStore::set_guild_order(const std::vector<Snowflake>& ordered_ids) {
   }
 }
 
+// --- Member roles ---
+
+void DataStore::set_member_roles(Snowflake guild_id, std::vector<Snowflake> role_ids) {
+  std::unique_lock lock(mutex_);
+  member_roles_[guild_id] = std::move(role_ids);
+}
+
+std::vector<Snowflake> DataStore::member_roles(Snowflake guild_id) const {
+  std::shared_lock lock(mutex_);
+  auto it = member_roles_.find(guild_id);
+  if (it != member_roles_.end()) {
+    return it->second;
+  }
+  return {};
+}
+
 // --- Mutations ---
 
 void DataStore::set_current_user(User user) {

@@ -128,6 +128,23 @@ private:
       }
     }
 
+    // Parse current user's roles per guild from merged_members (user tokens)
+    auto merged_members = obj["merged_members"].toArray();
+    for (int i = 0; i < merged_members.size() && i < static_cast<int>(guilds.size()); ++i) {
+      auto member_array = merged_members[i].toArray();
+      if (member_array.isEmpty()) {
+        continue;
+      }
+      auto member_obj = member_array[0].toObject();
+      auto roles_array = member_obj["roles"].toArray();
+      std::vector<Snowflake> role_ids;
+      role_ids.reserve(roles_array.size());
+      for (const auto& val : roles_array) {
+        role_ids.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
+      }
+      client_.store_->set_member_roles(guilds[static_cast<size_t>(i)].id, std::move(role_ids));
+    }
+
     // Decode guild ordering from user_settings_proto (user tokens only)
     auto settings_proto_b64 = obj["user_settings_proto"].toString();
     if (!settings_proto_b64.isEmpty()) {
@@ -526,6 +543,9 @@ std::vector<Message> Client::messages(Snowflake channel_id) const {
 }
 std::optional<User> Client::current_user() const {
   return store_->current_user();
+}
+std::vector<Snowflake> Client::member_roles(Snowflake guild_id) const {
+  return store_->member_roles(guild_id);
 }
 
 } // namespace kind

@@ -30,6 +30,10 @@ public:
   // Guild ordering (from user_settings_proto)
   void set_guild_order(const std::vector<Snowflake>& ordered_ids);
 
+  // Member roles (from merged_members in READY)
+  void set_member_roles(Snowflake guild_id, std::vector<Snowflake> role_ids);
+  std::vector<Snowflake> member_roles(Snowflake guild_id) const;
+
   // Mutations (called by gateway event handlers)
   void set_current_user(User user);
   void upsert_guild(Guild guild);
@@ -56,6 +60,7 @@ private:
   std::map<Snowflake, std::deque<Message>> channel_messages_;
   std::map<Snowflake, User> users_;
   std::vector<Snowflake> guild_order_;
+  std::map<Snowflake, std::vector<Snowflake>> member_roles_;
   std::map<Snowflake, std::unordered_set<Snowflake>> pending_deletes_;
 
   ObserverList<StoreObserver> observers_;
