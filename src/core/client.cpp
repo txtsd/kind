@@ -592,6 +592,11 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
         messages.push_back(std::move(*msg));
       }
     }
+    if (db_writer_) {
+      for (const auto& msg : messages) {
+        emit db_writer_->message_write_requested(msg);
+      }
+    }
     store_->add_messages_before(channel_id, std::move(messages));
   });
 }
