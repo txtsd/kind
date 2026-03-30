@@ -42,6 +42,7 @@ target_link_libraries(kind-core
     Qt6::Core
     Qt6::Network
     Qt6::WebSockets
+    Qt6::Sql
     Qt6::Protobuf
     Qt6::ProtobufWellKnownTypes
     Qt6Keychain::Qt6Keychain

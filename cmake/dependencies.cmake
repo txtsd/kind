@@ -44,7 +44,7 @@ endif()
 find_package(Qt6Keychain REQUIRED)
 
 # Qt6
-find_package(Qt6 6.10 REQUIRED COMPONENTS Core Network WebSockets Protobuf ProtobufWellKnownTypes)
+find_package(Qt6 6.10 REQUIRED COMPONENTS Core Network WebSockets Sql Protobuf ProtobufWellKnownTypes)
 if(KIND_BUILD_TESTS)
   find_package(Qt6 6.10 REQUIRED COMPONENTS Test)
 endif()
