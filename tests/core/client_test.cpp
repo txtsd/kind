@@ -352,7 +352,9 @@ TEST_F(ClientTest, GatewayMessageDeleteUpdatesStore) {
   std::string del_json = R"({"id": "555", "channel_id": "42"})";
   fire_gateway_event("MESSAGE_DELETE", del_json);
 
-  EXPECT_TRUE(client_->messages(42).empty());
+  auto msgs = client_->messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_TRUE(msgs[0].deleted);
 
   client_->remove_gateway_observer(&gw_obs);
 }

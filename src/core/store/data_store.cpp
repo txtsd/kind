@@ -278,12 +278,14 @@ void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
     std::unique_lock lock(mutex_);
     auto it = channel_messages_.find(channel_id);
     if (it != channel_messages_.end()) {
-      auto& deque = it->second;
-      deque.erase(
-          std::remove_if(deque.begin(), deque.end(), [message_id](const Message& m) { return m.id == message_id; }),
-          deque.end());
+      for (auto& msg : it->second) {
+        if (msg.id == message_id) {
+          msg.deleted = true;
+          break;
+        }
+      }
       if (!observers_.empty()) {
-        message_snapshot.assign(deque.begin(), deque.end());
+        message_snapshot.assign(it->second.begin(), it->second.end());
       }
     }
   }

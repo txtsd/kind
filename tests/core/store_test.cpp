@@ -210,9 +210,13 @@ TEST(DataStoreTier2, RemoveMessageRemovesCorrectOne) {
   store.remove_message(10, 2);
 
   auto result = store.messages(10);
-  ASSERT_EQ(result.size(), 2u);
+  ASSERT_EQ(result.size(), 3u);
   EXPECT_EQ(result[0].content, "first");
-  EXPECT_EQ(result[1].content, "third");
+  EXPECT_FALSE(result[0].deleted);
+  EXPECT_EQ(result[1].content, "second");
+  EXPECT_TRUE(result[1].deleted);
+  EXPECT_EQ(result[2].content, "third");
+  EXPECT_FALSE(result[2].deleted);
 }
 
 TEST(DataStoreTier2, ConcurrentReadsWhileWriting) {

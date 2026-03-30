@@ -16,6 +16,7 @@ struct Message {
   std::string timestamp;
   std::optional<std::string> edited_timestamp;
   bool pinned{false};
+  bool deleted{false};
   std::vector<Attachment> attachments;
   std::vector<Embed> embeds;
 
