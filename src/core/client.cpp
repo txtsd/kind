@@ -1,7 +1,7 @@
 #include "client.hpp"
 
 #include "auth/auth_manager.hpp"
-#include "auth/token_store.hpp"
+#include "auth/keychain_token_store.hpp"
 #include "cache/disk_cache.hpp"
 #include "config/config_manager.hpp"
 #include "gateway/gateway_client.hpp"
@@ -291,14 +291,13 @@ private:
 // ============================================================
 
 Client::Client(ConfigManager& config) : config_(config) {
-  auto config_dir = config.path().parent_path();
   auto api_base = config.get_or<std::string>("network.api_base_url", std::string(endpoints::api_base));
   auto max_messages = static_cast<std::size_t>(config.get_or<int64_t>("behavior.max_messages_per_channel", 500));
   auto reconnect_base = config.get_or<int64_t>("behavior.reconnect_base_delay_ms", 1000);
   auto reconnect_max = config.get_or<int64_t>("behavior.reconnect_max_delay_ms", 30000);
   auto reconnect_retries = config.get_or<int64_t>("behavior.reconnect_max_retries", 10);
 
-  token_store_ = std::make_unique<TokenStore>(config_dir);
+  token_store_ = std::make_unique<KeychainTokenStore>();
 
   auto qt_rest = std::make_unique<QtRestClient>();
   qt_rest->set_base_url(api_base);
@@ -386,6 +385,10 @@ bool Client::try_saved_login() {
   }
   auth_->login_with_token(saved->token, saved->token_type);
   return true;
+}
+
+std::optional<TokenStore::StoredToken> Client::saved_token() const {
+  return token_store_->load_token();
 }
 
 void Client::login_with_token(std::string_view token, std::string_view token_type) {

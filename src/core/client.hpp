@@ -1,5 +1,6 @@
 #pragma once
 
+#include "auth/token_store.hpp"
 #include "interfaces/auth_observer.hpp"
 #include "interfaces/gateway_observer.hpp"
 #include "interfaces/observer_list.hpp"
@@ -60,6 +61,7 @@ public:
 
   // Actions (all async, results delivered via observers)
   bool try_saved_login();  // Returns true if a saved token was found and login attempted
+  std::optional<TokenStore::StoredToken> saved_token() const;
   void login_with_token(std::string_view token, std::string_view token_type = "user");
   void login_with_credentials(std::string_view email, std::string_view password);
   void submit_mfa_code(std::string_view code);

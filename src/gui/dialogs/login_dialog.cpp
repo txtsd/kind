@@ -1,6 +1,5 @@
 #include "login_dialog.hpp"
 
-#include "auth/token_store.hpp"
 #include "client.hpp"
 #include "config/config_manager.hpp"
 
@@ -142,9 +141,7 @@ void LoginDialog::enable_login() {
 }
 
 void LoginDialog::load_saved_token(kind::Client& client) {
-  // Access the token store through a temporary TokenStore with the same path
-  kind::TokenStore store;
-  auto saved = store.load_token();
+  auto saved = client.saved_token();
   if (!saved) {
     return;
   }

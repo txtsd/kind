@@ -40,6 +40,9 @@ if(KIND_BUILD_TUI)
   endif()
 endif()
 
+# QtKeychain (system keychain for token storage)
+find_package(Qt6Keychain REQUIRED)
+
 # Qt6
 find_package(Qt6 6.10 REQUIRED COMPONENTS Core Network WebSockets Protobuf ProtobufWellKnownTypes)
 if(KIND_BUILD_TESTS)

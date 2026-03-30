@@ -1,5 +1,6 @@
 #include "auth/auth_manager.hpp"
 #include "auth/token_store.hpp"
+#include "file_token_store.hpp"
 #include "rest/endpoints.hpp"
 #include "rest/rest_client.hpp"
 #include "rest/rest_error.hpp"
@@ -46,80 +47,8 @@ static const std::string valid_user_json =
 static const std::string bot_user_json =
     R"({"id":"987654321","username":"botuser","discriminator":"0000","avatar":"bot_av","bot":true})";
 
-// ============================================================
-// TokenStore tests
-// ============================================================
-
-class TokenStoreTest : public ::testing::Test {
-protected:
-  std::filesystem::path test_dir_;
-
-  void SetUp() override {
-    test_dir_ = std::filesystem::temp_directory_path() / "kind_token_test";
-    std::filesystem::remove_all(test_dir_);
-  }
-
-  void TearDown() override { std::filesystem::remove_all(test_dir_); }
-};
-
-TEST_F(TokenStoreTest, SaveAndLoadRoundTrip) {
-  kind::TokenStore store(test_dir_);
-  store.save_token("my-secret-token", "user");
-
-  auto loaded = store.load_token();
-  ASSERT_TRUE(loaded.has_value());
-  EXPECT_EQ(loaded->token, "my-secret-token");
-  EXPECT_EQ(loaded->token_type, "user");
-}
-
-TEST_F(TokenStoreTest, LoadFromEmptyReturnsNullopt) {
-  kind::TokenStore store(test_dir_);
-  auto loaded = store.load_token();
-  EXPECT_FALSE(loaded.has_value());
-}
-
-TEST_F(TokenStoreTest, ClearRemovesToken) {
-  kind::TokenStore store(test_dir_);
-  store.save_token("token", "bot");
-  store.clear_token();
-
-  auto loaded = store.load_token();
-  EXPECT_FALSE(loaded.has_value());
-}
-
-TEST_F(TokenStoreTest, DirectoryCreatedIfMissing) {
-  auto nested = test_dir_ / "deep" / "nested";
-  kind::TokenStore store(nested);
-  store.save_token("token", "user");
-
-  EXPECT_TRUE(std::filesystem::exists(nested / "token.dat"));
-}
-
-TEST_F(TokenStoreTest, OverwriteExistingToken) {
-  kind::TokenStore store(test_dir_);
-  store.save_token("first-token", "user");
-  store.save_token("second-token", "bot");
-
-  auto loaded = store.load_token();
-  ASSERT_TRUE(loaded.has_value());
-  EXPECT_EQ(loaded->token, "second-token");
-  EXPECT_EQ(loaded->token_type, "bot");
-}
-
-#ifdef __unix__
-TEST_F(TokenStoreTest, FilePermissionsRestrictedOnUnix) {
-  kind::TokenStore store(test_dir_);
-  store.save_token("secret", "user");
-
-  auto path = test_dir_ / "token.dat";
-  auto perms = std::filesystem::status(path).permissions();
-  // Owner read/write only
-  EXPECT_NE(perms & std::filesystem::perms::owner_read, std::filesystem::perms::none);
-  EXPECT_NE(perms & std::filesystem::perms::owner_write, std::filesystem::perms::none);
-  EXPECT_EQ(perms & std::filesystem::perms::group_read, std::filesystem::perms::none);
-  EXPECT_EQ(perms & std::filesystem::perms::others_read, std::filesystem::perms::none);
-}
-#endif
+// TokenStore file-based tests removed — production now uses system keychain.
+// FileTokenStore is retained only as a test double for AuthManager tests.
 
 // ============================================================
 // AuthManager fixture
@@ -136,7 +65,7 @@ protected:
   void SetUp() override {
     test_dir_ = std::filesystem::temp_directory_path() / "kind_auth_test";
     std::filesystem::remove_all(test_dir_);
-    token_store_ = std::make_unique<kind::TokenStore>(test_dir_);
+    token_store_ = std::make_unique<kind::test::FileTokenStore>(test_dir_);
     auth_ = std::make_unique<kind::AuthManager>(mock_rest_, *token_store_);
     auth_->add_observer(&observer_);
   }
@@ -411,25 +340,4 @@ TEST_F(AuthManagerTest, ConcurrentLoginFromDifferentThreads) {
   SUCCEED();
 }
 
-TEST_F(AuthManagerTest, TokenStoreReadOnlyFile) {
-  // Create the file first, then make it read-only
-  token_store_->save_token("initial", "user");
-  auto path = test_dir_ / "token.dat";
-  std::filesystem::permissions(path, std::filesystem::perms::owner_read);
-
-  // Saving again should handle the error gracefully without crashing
-  token_store_->save_token("new-token", "user");
-
-  // Restore permissions for cleanup
-  std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
-}
-
-TEST_F(AuthManagerTest, TokenStoreDirectoryDoesNotExist) {
-  auto deep_path = test_dir_ / "nonexistent" / "deep" / "path";
-  kind::TokenStore deep_store(deep_path);
-  deep_store.save_token("token", "user");
-
-  auto loaded = deep_store.load_token();
-  ASSERT_TRUE(loaded.has_value());
-  EXPECT_EQ(loaded->token, "token");
-}
+// File-specific TokenStore tests removed — production uses system keychain.

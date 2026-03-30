@@ -1,5 +1,6 @@
 #include "auth/auth_manager.hpp"
 #include "auth/token_store.hpp"
+#include "file_token_store.hpp"
 #include "client.hpp"
 #include "config/config_manager.hpp"
 #include "gateway/gateway_client.hpp"
@@ -119,7 +120,7 @@ protected:
 
     // AuthManager needs a RestClient and TokenStore, but we provide real
     // ones because AuthManager's constructor takes references to them
-    auto token_store = std::make_unique<kind::TokenStore>(config_dir_);
+    auto token_store = std::make_unique<kind::test::FileTokenStore>(config_dir_);
     auto store = std::make_unique<kind::DataStore>(500);
 
     // Mock the users/@me endpoint for auth to work

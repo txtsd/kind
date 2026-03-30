@@ -9,7 +9,7 @@ target_sources(kind-core PRIVATE
   cache/disk_cache.cpp
   json/parsers.cpp
   auth/auth_manager.cpp
-  auth/token_store.cpp
+  auth/keychain_token_store.cpp
   config/platform_paths.cpp
   config/config_manager.cpp
   store/data_store.cpp
@@ -44,5 +44,6 @@ target_link_libraries(kind-core
     Qt6::WebSockets
     Qt6::Protobuf
     Qt6::ProtobufWellKnownTypes
+    Qt6Keychain::Qt6Keychain
     kind-core-proto
 )
