@@ -1,5 +1,6 @@
 #pragma once
 #include "models/channel.hpp"
+#include "models/role.hpp"
 #include "models/snowflake.hpp"
 
 #include <string>
@@ -10,6 +11,7 @@ struct Guild {
   std::string name;
   std::string icon_hash;
   Snowflake owner_id{};
+  std::vector<Role> roles;
   std::vector<Channel> channels;
 
   bool operator==(const Guild&) const = default;

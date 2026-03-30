@@ -1,8 +1,10 @@
 #pragma once
+#include "models/permission_overwrite.hpp"
 #include "models/snowflake.hpp"
 
 #include <optional>
 #include <string>
+#include <vector>
 namespace kind {
 struct Channel {
   Snowflake id{};
@@ -11,6 +13,7 @@ struct Channel {
   int type{};
   int position{};
   std::optional<Snowflake> parent_id;
+  std::vector<PermissionOverwrite> permission_overwrites;
 
   bool operator==(const Channel&) const = default;
 };
