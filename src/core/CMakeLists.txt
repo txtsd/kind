@@ -6,7 +6,6 @@ target_sources(kind-core PRIVATE
   logging.cpp
   permissions.cpp
   client.cpp
-  cache/disk_cache.cpp
   cache/database_manager.cpp
   cache/database_writer.cpp
   cache/database_reader.cpp

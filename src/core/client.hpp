@@ -25,6 +25,9 @@ class GatewayClient;
 class AuthManager;
 class DataStore;
 class TokenStore;
+class DatabaseManager;
+class DatabaseWriter;
+class DatabaseReader;
 
 // Dependency bundle for testing with mock components
 struct ClientDeps {
@@ -101,6 +104,11 @@ private:
   // External observer lists
   ObserverList<AuthObserver> auth_observers_;
   ObserverList<GatewayObserver> gateway_observers_;
+
+  // SQLite cache (production only; null in test constructor)
+  std::unique_ptr<DatabaseManager> db_manager_;
+  std::unique_ptr<DatabaseWriter> db_writer_;
+  std::unique_ptr<DatabaseReader> db_reader_;
 
   // Active selection tracking for stale response discarding
   std::atomic<Snowflake> active_guild_id_{0};

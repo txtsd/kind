@@ -2,7 +2,10 @@
 
 #include "auth/auth_manager.hpp"
 #include "auth/keychain_token_store.hpp"
-#include "cache/disk_cache.hpp"
+#include "cache/database_manager.hpp"
+#include "cache/database_reader.hpp"
+#include "cache/database_writer.hpp"
+#include "config/platform_paths.hpp"
 #include "config/config_manager.hpp"
 #include "gateway/gateway_client.hpp"
 #include "gateway/gateway_events.hpp"
@@ -36,6 +39,10 @@ public:
 
   void on_login_success(const User& user) override {
     client_.store_->set_current_user(user);
+
+    if (client_.db_writer_) {
+      emit client_.db_writer_->current_user_write_requested(user);
+    }
 
     auto token = client_.auth_->token();
     auto token_type = client_.auth_->token_type();
@@ -124,6 +131,16 @@ private:
       auto guild = json_parse::parse_guild(guild_obj);
       if (guild) {
         client_.store_->upsert_guild(*guild);
+        if (client_.db_writer_) {
+          emit client_.db_writer_->guild_write_requested(*guild);
+          emit client_.db_writer_->roles_write_requested(guild->id, guild->roles);
+          for (const auto& ch : guild->channels) {
+            emit client_.db_writer_->channel_write_requested(ch);
+            if (!ch.permission_overwrites.empty()) {
+              emit client_.db_writer_->overwrites_write_requested(ch.id, ch.permission_overwrites);
+            }
+          }
+        }
         guilds.push_back(std::move(*guild));
       }
     }
@@ -142,7 +159,11 @@ private:
       for (const auto& val : roles_array) {
         role_ids.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
       }
-      client_.store_->set_member_roles(guilds[static_cast<size_t>(i)].id, std::move(role_ids));
+      auto guild_id = guilds[static_cast<size_t>(i)].id;
+      if (client_.db_writer_) {
+        emit client_.db_writer_->member_roles_write_requested(guild_id, role_ids);
+      }
+      client_.store_->set_member_roles(guild_id, std::move(role_ids));
     }
 
     // Decode guild ordering from user_settings_proto (user tokens only)
@@ -184,6 +205,9 @@ private:
 
           if (!ordered_ids.empty()) {
             client_.store_->set_guild_order(ordered_ids);
+            if (client_.db_writer_) {
+              emit client_.db_writer_->guild_order_write_requested(ordered_ids);
+            }
             guilds = client_.store_->guilds();
           }
         }
@@ -202,6 +226,9 @@ private:
       return;
     }
     client_.store_->add_message(*msg);
+    if (client_.db_writer_) {
+      emit client_.db_writer_->message_write_requested(*msg);
+    }
     client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_create(*msg); });
   }
 
@@ -211,6 +238,9 @@ private:
       return;
     }
     client_.store_->update_message(*msg);
+    if (client_.db_writer_) {
+      emit client_.db_writer_->message_write_requested(*msg);
+    }
     client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_update(*msg); });
   }
 
@@ -224,6 +254,9 @@ private:
     auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
     auto message_id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
     client_.store_->remove_message(channel_id, message_id);
+    if (client_.db_writer_) {
+      emit client_.db_writer_->message_delete_requested(channel_id, message_id);
+    }
     client_.gateway_observers_.notify(
         [channel_id, message_id](GatewayObserver* obs) { obs->on_message_delete(channel_id, message_id); });
   }
@@ -239,6 +272,16 @@ private:
       return;
     }
     client_.store_->upsert_guild(*guild);
+    if (client_.db_writer_) {
+      emit client_.db_writer_->guild_write_requested(*guild);
+      emit client_.db_writer_->roles_write_requested(guild->id, guild->roles);
+      for (const auto& ch : guild->channels) {
+        emit client_.db_writer_->channel_write_requested(ch);
+        if (!ch.permission_overwrites.empty()) {
+          emit client_.db_writer_->overwrites_write_requested(ch.id, ch.permission_overwrites);
+        }
+      }
+    }
     client_.gateway_observers_.notify([&guild](GatewayObserver* obs) { obs->on_guild_create(*guild); });
   }
 
@@ -253,6 +296,12 @@ private:
       return;
     }
     client_.store_->upsert_channel(*channel);
+    if (client_.db_writer_) {
+      emit client_.db_writer_->channel_write_requested(*channel);
+      if (!channel->permission_overwrites.empty()) {
+        emit client_.db_writer_->overwrites_write_requested(channel->id, channel->permission_overwrites);
+      }
+    }
     client_.gateway_observers_.notify([&channel](GatewayObserver* obs) { obs->on_channel_update(*channel); });
   }
 
@@ -319,6 +368,13 @@ Client::Client(ConfigManager& config, const std::string& keychain_service) : con
   gateway_->set_intents(default_intents);
 
   store_ = std::make_unique<DataStore>(max_messages);
+
+  auto db_path = platform_paths().state_dir / "kind.db";
+  db_manager_ = std::make_unique<DatabaseManager>(db_path);
+  db_manager_->initialize();
+  db_writer_ = std::make_unique<DatabaseWriter>(db_path.string());
+  db_reader_ = std::make_unique<DatabaseReader>(db_path.string());
+
   auth_ = std::make_unique<AuthManager>(*rest_, *token_store_);
 
   wire_bridges();
@@ -445,6 +501,12 @@ void Client::select_guild(Snowflake guild_id) {
       if (channel) {
         channel->guild_id = guild_id;
         store_->upsert_channel(*channel);
+        if (db_writer_) {
+          emit db_writer_->channel_write_requested(*channel);
+          if (!channel->permission_overwrites.empty()) {
+            emit db_writer_->overwrites_write_requested(channel->id, channel->permission_overwrites);
+          }
+        }
       }
     }
   });
@@ -479,6 +541,11 @@ void Client::select_channel(Snowflake channel_id) {
       if (msg) {
         msg->channel_id = channel_id;
         messages.push_back(std::move(*msg));
+      }
+    }
+    if (db_writer_) {
+      for (const auto& msg : messages) {
+        emit db_writer_->message_write_requested(msg);
       }
     }
     store_->set_messages(channel_id, std::move(messages));
@@ -522,13 +589,45 @@ void Client::logout() {
 }
 
 void Client::load_cache() {
-  DiskCache cache;
-  cache.load(*store_);
+  if (!db_reader_) {
+    return;
+  }
+
+  auto user = db_reader_->current_user();
+  if (user) {
+    store_->set_current_user(*user);
+  }
+
+  auto all_guilds = db_reader_->guilds();
+  for (auto& guild : all_guilds) {
+    guild.roles = db_reader_->roles(guild.id);
+    store_->upsert_guild(guild);
+  }
+
+  auto order = db_reader_->guild_order();
+  if (!order.empty()) {
+    store_->set_guild_order(order);
+  }
+
+  for (const auto& guild : all_guilds) {
+    auto channels = db_reader_->channels(guild.id);
+    for (auto& ch : channels) {
+      ch.permission_overwrites = db_reader_->permission_overwrites(ch.id);
+      store_->upsert_channel(ch);
+    }
+    auto role_ids = db_reader_->member_roles(guild.id);
+    if (!role_ids.empty()) {
+      store_->set_member_roles(guild.id, role_ids);
+    }
+  }
+
+  log::cache()->info("Loaded cache from database");
 }
 
 void Client::save_cache() {
-  DiskCache cache;
-  cache.save(*store_);
+  if (db_writer_) {
+    db_writer_->flush_sync();
+  }
 }
 
 // ============================================================
