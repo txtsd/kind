@@ -34,12 +34,53 @@ User user_from_json(const QJsonObject& obj) {
   return user;
 }
 
+QJsonObject role_to_json(const Role& role) {
+  QJsonObject obj;
+  obj["id"] = QString::number(role.id);
+  obj["name"] = QString::fromStdString(role.name);
+  obj["permissions"] = QString::number(role.permissions);
+  obj["position"] = role.position;
+  return obj;
+}
+
+Role role_from_json(const QJsonObject& obj) {
+  Role role;
+  role.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  role.name = obj["name"].toString().toStdString();
+  role.permissions = obj["permissions"].toString().toULongLong();
+  role.position = obj["position"].toInt();
+  return role;
+}
+
+QJsonObject overwrite_to_json(const PermissionOverwrite& ow) {
+  QJsonObject obj;
+  obj["id"] = QString::number(ow.id);
+  obj["type"] = ow.type;
+  obj["allow"] = QString::number(ow.allow);
+  obj["deny"] = QString::number(ow.deny);
+  return obj;
+}
+
+PermissionOverwrite overwrite_from_json(const QJsonObject& obj) {
+  PermissionOverwrite ow;
+  ow.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  ow.type = obj["type"].toInt();
+  ow.allow = obj["allow"].toString().toULongLong();
+  ow.deny = obj["deny"].toString().toULongLong();
+  return ow;
+}
+
 QJsonObject guild_to_json(const Guild& guild) {
   QJsonObject obj;
   obj["id"] = QString::number(guild.id);
   obj["name"] = QString::fromStdString(guild.name);
   obj["icon"] = QString::fromStdString(guild.icon_hash);
   obj["owner_id"] = QString::number(guild.owner_id);
+  QJsonArray roles_array;
+  for (const auto& role : guild.roles) {
+    roles_array.append(role_to_json(role));
+  }
+  obj["roles"] = roles_array;
   return obj;
 }
 
@@ -49,6 +90,13 @@ Guild guild_from_json(const QJsonObject& obj) {
   guild.name = obj["name"].toString().toStdString();
   guild.icon_hash = obj["icon"].toString().toStdString();
   guild.owner_id = static_cast<Snowflake>(obj["owner_id"].toString().toULongLong());
+  auto roles_array = obj["roles"].toArray();
+  for (const auto& val : roles_array) {
+    auto role = role_from_json(val.toObject());
+    if (role.id != 0) {
+      guild.roles.push_back(std::move(role));
+    }
+  }
   return guild;
 }
 
@@ -64,6 +112,11 @@ QJsonObject channel_to_json(const Channel& channel) {
   } else {
     obj["parent_id"] = QJsonValue(QJsonValue::Null);
   }
+  QJsonArray overwrites_array;
+  for (const auto& ow : channel.permission_overwrites) {
+    overwrites_array.append(overwrite_to_json(ow));
+  }
+  obj["permission_overwrites"] = overwrites_array;
   return obj;
 }
 
@@ -76,6 +129,13 @@ Channel channel_from_json(const QJsonObject& obj) {
   channel.position = obj["position"].toInt();
   if (obj.contains("parent_id") && !obj["parent_id"].isNull()) {
     channel.parent_id = static_cast<Snowflake>(obj["parent_id"].toString().toULongLong());
+  }
+  auto overwrites_array = obj["permission_overwrites"].toArray();
+  for (const auto& val : overwrites_array) {
+    auto ow = overwrite_from_json(val.toObject());
+    if (ow.id != 0) {
+      channel.permission_overwrites.push_back(ow);
+    }
   }
   return channel;
 }
@@ -130,6 +190,20 @@ void DiskCache::save(const DataStore& store) {
   }
   root["guilds"] = guilds_array;
   root["guild_order"] = guild_order_array;
+
+  // Member roles per guild
+  QJsonObject member_roles_obj;
+  for (const auto& guild : all_guilds) {
+    auto roles = store.member_roles(guild.id);
+    if (!roles.empty()) {
+      QJsonArray roles_array;
+      for (auto role_id : roles) {
+        roles_array.append(QString::number(role_id));
+      }
+      member_roles_obj[QString::number(guild.id)] = roles_array;
+    }
+  }
+  root["member_roles"] = member_roles_obj;
 
   // Channels grouped by guild_id
   QJsonObject channels_obj;
@@ -243,6 +317,24 @@ void DiskCache::load(DataStore& store) {
     }
     if (!order.empty()) {
       store.set_guild_order(order);
+    }
+  }
+
+  // Restore member roles
+  auto member_roles_obj = root["member_roles"].toObject();
+  for (auto it = member_roles_obj.begin(); it != member_roles_obj.end(); ++it) {
+    auto guild_id = static_cast<Snowflake>(it.key().toULongLong());
+    auto roles_array = it.value().toArray();
+    std::vector<Snowflake> role_ids;
+    role_ids.reserve(roles_array.size());
+    for (const auto& val : roles_array) {
+      auto id = val.toString().toULongLong();
+      if (id != 0) {
+        role_ids.push_back(id);
+      }
+    }
+    if (!role_ids.empty()) {
+      store.set_member_roles(guild_id, std::move(role_ids));
     }
   }
 
