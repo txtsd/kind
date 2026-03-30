@@ -6,8 +6,11 @@
 
 namespace kind::log {
 
-// Initialize all subsystem loggers. Call once at startup.
+// Initialize all subsystem loggers with file sink at platform log directory.
 void init();
+
+// Initialize with console-only logging (no file sink). For tests.
+void init_console_only();
 
 // Apply log level spec from --log-level flag.
 // Format: "debug" (global) or "gateway=debug,rest=warn" (per-subsystem)

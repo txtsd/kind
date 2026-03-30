@@ -22,39 +22,42 @@ static spdlog::level::level_enum parse_level(std::string_view str) {
   return spdlog::level::info;
 }
 
-// Shared sinks: terminal (color) + rotating file
+// Shared sinks: terminal (color) + optional rotating file
 static std::vector<spdlog::sink_ptr>& sinks() {
   static std::vector<spdlog::sink_ptr> instance;
   return instance;
 }
 
-static void ensure_sinks() {
+static void init_sinks(const std::string& log_dir_path) {
   if (!sinks().empty()) {
     return;
   }
 
-  // Terminal sink
+  // Terminal sink (always)
   auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
   console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
   sinks().push_back(console_sink);
 
-  // Rotating file sink: 5 MB per file, 10 rotated files
-  auto log_dir = platform_paths().state_dir / "logs";
-  std::filesystem::create_directories(log_dir);
-  auto log_path = (log_dir / "kind.log").string();
+  // File sink (only when a log directory is provided)
+  if (!log_dir_path.empty()) {
+    std::filesystem::create_directories(log_dir_path);
+    auto log_path = (std::filesystem::path(log_dir_path) / "kind.log").string();
 
-  auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      log_path, 5 * 1024 * 1024, 10);
-  file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
-  // File sink captures all levels; terminal level is controlled per-logger
-  file_sink->set_level(spdlog::level::trace);
-  sinks().push_back(file_sink);
+    auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+        log_path, 5 * 1024 * 1024, 10);
+    file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
+    file_sink->set_level(spdlog::level::trace);
+    sinks().push_back(file_sink);
+  }
 }
 
 static std::shared_ptr<spdlog::logger> get_or_create(const std::string& name) {
   auto logger = spdlog::get(name);
   if (!logger) {
-    ensure_sinks();
+    // If init() hasn't been called yet, create console-only sinks (safe for tests)
+    if (sinks().empty()) {
+      init_sinks("");
+    }
     logger = std::make_shared<spdlog::logger>(name, sinks().begin(), sinks().end());
     logger->set_level(spdlog::level::info);
     spdlog::register_logger(logger);
@@ -63,6 +66,18 @@ static std::shared_ptr<spdlog::logger> get_or_create(const std::string& name) {
 }
 
 void init() {
+  init_sinks((platform_paths().state_dir / "logs").string());
+  get_or_create("gateway");
+  get_or_create("rest");
+  get_or_create("client");
+  get_or_create("cache");
+  get_or_create("auth");
+  get_or_create("config");
+  get_or_create("store");
+}
+
+void init_console_only() {
+  init_sinks("");
   get_or_create("gateway");
   get_or_create("rest");
   get_or_create("client");

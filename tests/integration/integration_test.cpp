@@ -344,7 +344,7 @@ TEST_F(IntegrationTest, ReconnectionAfterDisconnect) {
 }
 
 int main(int argc, char* argv[]) {
-  kind::log::init();
+  kind::log::init_console_only();
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
