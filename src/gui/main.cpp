@@ -187,70 +187,67 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
-  // Wire widget signals to client actions
-  QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
-                   [&client, &current_guild_id, &current_channel_id, channel_list,
-                    &compute_channel_permissions, &config](kind::Snowflake guild_id) {
-                     current_guild_id = guild_id;
-                     client.save_last_selection(guild_id, current_channel_id);
+  // Shared actions for guild/channel selection (used by signals and restore)
+  auto select_guild_action = [&client, &current_guild_id, &current_channel_id,
+                              channel_list, &compute_channel_permissions, &config](
+                                 kind::Snowflake guild_id) {
+    current_guild_id = guild_id;
+    client.save_last_selection(guild_id, current_channel_id);
 
-                     // Display cached channels immediately
-                     auto cached_channels = client.channels(guild_id);
-                     if (!cached_channels.empty()) {
-                       QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
-                       auto perms = compute_channel_permissions(guild_id, qvec);
-                       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
-                       channel_list->set_channels(qvec, perms, hide_locked);
-                     }
+    auto cached_channels = client.channels(guild_id);
+    if (!cached_channels.empty()) {
+      QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
+      auto perms = compute_channel_permissions(guild_id, qvec);
+      bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
+      channel_list->set_channels(qvec, perms, hide_locked);
+    }
 
-                     // Fetch fresh channels; channels_updated signal will refresh
-                     client.select_guild(guild_id);
-                   });
+    client.select_guild(guild_id);
+  };
 
-  QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected,
-                   [&client, &current_channel_id, &current_guild_id,
-                    message_view, message_input](kind::Snowflake channel_id) {
-                     current_channel_id = channel_id;
-                     client.save_last_selection(current_guild_id, channel_id);
+  auto select_channel_action = [&client, &current_channel_id, &current_guild_id,
+                                message_view, message_input](kind::Snowflake channel_id) {
+    current_channel_id = channel_id;
+    client.save_last_selection(current_guild_id, channel_id);
 
-                     // Check send permission for this channel
-                     auto all_guilds = client.guilds();
-                     std::vector<kind::Role> guild_roles;
-                     kind::Snowflake owner_id = 0;
-                     for (const auto& guild : all_guilds) {
-                       if (guild.id == current_guild_id) {
-                         guild_roles = guild.roles;
-                         owner_id = guild.owner_id;
-                         break;
-                       }
-                     }
-                     auto user = client.current_user();
-                     kind::Snowflake user_id = user ? user->id : 0;
-                     auto member_role_ids = client.member_roles(current_guild_id);
+    auto all_guilds = client.guilds();
+    std::vector<kind::Role> guild_roles;
+    kind::Snowflake owner_id = 0;
+    for (const auto& guild : all_guilds) {
+      if (guild.id == current_guild_id) {
+        guild_roles = guild.roles;
+        owner_id = guild.owner_id;
+        break;
+      }
+    }
+    auto user = client.current_user();
+    kind::Snowflake user_id = user ? user->id : 0;
+    auto member_role_ids = client.member_roles(current_guild_id);
 
-                     // Find this channel's overwrites
-                     auto channels = client.channels(current_guild_id);
-                     std::vector<kind::PermissionOverwrite> overwrites;
-                     for (const auto& ch : channels) {
-                       if (ch.id == channel_id) {
-                         overwrites = ch.permission_overwrites;
-                         break;
-                       }
-                     }
+    auto channels = client.channels(current_guild_id);
+    std::vector<kind::PermissionOverwrite> overwrites;
+    for (const auto& ch : channels) {
+      if (ch.id == channel_id) {
+        overwrites = ch.permission_overwrites;
+        break;
+      }
+    }
 
-                     auto perms = kind::compute_permissions(
-                         user_id, current_guild_id, owner_id, guild_roles,
-                         member_role_ids, overwrites);
-                     message_input->set_read_only(!kind::can_send_messages(perms));
+    auto perms = kind::compute_permissions(
+        user_id, current_guild_id, owner_id, guild_roles,
+        member_role_ids, overwrites);
+    message_input->set_read_only(!kind::can_send_messages(perms));
 
-                     // Display cached messages immediately so the view is not blank
-                     auto cached = client.messages(channel_id, {}, 50);
-                     QVector<kind::Message> qvec(cached.begin(), cached.end());
-                     message_view->switch_channel(channel_id, qvec);
+    auto cached = client.messages(channel_id, {}, 50);
+    QVector<kind::Message> qvec(cached.begin(), cached.end());
+    message_view->switch_channel(channel_id, qvec);
 
-                     // Fetch fresh messages; the messages_updated signal will refresh the view
-                     client.select_channel(channel_id);
-                   });
+    client.select_channel(channel_id);
+  };
+
+  // Wire widget signals to shared actions
+  QObject::connect(server_list, &kind::gui::ServerList::guild_selected, select_guild_action);
+  QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected, select_channel_action);
 
   QObject::connect(message_input, &kind::gui::MessageInput::message_submitted,
                    [&client, &current_channel_id](const QString& content) {
@@ -299,27 +296,10 @@ int main(int argc, char* argv[]) {
   // Restore last selected guild and channel
   auto last = client.last_selection();
   if (last.guild_id != 0) {
-    current_guild_id = last.guild_id;
-
-    auto cached_channels = client.channels(last.guild_id);
-    if (!cached_channels.empty()) {
-      QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
-      auto perms = compute_channel_permissions(last.guild_id, qvec);
-      bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
-      channel_list->set_channels(qvec, perms, hide_locked);
-    }
-
+    select_guild_action(last.guild_id);
     if (last.channel_id != 0) {
-      current_channel_id = last.channel_id;
-
-      auto cached_msgs = client.messages(last.channel_id, {}, 50);
-      QVector<kind::Message> qvec(cached_msgs.begin(), cached_msgs.end());
-      message_view->switch_channel(last.channel_id, qvec);
-
-      client.select_channel(last.channel_id);
+      select_channel_action(last.channel_id);
     }
-
-    client.select_guild(last.guild_id);
   }
 
   main_window.show();
