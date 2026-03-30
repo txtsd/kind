@@ -125,6 +125,7 @@ font_size = 0
 timestamp_format = "%H:%M"
 show_avatars = true
 compact_mode = false
+hide_locked_channels = false
 message_grouping_seconds = 300
 
 [appearance.tui]

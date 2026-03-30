@@ -133,11 +133,12 @@ int main(int argc, char* argv[]) {
   QObject::connect(&app, &kind::gui::App::guilds_updated, server_list, &kind::gui::ServerList::set_guilds);
 
   QObject::connect(&app, &kind::gui::App::channels_updated,
-                   [channel_list, &current_guild_id, &compute_channel_permissions](
+                   [channel_list, &current_guild_id, &compute_channel_permissions, &config](
                        kind::Snowflake guild_id, const QVector<kind::Channel>& channels) {
                      if (guild_id == current_guild_id) {
                        auto perms = compute_channel_permissions(guild_id, channels);
-                       channel_list->set_channels(channels, perms);
+                       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
+                       channel_list->set_channels(channels, perms, hide_locked);
                      }
                    });
 
@@ -188,7 +189,7 @@ int main(int argc, char* argv[]) {
 
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
-                   [&client, &current_guild_id, channel_list, &compute_channel_permissions](
+                   [&client, &current_guild_id, channel_list, &compute_channel_permissions, &config](
                        kind::Snowflake guild_id) {
                      current_guild_id = guild_id;
 
@@ -197,7 +198,8 @@ int main(int argc, char* argv[]) {
                      if (!cached_channels.empty()) {
                        QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
                        auto perms = compute_channel_permissions(guild_id, qvec);
-                       channel_list->set_channels(qvec, perms);
+                       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
+                       channel_list->set_channels(qvec, perms, hide_locked);
                      }
 
                      // Fetch fresh channels; channels_updated signal will refresh
