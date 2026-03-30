@@ -36,6 +36,7 @@ private:
   MessageModel* model_;
   MessageDelegate* delegate_;
   bool auto_scroll_{true};
+  bool prepending_{false};
   kind::Snowflake current_channel_id_{0};
   QHash<kind::Snowflake, int> scroll_positions_;
 

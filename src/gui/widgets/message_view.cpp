@@ -25,6 +25,9 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   // Track whether the user is scrolled to the bottom for auto-scroll,
   // and detect scroll-to-top for loading older messages
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+    if (prepending_) {
+      return;
+    }
     auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5);
 
     // When scrolled to the very top, request older messages
@@ -38,7 +41,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
 
   // Auto-scroll when new rows are inserted, if already at bottom
   connect(model_, &QAbstractItemModel::rowsInserted, this, [this]() {
-    if (auto_scroll_) {
+    if (auto_scroll_ && !prepending_) {
       scroll_to_bottom();
     }
   });
@@ -80,17 +83,17 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
     return;
   }
 
-  // Capture scroll state before inserting rows
-  int old_max = verticalScrollBar()->maximum();
-  int old_val = verticalScrollBar()->value();
+  int prepend_count = messages.size();
+  prepending_ = true;
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->prepend_messages(vec);
 
-  // Adjust scroll so the viewport stays put after rows are inserted at the top
-  QTimer::singleShot(0, this, [this, old_max, old_val]() {
-    int delta = verticalScrollBar()->maximum() - old_max;
-    verticalScrollBar()->setValue(old_val + delta);
+  // Scroll to the item that was previously at the top of the viewport.
+  // It was at row 0 before the prepend, now it is at row prepend_count.
+  QTimer::singleShot(0, this, [this, prepend_count]() {
+    scrollTo(model_->index(prepend_count, 0), QAbstractItemView::PositionAtTop);
+    prepending_ = false;
   });
 }
 
