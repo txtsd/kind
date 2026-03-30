@@ -21,6 +21,13 @@ int main(int argc, char* argv[]) {
   qapp.setApplicationName("kind");
   qapp.setApplicationVersion(kind::version);
 
+  // --log-level debug  or  --log-level gateway=debug,rest=warn
+  auto args = qapp.arguments();
+  int log_idx = args.indexOf("--log-level");
+  if (log_idx >= 0 && log_idx + 1 < args.size()) {
+    kind::log::apply_level_spec(args[log_idx + 1].toStdString());
+  }
+
   kind::ConfigManager config;
   kind::Client client(config);
   client.load_cache();

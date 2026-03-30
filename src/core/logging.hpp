@@ -9,6 +9,10 @@ namespace kind::log {
 // Initialize all subsystem loggers. Call once at startup.
 void init();
 
+// Apply log level spec from --log-level flag.
+// Format: "debug" (global) or "gateway=debug,rest=warn" (per-subsystem)
+void apply_level_spec(const std::string& spec);
+
 // Subsystem loggers. Each can be independently filtered by level.
 std::shared_ptr<spdlog::logger> gateway();
 std::shared_ptr<spdlog::logger> rest();
