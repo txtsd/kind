@@ -4,6 +4,8 @@
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
 
+#include <QMetaType>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -23,3 +25,5 @@ struct Message {
   bool operator==(const Message&) const = default;
 };
 } // namespace kind
+
+Q_DECLARE_METATYPE(kind::Message)

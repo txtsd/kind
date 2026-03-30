@@ -1,12 +1,15 @@
 #pragma once
 
-#include <QTextLayout>
+#include <QMetaType>
 #include <QString>
+#include <QTextLayout>
+
+#include <memory>
 
 namespace kind::gui {
 
 struct RenderedMessage {
-  QTextLayout text_layout;
+  std::shared_ptr<QTextLayout> text_layout{std::make_shared<QTextLayout>()};
   QString time_str;
   QString author_str;
   int time_width{0};
@@ -19,3 +22,5 @@ struct RenderedMessage {
 };
 
 } // namespace kind::gui
+
+Q_DECLARE_METATYPE(kind::gui::RenderedMessage)
