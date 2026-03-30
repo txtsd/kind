@@ -114,6 +114,28 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
+  QObject::connect(&app, &kind::gui::App::message_updated,
+                   [message_view, &current_channel_id](const kind::Message& msg) {
+                     if (msg.channel_id == current_channel_id) {
+                       message_view->update_message(msg);
+                     }
+                   });
+
+  QObject::connect(&app, &kind::gui::App::message_deleted,
+                   [message_view, &current_channel_id](kind::Snowflake channel_id, kind::Snowflake message_id) {
+                     if (channel_id == current_channel_id) {
+                       message_view->mark_deleted(channel_id, message_id);
+                     }
+                   });
+
+  // Load older messages when scrolled to top
+  QObject::connect(message_view, &kind::gui::MessageView::load_more_requested,
+                   [&client, &current_channel_id](kind::Snowflake before_id) {
+                     if (current_channel_id != 0) {
+                       client.fetch_message_history(current_channel_id, before_id);
+                     }
+                   });
+
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
                    [&client, &current_guild_id, channel_list](kind::Snowflake guild_id) {
@@ -136,10 +158,8 @@ int main(int argc, char* argv[]) {
 
                      // Display cached messages immediately so the view is not blank
                      auto cached = client.messages(channel_id);
-                     if (!cached.empty()) {
-                       QVector<kind::Message> qvec(cached.begin(), cached.end());
-                       message_view->set_messages(qvec);
-                     }
+                     QVector<kind::Message> qvec(cached.begin(), cached.end());
+                     message_view->switch_channel(channel_id, qvec);
 
                      // Fetch fresh messages; the messages_updated signal will refresh the view
                      client.select_channel(channel_id);
@@ -169,9 +189,7 @@ int main(int argc, char* argv[]) {
       login_ok = true;
       wait.quit();
     });
-    QObject::connect(&app, &kind::gui::App::login_failure, &wait, [&]() {
-      wait.quit();
-    });
+    QObject::connect(&app, &kind::gui::App::login_failure, &wait, [&]() { wait.quit(); });
     wait.exec();
 
     if (!login_ok) {
