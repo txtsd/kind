@@ -112,8 +112,17 @@ int main(int argc, char* argv[]) {
                    });
 
   QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected,
-                   [&client, &current_channel_id](kind::Snowflake channel_id) {
+                   [&client, &current_channel_id, message_view](kind::Snowflake channel_id) {
                      current_channel_id = channel_id;
+
+                     // Display cached messages immediately so the view is not blank
+                     auto cached = client.messages(channel_id);
+                     if (!cached.empty()) {
+                       QVector<kind::Message> qvec(cached.begin(), cached.end());
+                       message_view->set_messages(qvec);
+                     }
+
+                     // Fetch fresh messages; the messages_updated signal will refresh the view
                      client.select_channel(channel_id);
                    });
 
