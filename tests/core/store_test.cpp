@@ -118,6 +118,36 @@ TEST(DataStoreTier1, UpsertGuildUpdatesExisting) {
   EXPECT_EQ(result[0].name, "New Name");
 }
 
+TEST(DataStoreTier1, PaginatedMessages) {
+  kind::DataStore store;
+  for (int i = 1; i <= 10; ++i) {
+    kind::Message msg;
+    msg.id = static_cast<kind::Snowflake>(i);
+    msg.channel_id = 100;
+    msg.content = "msg " + std::to_string(i);
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    store.add_message(std::move(msg));
+  }
+
+  // Latest 3 messages (no before)
+  auto latest = store.messages(100, std::nullopt, 3);
+  ASSERT_EQ(latest.size(), 3u);
+  EXPECT_EQ(latest[0].id, 8u);
+  EXPECT_EQ(latest[1].id, 9u);
+  EXPECT_EQ(latest[2].id, 10u);
+
+  // 3 messages before id 8
+  auto page = store.messages(100, 8, 3);
+  ASSERT_EQ(page.size(), 3u);
+  EXPECT_EQ(page[0].id, 5u);
+  EXPECT_EQ(page[1].id, 6u);
+  EXPECT_EQ(page[2].id, 7u);
+
+  // Empty channel
+  auto empty = store.messages(999, std::nullopt, 50);
+  EXPECT_TRUE(empty.empty());
+}
+
 // =============================================================================
 // Tier 2: Extensive edge cases
 // =============================================================================

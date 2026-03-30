@@ -57,6 +57,29 @@ std::vector<Message> DataStore::messages(Snowflake channel_id) const {
   return {it->second.begin(), it->second.end()};
 }
 
+std::vector<Message> DataStore::messages(Snowflake channel_id,
+                                         std::optional<Snowflake> before,
+                                         int limit) const {
+  std::shared_lock lock(mutex_);
+  auto it = channel_messages_.find(channel_id);
+  if (it == channel_messages_.end()) {
+    return {};
+  }
+  const auto& deque = it->second;
+  std::vector<Message> result;
+  for (auto rit = deque.rbegin(); rit != deque.rend(); ++rit) {
+    if (before && rit->id >= *before) {
+      continue;
+    }
+    result.push_back(*rit);
+    if (static_cast<int>(result.size()) >= limit) {
+      break;
+    }
+  }
+  std::reverse(result.begin(), result.end());
+  return result;
+}
+
 std::optional<User> DataStore::user(Snowflake user_id) const {
   std::shared_lock lock(mutex_);
   auto it = users_.find(user_id);

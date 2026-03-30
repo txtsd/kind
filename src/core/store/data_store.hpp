@@ -24,6 +24,9 @@ public:
   std::vector<Guild> guilds() const;
   std::vector<Channel> channels(Snowflake guild_id) const;
   std::vector<Message> messages(Snowflake channel_id) const;
+  std::vector<Message> messages(Snowflake channel_id,
+                                std::optional<Snowflake> before,
+                                int limit) const;
   std::optional<User> user(Snowflake user_id) const;
   std::optional<User> current_user() const;
 
