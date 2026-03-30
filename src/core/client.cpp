@@ -643,6 +643,18 @@ std::vector<Channel> Client::channels(Snowflake guild_id) const {
 std::vector<Message> Client::messages(Snowflake channel_id) const {
   return store_->messages(channel_id);
 }
+std::vector<Message> Client::messages(Snowflake channel_id,
+                                       std::optional<Snowflake> before,
+                                       int limit) const {
+  auto cached = store_->messages(channel_id, before, limit);
+  if (!cached.empty()) {
+    return cached;
+  }
+  if (db_reader_) {
+    return db_reader_->messages(channel_id, before, limit);
+  }
+  return {};
+}
 std::optional<User> Client::current_user() const {
   return store_->current_user();
 }

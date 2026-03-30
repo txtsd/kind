@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
                      message_input->set_read_only(!kind::can_send_messages(perms));
 
                      // Display cached messages immediately so the view is not blank
-                     auto cached = client.messages(channel_id);
+                     auto cached = client.messages(channel_id, {}, 50);
                      QVector<kind::Message> qvec(cached.begin(), cached.end());
                      message_view->switch_channel(channel_id, qvec);
 
