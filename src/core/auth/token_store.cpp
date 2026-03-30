@@ -3,7 +3,7 @@
 #include "config/platform_paths.hpp"
 
 #include <fstream>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 #include <system_error>
 
 #ifdef __unix__
@@ -21,13 +21,13 @@ void TokenStore::save_token(std::string_view token, std::string_view token_type)
   std::error_code ec;
   std::filesystem::create_directories(token_path_.parent_path(), ec);
   if (ec) {
-    spdlog::error("Failed to create token directory: {}", ec.message());
+    log::auth()->error("Failed to create token directory: {}", ec.message());
     return;
   }
 
   std::ofstream out(token_path_, std::ios::trunc);
   if (!out) {
-    spdlog::error("Failed to open token file for writing: {}", token_path_.string());
+    log::auth()->error("Failed to open token file for writing: {}", token_path_.string());
     return;
   }
 
@@ -63,7 +63,7 @@ void TokenStore::clear_token() {
   std::error_code ec;
   std::filesystem::remove(token_path_, ec);
   if (ec) {
-    spdlog::warn("Failed to remove token file: {}", ec.message());
+    log::auth()->warn("Failed to remove token file: {}", ec.message());
   }
 }
 

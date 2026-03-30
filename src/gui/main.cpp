@@ -1,6 +1,7 @@
 #include "app.hpp"
 #include "client.hpp"
 #include "config/config_manager.hpp"
+#include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
 #include "version.hpp"
 #include "widgets/channel_list.hpp"
@@ -14,6 +15,8 @@
 #include <QVBoxLayout>
 
 int main(int argc, char* argv[]) {
+  kind::log::init();
+
   QApplication qapp(argc, argv);
   qapp.setApplicationName("kind");
   qapp.setApplicationVersion(kind::version);

@@ -1,7 +1,7 @@
 #include "config/config_manager.hpp"
 
 #include <fstream>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -42,7 +42,7 @@ ConfigManager::ConfigManager(const std::filesystem::path& config_path) {
     try {
       table_ = toml::parse_file(path_.string());
     } catch (const toml::parse_error& e) {
-      spdlog::warn("Failed to parse config file: {}", e.what());
+      log::config()->warn("Failed to parse config file: {}", e.what());
       table_ = default_config();
     }
     // Merge defaults for any keys missing from the loaded config
@@ -73,7 +73,7 @@ void ConfigManager::reload() {
     try {
       table_ = toml::parse_file(path_.string());
     } catch (const toml::parse_error& e) {
-      spdlog::warn("Failed to reload config file: {}", e.what());
+      log::config()->warn("Failed to reload config file: {}", e.what());
     }
   }
 }

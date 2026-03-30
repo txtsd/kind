@@ -1,5 +1,6 @@
 #include "client.hpp"
 #include "config/config_manager.hpp"
+#include "logging.hpp"
 #include "interfaces/auth_observer.hpp"
 #include "interfaces/gateway_observer.hpp"
 #include "mock_discord_server.hpp"
@@ -339,6 +340,7 @@ TEST_F(IntegrationTest, ReconnectionAfterDisconnect) {
 }
 
 int main(int argc, char* argv[]) {
+  kind::log::init();
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

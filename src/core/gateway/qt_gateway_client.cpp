@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <random>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 
 namespace kind {
 
@@ -37,7 +37,7 @@ void QtGatewayClient::connect(std::string_view url, std::string_view token) {
   resuming_ = false;
 
   std::string ws_url = gateway_url_ + "?v=10&encoding=json";
-  spdlog::info("Gateway: connecting to {}", ws_url);
+  log::gateway()->info(" connecting to {}", ws_url);
   socket_->open(QUrl(QString::fromStdString(ws_url)));
 }
 
@@ -74,7 +74,7 @@ void QtGatewayClient::set_bot_mode(bool is_bot) {
 }
 
 void QtGatewayClient::on_connected() {
-  spdlog::info("Gateway: WebSocket connected, waiting for HELLO");
+  log::gateway()->info(" WebSocket connected, waiting for HELLO");
   connected_ = true;
   reconnect_attempts_ = 0;
 }
@@ -82,7 +82,7 @@ void QtGatewayClient::on_connected() {
 void QtGatewayClient::on_text_message(const QString& message) {
   QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
   if (!doc.isObject()) {
-    spdlog::warn("Gateway: received non-object message");
+    log::gateway()->warn(" received non-object message");
     return;
   }
 
@@ -127,7 +127,7 @@ void QtGatewayClient::on_text_message(const QString& message) {
     handle_heartbeat_ack();
     break;
   default:
-    spdlog::debug("Gateway: unhandled opcode {}", op);
+    log::gateway()->debug(" unhandled opcode {}", op);
     break;
   }
 }
@@ -137,10 +137,10 @@ void QtGatewayClient::on_disconnected() {
   heartbeat_->stop();
 
   auto close_code = static_cast<int>(socket_->closeCode());
-  spdlog::warn("Gateway: disconnected with close code {}", close_code);
+  log::gateway()->warn(" disconnected with close code {}", close_code);
 
   if (close_code != 0 && !gateway::is_recoverable_close(close_code)) {
-    spdlog::error("Gateway: non-recoverable close code {}, will not reconnect", close_code);
+    log::gateway()->error(" non-recoverable close code {}, will not reconnect", close_code);
     if (event_callback_) {
       event_callback_("GATEWAY_CLOSED", "{\"code\":" + std::to_string(close_code) + ",\"recoverable\":false}");
     }
@@ -151,19 +151,19 @@ void QtGatewayClient::on_disconnected() {
 }
 
 void QtGatewayClient::on_error(QAbstractSocket::SocketError error) {
-  spdlog::error("Gateway: socket error {}: {}", static_cast<int>(error), socket_->errorString().toStdString());
+  log::gateway()->error(" socket error {}: {}", static_cast<int>(error), socket_->errorString().toStdString());
 }
 
 void QtGatewayClient::handle_hello(const std::string& data_json) {
   QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
   int interval = doc.object().value("heartbeat_interval").toInt(41250);
 
-  spdlog::info("Gateway: received HELLO, heartbeat interval {}ms", interval);
+  log::gateway()->info(" received HELLO, heartbeat interval {}ms", interval);
 
   heartbeat_->start(
       interval, [this](std::optional<int64_t> seq) { send_heartbeat(seq); },
       [this]() {
-        spdlog::warn("Gateway: heartbeat ACK missed, reconnecting");
+        log::gateway()->warn(" heartbeat ACK missed, reconnecting");
         heartbeat_->stop();
         connected_ = false;
         resuming_ = true;
@@ -181,7 +181,7 @@ void QtGatewayClient::handle_dispatch(const std::string& event_name, const std::
   sequence_ = seq;
   heartbeat_->set_sequence(seq);
 
-  spdlog::debug("Gateway: dispatch event={} seq={}", event_name, seq);
+  log::gateway()->debug(" dispatch event={} seq={}", event_name, seq);
 
   // Store session info from READY
   if (event_name == gateway::events::Ready) {
@@ -189,7 +189,7 @@ void QtGatewayClient::handle_dispatch(const std::string& event_name, const std::
     QJsonObject obj = doc.object();
     session_id_ = obj.value("session_id").toString().toStdString();
     resume_gateway_url_ = obj.value("resume_gateway_url").toString().toStdString();
-    spdlog::info("Gateway: READY, session_id={}", session_id_);
+    log::gateway()->info(" READY, session_id={}", session_id_);
   }
 
   if (event_callback_) {
@@ -198,19 +198,19 @@ void QtGatewayClient::handle_dispatch(const std::string& event_name, const std::
 }
 
 void QtGatewayClient::handle_heartbeat_request() {
-  spdlog::debug("Gateway: server requested heartbeat");
+  log::gateway()->debug(" server requested heartbeat");
   send_heartbeat(sequence_);
 }
 
 void QtGatewayClient::handle_reconnect() {
-  spdlog::info("Gateway: server requested reconnect");
+  log::gateway()->info(" server requested reconnect");
   resuming_ = true;
   heartbeat_->stop();
   socket_->close();
 }
 
 void QtGatewayClient::handle_invalid_session(bool resumable) {
-  spdlog::warn("Gateway: invalid session, resumable={}", resumable);
+  log::gateway()->warn(" invalid session, resumable={}", resumable);
 
   if (!resumable) {
     session_id_.clear();
@@ -224,7 +224,7 @@ void QtGatewayClient::handle_invalid_session(bool resumable) {
 }
 
 void QtGatewayClient::handle_heartbeat_ack() {
-  spdlog::debug("Gateway: heartbeat ACK received");
+  log::gateway()->debug(" heartbeat ACK received");
   heartbeat_->ack_received();
 }
 
@@ -290,7 +290,7 @@ void QtGatewayClient::send_identify() {
 
   QJsonDocument doc(payload);
   std::string json = doc.toJson(QJsonDocument::Compact).toStdString();
-  spdlog::info("Gateway: sending IDENTIFY");
+  log::gateway()->info(" sending IDENTIFY");
   send(json);
 }
 
@@ -306,7 +306,7 @@ void QtGatewayClient::send_resume() {
 
   QJsonDocument doc(payload);
   std::string json = doc.toJson(QJsonDocument::Compact).toStdString();
-  spdlog::info("Gateway: sending RESUME");
+  log::gateway()->info(" sending RESUME");
   send(json);
 }
 
@@ -321,7 +321,7 @@ void QtGatewayClient::send_heartbeat(std::optional<int64_t> sequence) {
 
 void QtGatewayClient::attempt_reconnect() {
   if (reconnect_attempts_ >= config_.max_retries) {
-    spdlog::error("Gateway: max reconnect attempts ({}) reached", config_.max_retries);
+    log::gateway()->error(" max reconnect attempts ({}) reached", config_.max_retries);
     if (event_callback_) {
       event_callback_("GATEWAY_CLOSED", "{\"code\":0,\"recoverable\":false,\"reason\":\"max_retries\"}");
     }
@@ -331,7 +331,7 @@ void QtGatewayClient::attempt_reconnect() {
   int delay = calculate_backoff_ms();
   reconnect_attempts_++;
 
-  spdlog::info("Gateway: reconnecting in {}ms (attempt {}/{})", delay, reconnect_attempts_, config_.max_retries);
+  log::gateway()->info(" reconnecting in {}ms (attempt {}/{})", delay, reconnect_attempts_, config_.max_retries);
 
   QTimer::singleShot(delay, this, [this]() {
     std::string url;

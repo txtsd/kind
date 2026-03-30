@@ -18,7 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProtobufSerializer>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 #include <algorithm>
 #include <set>
 #include <string>
@@ -105,11 +105,11 @@ private:
   void handle_ready(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull()) {
-      spdlog::warn("Failed to parse READY JSON: document is null");
+      log::client()->warn("Failed to parse READY JSON: document is null");
       return;
     }
     if (!doc.isObject()) {
-      spdlog::warn("Failed to parse READY JSON: expected object");
+      log::client()->warn("Failed to parse READY JSON: expected object");
       return;
     }
     auto obj = doc.object();
@@ -171,7 +171,7 @@ private:
           }
         }
       } else {
-        spdlog::warn("Failed to decode user_settings_proto: {}",
+        log::client()->warn("Failed to decode user_settings_proto: {}",
                      serializer.lastErrorString().toStdString());
       }
     }
@@ -200,7 +200,7 @@ private:
   void handle_message_delete(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
-      spdlog::warn("Failed to parse MESSAGE_DELETE JSON");
+      log::client()->warn("Failed to parse MESSAGE_DELETE JSON");
       return;
     }
     auto obj = doc.object();
@@ -214,7 +214,7 @@ private:
   void handle_guild_create(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
-      spdlog::warn("Failed to parse GUILD_CREATE JSON");
+      log::client()->warn("Failed to parse GUILD_CREATE JSON");
       return;
     }
     auto guild = json_parse::parse_guild(doc.object());
@@ -228,7 +228,7 @@ private:
   void handle_channel_update(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
-      spdlog::warn("Failed to parse CHANNEL_UPDATE JSON");
+      log::client()->warn("Failed to parse CHANNEL_UPDATE JSON");
       return;
     }
     auto channel = json_parse::parse_channel(doc.object());
@@ -242,7 +242,7 @@ private:
   void handle_typing_start(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
-      spdlog::warn("Failed to parse TYPING_START JSON");
+      log::client()->warn("Failed to parse TYPING_START JSON");
       return;
     }
     auto obj = doc.object();
@@ -255,7 +255,7 @@ private:
   void handle_presence_update(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
-      spdlog::warn("Failed to parse PRESENCE_UPDATE JSON");
+      log::client()->warn("Failed to parse PRESENCE_UPDATE JSON");
       return;
     }
     auto obj = doc.object();
@@ -390,7 +390,7 @@ void Client::send_message(Snowflake channel_id, std::string_view content) {
 
   rest_->post(endpoints::channel_messages(channel_id), payload, [channel_id](RestClient::Response response) {
     if (!response) {
-      spdlog::warn("Failed to send message to channel {}: {}", channel_id, response.error().message);
+      log::client()->warn("Failed to send message to channel {}: {}", channel_id, response.error().message);
     }
   });
 }
@@ -405,17 +405,17 @@ void Client::select_guild(Snowflake guild_id) {
     }
 
     if (!response) {
-      spdlog::warn("Failed to fetch channels for guild {}: {}", guild_id, response.error().message);
+      log::client()->warn("Failed to fetch channels for guild {}: {}", guild_id, response.error().message);
       return;
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
     if (doc.isNull()) {
-      spdlog::warn("Failed to parse guild channels JSON: document is null");
+      log::client()->warn("Failed to parse guild channels JSON: document is null");
       return;
     }
     if (!doc.isArray()) {
-      spdlog::warn("Failed to parse guild channels JSON: expected array");
+      log::client()->warn("Failed to parse guild channels JSON: expected array");
       return;
     }
 
@@ -441,13 +441,13 @@ void Client::select_channel(Snowflake channel_id) {
     }
 
     if (!response) {
-      spdlog::warn("Failed to fetch messages for channel {}: {}", channel_id, response.error().message);
+      log::client()->warn("Failed to fetch messages for channel {}: {}", channel_id, response.error().message);
       return;
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
     if (doc.isNull() || !doc.isArray()) {
-      spdlog::warn("Failed to parse message history JSON");
+      log::client()->warn("Failed to parse message history JSON");
       return;
     }
 
@@ -473,13 +473,13 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
 
   rest_->get(path, [this, channel_id](RestClient::Response response) {
     if (!response) {
-      spdlog::warn("Failed to fetch messages for channel {}: {}", channel_id, response.error().message);
+      log::client()->warn("Failed to fetch messages for channel {}: {}", channel_id, response.error().message);
       return;
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
     if (doc.isNull() || !doc.isArray()) {
-      spdlog::warn("Failed to parse message history JSON");
+      log::client()->warn("Failed to parse message history JSON");
       return;
     }
 

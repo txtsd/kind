@@ -2,13 +2,13 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 
 namespace kind::json_parse {
 
 std::optional<User> parse_user(const QJsonObject& obj) {
   if (obj.isEmpty()) {
-    spdlog::warn("Failed to parse User: empty JSON object");
+    log::client()->warn("Failed to parse User: empty JSON object");
     return std::nullopt;
   }
 
@@ -24,11 +24,11 @@ std::optional<User> parse_user(const QJsonObject& obj) {
 std::optional<User> parse_user(const std::string& json) {
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
   if (doc.isNull()) {
-    spdlog::warn("Failed to parse User JSON: document is null");
+    log::client()->warn("Failed to parse User JSON: document is null");
     return std::nullopt;
   }
   if (!doc.isObject()) {
-    spdlog::warn("Failed to parse User JSON: expected object");
+    log::client()->warn("Failed to parse User JSON: expected object");
     return std::nullopt;
   }
   return parse_user(doc.object());
@@ -36,7 +36,7 @@ std::optional<User> parse_user(const std::string& json) {
 
 std::optional<Guild> parse_guild(const QJsonObject& obj) {
   if (obj.isEmpty()) {
-    spdlog::warn("Failed to parse Guild: empty JSON object");
+    log::client()->warn("Failed to parse Guild: empty JSON object");
     return std::nullopt;
   }
 
@@ -67,7 +67,7 @@ std::optional<Guild> parse_guild(const QJsonObject& obj) {
 
 std::optional<Channel> parse_channel(const QJsonObject& obj) {
   if (obj.isEmpty()) {
-    spdlog::warn("Failed to parse Channel: empty JSON object");
+    log::client()->warn("Failed to parse Channel: empty JSON object");
     return std::nullopt;
   }
 
@@ -85,7 +85,7 @@ std::optional<Channel> parse_channel(const QJsonObject& obj) {
 
 std::optional<Message> parse_message(const QJsonObject& obj) {
   if (obj.isEmpty()) {
-    spdlog::warn("Failed to parse Message: empty JSON object");
+    log::client()->warn("Failed to parse Message: empty JSON object");
     return std::nullopt;
   }
 
@@ -112,11 +112,11 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
 std::optional<Message> parse_message(const std::string& json) {
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
   if (doc.isNull()) {
-    spdlog::warn("Failed to parse Message JSON: document is null");
+    log::client()->warn("Failed to parse Message JSON: document is null");
     return std::nullopt;
   }
   if (!doc.isObject()) {
-    spdlog::warn("Failed to parse Message JSON: expected object");
+    log::client()->warn("Failed to parse Message JSON: expected object");
     return std::nullopt;
   }
   return parse_message(doc.object());

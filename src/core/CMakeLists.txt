@@ -3,6 +3,7 @@ add_library(kind-core STATIC)
 set_target_properties(kind-core PROPERTIES AUTOMOC ON)
 
 target_sources(kind-core PRIVATE
+  logging.cpp
   client.cpp
   cache/disk_cache.cpp
   json/parsers.cpp

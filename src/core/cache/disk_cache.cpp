@@ -6,7 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <spdlog/spdlog.h>
+#include "logging.hpp"
 
 namespace kind {
 
@@ -170,35 +170,35 @@ void DiskCache::save(const DataStore& store) {
   std::error_code ec;
   std::filesystem::create_directories(cache_path_.parent_path(), ec);
   if (ec) {
-    spdlog::warn("Failed to create cache directory {}: {}", cache_path_.parent_path().string(), ec.message());
+    log::cache()->warn("Failed to create cache directory {}: {}", cache_path_.parent_path().string(), ec.message());
     return;
   }
 
   QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Compact);
   std::ofstream file(cache_path_, std::ios::binary | std::ios::trunc);
   if (!file) {
-    spdlog::warn("Failed to open cache file for writing: {}", cache_path_.string());
+    log::cache()->warn("Failed to open cache file for writing: {}", cache_path_.string());
     return;
   }
   file.write(data.constData(), data.size());
   if (!file) {
-    spdlog::warn("Failed to write cache file: {}", cache_path_.string());
+    log::cache()->warn("Failed to write cache file: {}", cache_path_.string());
     return;
   }
 
-  spdlog::info("Saved disk cache to {}", cache_path_.string());
+  log::cache()->info("Saved disk cache to {}", cache_path_.string());
 }
 
 void DiskCache::load(DataStore& store) {
   std::error_code ec;
   if (!std::filesystem::exists(cache_path_, ec)) {
-    spdlog::debug("No disk cache found at {}", cache_path_.string());
+    log::cache()->debug("No disk cache found at {}", cache_path_.string());
     return;
   }
 
   std::ifstream file(cache_path_, std::ios::binary);
   if (!file) {
-    spdlog::warn("Failed to open cache file for reading: {}", cache_path_.string());
+    log::cache()->warn("Failed to open cache file for reading: {}", cache_path_.string());
     return;
   }
 
@@ -207,7 +207,7 @@ void DiskCache::load(DataStore& store) {
 
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(contents));
   if (doc.isNull() || !doc.isObject()) {
-    spdlog::warn("Failed to parse disk cache: invalid JSON");
+    log::cache()->warn("Failed to parse disk cache: invalid JSON");
     return;
   }
 
@@ -276,7 +276,7 @@ void DiskCache::load(DataStore& store) {
     }
   }
 
-  spdlog::info("Loaded disk cache from {}", cache_path_.string());
+  log::cache()->info("Loaded disk cache from {}", cache_path_.string());
 }
 
 } // namespace kind
