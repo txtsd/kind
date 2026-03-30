@@ -10,7 +10,13 @@ add_executable(kind-tests
   core/auth_test.cpp
   core/permissions_test.cpp
   core/client_test.cpp
+  gui/message_model_test.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
 )
+
+set_target_properties(kind-tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(kind-tests PRIVATE ${CMAKE_SOURCE_DIR}/src/gui)
 
 target_link_libraries(kind-tests
   PRIVATE
@@ -18,6 +24,7 @@ target_link_libraries(kind-tests
     GTest::gtest_main
     GTest::gmock
     Qt6::Core
+    Qt6::Gui
     Qt6::Test
 )
 

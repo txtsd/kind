@@ -1,6 +1,7 @@
 #pragma once
 
 #include "models/message.hpp"
+#include "models/rendered_message.hpp"
 
 #include <optional>
 #include <QAbstractListModel>
@@ -20,6 +21,7 @@ public:
     ChannelIdRole,
     DeletedRole,
     EditedRole,
+    RenderedLayoutRole,
   };
 
   explicit MessageModel(QObject* parent = nullptr);
@@ -33,9 +35,14 @@ public:
   void mark_deleted(kind::Snowflake message_id);
   std::optional<kind::Snowflake> oldest_message_id() const;
   void prepend_messages(const std::vector<kind::Message>& messages);
+  std::optional<int> row_for_id(kind::Snowflake id) const;
+
+public slots:
+  void on_layout_ready(kind::Snowflake message_id, kind::gui::RenderedMessage layout);
 
 private:
   std::vector<kind::Message> messages_;
+  std::vector<RenderedMessage> rendered_;
   static constexpr int max_messages_ = 500;
 };
 

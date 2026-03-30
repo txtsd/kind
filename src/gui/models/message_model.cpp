@@ -58,6 +58,13 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return msg.deleted;
   case EditedRole:
     return msg.edited_timestamp.has_value();
+  case RenderedLayoutRole: {
+    auto row_idx = static_cast<size_t>(index.row());
+    if (row_idx < rendered_.size() && rendered_[row_idx].valid) {
+      return QVariant::fromValue(static_cast<const void*>(&rendered_[row_idx]));
+    }
+    return {};
+  }
   default:
     return {};
   }
@@ -69,6 +76,8 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
   // Ensure oldest first (smallest Snowflake ID = oldest)
   std::sort(messages_.begin(), messages_.end(),
             [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+  rendered_.clear();
+  rendered_.resize(messages_.size());
   endResetModel();
 }
 
@@ -87,6 +96,7 @@ void MessageModel::append_message(const kind::Message& msg) {
 
   beginInsertRows(QModelIndex(), row, row);
   messages_.insert(it, msg);
+  rendered_.insert(rendered_.begin() + row, RenderedMessage{});
   endInsertRows();
 
   // Trim from the front if over capacity
@@ -94,6 +104,7 @@ void MessageModel::append_message(const kind::Message& msg) {
     int excess = static_cast<int>(messages_.size()) - max_messages_;
     beginRemoveRows(QModelIndex(), 0, excess - 1);
     messages_.erase(messages_.begin(), messages_.begin() + excess);
+    rendered_.erase(rendered_.begin(), rendered_.begin() + excess);
     endRemoveRows();
   }
 }
@@ -102,6 +113,9 @@ void MessageModel::update_message(const kind::Message& msg) {
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
     if (messages_[static_cast<size_t>(i)].id == msg.id) {
       messages_[static_cast<size_t>(i)] = msg;
+      if (static_cast<size_t>(i) < rendered_.size()) {
+        rendered_[static_cast<size_t>(i)].valid = false;
+      }
       auto idx = index(i);
       emit dataChanged(idx, idx);
       return;
@@ -115,6 +129,9 @@ void MessageModel::mark_deleted(kind::Snowflake message_id) {
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
     if (messages_[static_cast<size_t>(i)].id == message_id) {
       messages_[static_cast<size_t>(i)].deleted = true;
+      if (static_cast<size_t>(i) < rendered_.size()) {
+        rendered_[static_cast<size_t>(i)].valid = false;
+      }
       auto idx = index(i);
       emit dataChanged(idx, idx);
       return;
@@ -135,7 +152,31 @@ void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) 
   }
   beginInsertRows(QModelIndex(), 0, static_cast<int>(messages.size()) - 1);
   messages_.insert(messages_.begin(), messages.begin(), messages.end());
+  rendered_.insert(rendered_.begin(), messages.size(), RenderedMessage{});
   endInsertRows();
+}
+
+std::optional<int> MessageModel::row_for_id(kind::Snowflake id) const {
+  auto it = std::lower_bound(messages_.begin(), messages_.end(), id,
+                             [](const kind::Message& msg, kind::Snowflake target) { return msg.id < target; });
+  if (it != messages_.end() && it->id == id) {
+    return static_cast<int>(std::distance(messages_.begin(), it));
+  }
+  return std::nullopt;
+}
+
+void MessageModel::on_layout_ready(kind::Snowflake message_id, kind::gui::RenderedMessage layout) {
+  auto row = row_for_id(message_id);
+  if (!row) {
+    return;
+  }
+  auto idx = static_cast<size_t>(*row);
+  if (idx >= rendered_.size()) {
+    return;
+  }
+  rendered_[idx] = std::move(layout);
+  auto model_idx = index(*row);
+  emit dataChanged(model_idx, model_idx);
 }
 
 } // namespace kind::gui
