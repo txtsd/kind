@@ -145,6 +145,23 @@ private:
       }
     }
 
+    // Reconcile: remove guilds that are no longer in READY
+    {
+      std::unordered_set<Snowflake> fresh_ids;
+      for (const auto& guild : guilds) {
+        fresh_ids.insert(guild.id);
+      }
+      auto old_guilds = client_.store_->guilds();
+      for (const auto& old : old_guilds) {
+        if (fresh_ids.find(old.id) == fresh_ids.end()) {
+          client_.store_->remove_guild(old.id);
+          if (client_.db_writer_) {
+            emit client_.db_writer_->guild_delete_requested(old.id);
+          }
+        }
+      }
+    }
+
     // Parse current user's roles per guild from merged_members (user tokens)
     auto merged_members = obj["merged_members"].toArray();
     for (int i = 0; i < merged_members.size() && i < static_cast<int>(guilds.size()); ++i) {
