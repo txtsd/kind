@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Prefer mold linker for faster link times
+find_program(MOLD_LINKER mold)
+if(MOLD_LINKER)
+  add_link_options(-fuse-ld=mold)
+endif()
+
 option(KIND_BUILD_GUI "Build the Qt6 GUI frontend" ON)
 option(KIND_BUILD_TUI "Build the FTXUI TUI frontend" OFF)
 option(KIND_BUILD_TESTS "Build tests" ON)
