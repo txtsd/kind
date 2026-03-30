@@ -3,6 +3,7 @@
 #include "config/config_manager.hpp"
 #include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
+#include "permissions.hpp"
 #include "version.hpp"
 #include "widgets/channel_list.hpp"
 #include "widgets/message_input.hpp"
@@ -13,6 +14,8 @@
 #include <QMainWindow>
 #include <QSplitter>
 #include <QVBoxLayout>
+
+#include <unordered_map>
 
 int main(int argc, char* argv[]) {
   kind::log::init();
@@ -75,6 +78,33 @@ int main(int argc, char* argv[]) {
   kind::Snowflake current_guild_id = 0;
   kind::Snowflake current_channel_id = 0;
 
+  auto compute_channel_permissions = [&client](kind::Snowflake guild_id,
+                                               const QVector<kind::Channel>& channels) {
+    auto user = client.current_user();
+    kind::Snowflake user_id = user ? user->id : 0;
+
+    auto all_guilds = client.guilds();
+    std::vector<kind::Role> guild_roles;
+    kind::Snowflake owner_id = 0;
+    for (const auto& guild : all_guilds) {
+      if (guild.id == guild_id) {
+        guild_roles = guild.roles;
+        owner_id = guild.owner_id;
+        break;
+      }
+    }
+
+    auto member_role_ids = client.member_roles(guild_id);
+
+    std::unordered_map<kind::Snowflake, uint64_t> perms;
+    for (const auto& ch : channels) {
+      perms[ch.id] = kind::compute_permissions(
+          user_id, guild_id, owner_id, guild_roles, member_role_ids,
+          ch.permission_overwrites);
+    }
+    return perms;
+  };
+
   // Wire login dialog signals to client actions
   QObject::connect(&login_dialog, &kind::gui::LoginDialog::token_login_requested,
                    [&client](const QString& token, const QString& type) {
@@ -103,9 +133,11 @@ int main(int argc, char* argv[]) {
   QObject::connect(&app, &kind::gui::App::guilds_updated, server_list, &kind::gui::ServerList::set_guilds);
 
   QObject::connect(&app, &kind::gui::App::channels_updated,
-                   [channel_list, &current_guild_id](kind::Snowflake guild_id, const QVector<kind::Channel>& channels) {
+                   [channel_list, &current_guild_id, &compute_channel_permissions](
+                       kind::Snowflake guild_id, const QVector<kind::Channel>& channels) {
                      if (guild_id == current_guild_id) {
-                       channel_list->set_channels(channels);
+                       auto perms = compute_channel_permissions(guild_id, channels);
+                       channel_list->set_channels(channels, perms);
                      }
                    });
 
@@ -156,14 +188,16 @@ int main(int argc, char* argv[]) {
 
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
-                   [&client, &current_guild_id, channel_list](kind::Snowflake guild_id) {
+                   [&client, &current_guild_id, channel_list, &compute_channel_permissions](
+                       kind::Snowflake guild_id) {
                      current_guild_id = guild_id;
 
                      // Display cached channels immediately
                      auto cached_channels = client.channels(guild_id);
                      if (!cached_channels.empty()) {
                        QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
-                       channel_list->set_channels(qvec);
+                       auto perms = compute_channel_permissions(guild_id, qvec);
+                       channel_list->set_channels(qvec, perms);
                      }
 
                      // Fetch fresh channels; channels_updated signal will refresh
@@ -171,8 +205,39 @@ int main(int argc, char* argv[]) {
                    });
 
   QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected,
-                   [&client, &current_channel_id, message_view](kind::Snowflake channel_id) {
+                   [&client, &current_channel_id, &current_guild_id,
+                    message_view, message_input](kind::Snowflake channel_id) {
                      current_channel_id = channel_id;
+
+                     // Check send permission for this channel
+                     auto all_guilds = client.guilds();
+                     std::vector<kind::Role> guild_roles;
+                     kind::Snowflake owner_id = 0;
+                     for (const auto& guild : all_guilds) {
+                       if (guild.id == current_guild_id) {
+                         guild_roles = guild.roles;
+                         owner_id = guild.owner_id;
+                         break;
+                       }
+                     }
+                     auto user = client.current_user();
+                     kind::Snowflake user_id = user ? user->id : 0;
+                     auto member_role_ids = client.member_roles(current_guild_id);
+
+                     // Find this channel's overwrites
+                     auto channels = client.channels(current_guild_id);
+                     std::vector<kind::PermissionOverwrite> overwrites;
+                     for (const auto& ch : channels) {
+                       if (ch.id == channel_id) {
+                         overwrites = ch.permission_overwrites;
+                         break;
+                       }
+                     }
+
+                     auto perms = kind::compute_permissions(
+                         user_id, current_guild_id, owner_id, guild_roles,
+                         member_role_ids, overwrites);
+                     message_input->set_read_only(!kind::can_send_messages(perms));
 
                      // Display cached messages immediately so the view is not blank
                      auto cached = client.messages(channel_id);

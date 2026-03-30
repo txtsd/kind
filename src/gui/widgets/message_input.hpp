@@ -11,6 +11,8 @@ class MessageInput : public QLineEdit {
 public:
   explicit MessageInput(QWidget* parent = nullptr);
 
+  void set_read_only(bool read_only);
+
 signals:
   void message_submitted(QString content);
 
