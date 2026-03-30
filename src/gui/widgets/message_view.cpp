@@ -43,6 +43,16 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       scroll_to_bottom();
     }
   });
+
+  // Invalidate delegate size cache when model data changes
+  connect(model_, &QAbstractItemModel::modelReset, this, [this]() { delegate_->clear_size_cache(); });
+  connect(model_, &QAbstractItemModel::dataChanged, this,
+          [this](const QModelIndex& top_left, const QModelIndex& bottom_right) {
+            for (int row = top_left.row(); row <= bottom_right.row(); ++row) {
+              auto msg_id = model_->data(model_->index(row), MessageModel::MessageIdRole).value<qulonglong>();
+              delegate_->invalidate_message(msg_id);
+            }
+          });
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
