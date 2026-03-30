@@ -22,3 +22,28 @@ target_link_libraries(kind-tests
 )
 
 gtest_discover_tests(kind-tests)
+
+# Integration tests (uses real Qt networking against a local mock server)
+add_executable(kind-integration-tests
+  integration/mock_discord_server.cpp
+  integration/integration_test.cpp
+)
+
+set_target_properties(kind-integration-tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(kind-integration-tests
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/integration
+)
+
+target_link_libraries(kind-integration-tests
+  PRIVATE
+    kind-core
+    GTest::gtest
+    Qt6::Core
+    Qt6::Network
+    Qt6::WebSockets
+    Qt6::Test
+)
+
+gtest_discover_tests(kind-integration-tests)
