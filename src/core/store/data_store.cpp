@@ -293,13 +293,36 @@ void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
       [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
+void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
+  std::vector<Message> message_snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    auto& deque = channel_messages_[channel_id];
+    deque.assign(msgs.begin(), msgs.end());
+    if (!observers_.empty()) {
+      message_snapshot.assign(deque.begin(), deque.end());
+    }
+  }
+  observers_.notify(
+      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
+}
+
 void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> msgs) {
   std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
+
+    // Build a set of existing IDs to skip duplicates
+    std::unordered_set<Snowflake> existing_ids;
+    for (const auto& m : deque) {
+      existing_ids.insert(m.id);
+    }
+
     for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
-      deque.push_front(std::move(*it));
+      if (existing_ids.find(it->id) == existing_ids.end()) {
+        deque.push_front(std::move(*it));
+      }
     }
     if (!observers_.empty()) {
       message_snapshot.assign(deque.begin(), deque.end());

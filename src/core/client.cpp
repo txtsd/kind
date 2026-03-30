@@ -461,7 +461,7 @@ void Client::select_channel(Snowflake channel_id) {
         messages.push_back(std::move(*msg));
       }
     }
-    store_->add_messages_before(channel_id, std::move(messages));
+    store_->set_messages(channel_id, std::move(messages));
   });
 }
 

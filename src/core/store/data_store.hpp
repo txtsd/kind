@@ -38,6 +38,7 @@ public:
   void add_message(Message msg);
   void update_message(Message msg);
   void remove_message(Snowflake channel_id, Snowflake message_id);
+  void set_messages(Snowflake channel_id, std::vector<Message> msgs);
   void add_messages_before(Snowflake channel_id, std::vector<Message> msgs);
 
   // Observer management
