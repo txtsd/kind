@@ -41,8 +41,8 @@ private:
   std::chrono::steady_clock::time_point global_reset_at_;
 
   // Preemptive token bucket: prevents bursting before bucket info is known
-  static constexpr int max_tokens_ = 5;
-  static constexpr auto refill_interval_ = std::chrono::milliseconds(1000);
+  static constexpr int max_tokens_ = 10;
+  static constexpr auto refill_interval_ = std::chrono::milliseconds(200);
   int tokens_ = max_tokens_;
   std::chrono::steady_clock::time_point last_refill_ = std::chrono::steady_clock::now();
 };
