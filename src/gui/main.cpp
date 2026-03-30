@@ -2,6 +2,7 @@
 #include "client.hpp"
 #include "config/config_manager.hpp"
 #include "dialogs/login_dialog.hpp"
+#include "version.hpp"
 #include "widgets/channel_list.hpp"
 #include "widgets/message_input.hpp"
 #include "widgets/message_view.hpp"
@@ -15,7 +16,7 @@
 int main(int argc, char* argv[]) {
   QApplication qapp(argc, argv);
   qapp.setApplicationName("kind");
-  qapp.setApplicationVersion("0.1.0");
+  qapp.setApplicationVersion(kind::version);
 
   kind::ConfigManager config;
   kind::Client client(config);

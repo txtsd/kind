@@ -17,7 +17,9 @@ target_sources(kind-core PRIVATE
 )
 
 target_include_directories(kind-core
-  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 target_link_libraries(kind-core

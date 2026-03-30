@@ -26,6 +26,12 @@ if(KIND_ENABLE_UBSAN)
   add_link_options(-fsanitize=undefined)
 endif()
 
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/version.hpp.in
+  ${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
+  @ONLY
+)
+
 include(cmake/dependencies.cmake)
 
 add_subdirectory(src/core)
