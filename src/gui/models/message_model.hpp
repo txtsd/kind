@@ -30,11 +30,13 @@ public:
   QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
   void set_messages(const std::vector<kind::Message>& messages);
+  void set_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts);
   void append_message(const kind::Message& msg);
   void update_message(const kind::Message& msg);
   void mark_deleted(kind::Snowflake message_id);
   std::optional<kind::Snowflake> oldest_message_id() const;
   void prepend_messages(const std::vector<kind::Message>& messages);
+  void prepend_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts);
   std::optional<int> row_for_id(kind::Snowflake id) const;
   const std::vector<kind::Message>& messages() const { return messages_; }
 

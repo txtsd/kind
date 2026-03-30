@@ -73,10 +73,19 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
 void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
   beginResetModel();
   messages_ = messages;
-  // Ensure oldest first (smallest Snowflake ID = oldest)
   std::sort(messages_.begin(), messages_.end(),
             [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
   rendered_.clear();
+  rendered_.resize(messages_.size());
+  endResetModel();
+}
+
+void MessageModel::set_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts) {
+  beginResetModel();
+  messages_ = messages;
+  std::sort(messages_.begin(), messages_.end(),
+            [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+  rendered_ = std::move(layouts);
   rendered_.resize(messages_.size());
   endResetModel();
 }
@@ -153,6 +162,16 @@ void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) 
   beginInsertRows(QModelIndex(), 0, static_cast<int>(messages.size()) - 1);
   messages_.insert(messages_.begin(), messages.begin(), messages.end());
   rendered_.insert(rendered_.begin(), messages.size(), RenderedMessage{});
+  endInsertRows();
+}
+
+void MessageModel::prepend_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts) {
+  if (messages.empty()) {
+    return;
+  }
+  beginInsertRows(QModelIndex(), 0, static_cast<int>(messages.size()) - 1);
+  messages_.insert(messages_.begin(), messages.begin(), messages.end());
+  rendered_.insert(rendered_.begin(), std::make_move_iterator(layouts.begin()), std::make_move_iterator(layouts.end()));
   endInsertRows();
 }
 

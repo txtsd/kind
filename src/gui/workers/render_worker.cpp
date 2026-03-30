@@ -12,10 +12,7 @@ static const int snowflake_reg = qRegisterMetaType<kind::Snowflake>("kind::Snowf
 
 namespace kind::gui {
 
-RenderWorker::RenderWorker(QObject* parent) : QObject(parent) {}
-
-void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
-                          int viewport_width, QFont font) {
+RenderedMessage compute_layout(const kind::Message& message, int viewport_width, const QFont& font) {
   static constexpr int padding = 4;
 
   QFont bold_font = font;
@@ -55,6 +52,7 @@ void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
   int usable_width = viewport_width - 2 * padding;
   int prefix_width = result.time_width + result.author_width;
 
+  result.text_layout = std::make_shared<QTextLayout>();
   result.text_layout->setFont(font);
   result.text_layout->setText(content);
 
@@ -95,7 +93,14 @@ void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
   }
   result.valid = true;
 
-  emit layout_ready(message_id, std::move(result));
+  return result;
+}
+
+RenderWorker::RenderWorker(QObject* parent) : QObject(parent) {}
+
+void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
+                          int viewport_width, QFont font) {
+  emit layout_ready(message_id, compute_layout(message, viewport_width, font));
 }
 
 RenderThread::RenderThread(QObject* parent) : QObject(parent), worker_(new RenderWorker) {

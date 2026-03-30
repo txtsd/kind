@@ -80,6 +80,17 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   });
 }
 
+std::vector<RenderedMessage> MessageView::compute_layouts_sync(const std::vector<kind::Message>& messages) {
+  int width = viewport()->width() > 0 ? viewport()->width() : 400;
+  QFont view_font = font();
+  std::vector<RenderedMessage> layouts;
+  layouts.reserve(messages.size());
+  for (const auto& msg : messages) {
+    layouts.push_back(compute_layout(msg, width, view_font));
+  }
+  return layouts;
+}
+
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
   unread_count_ = 0;
   jump_pill_->set_count(0);
@@ -89,8 +100,8 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 
   mutating_ = true;
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  model_->set_messages(vec);
-  request_all_renders(vec);
+  auto layouts = compute_layouts_sync(vec);
+  model_->set_messages(vec, std::move(layouts));
 
   auto anchor_it = scroll_anchors_.find(channel_id);
   if (anchor_it != scroll_anchors_.end() && !anchor_it->at_bottom) {
@@ -114,8 +125,8 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  model_->set_messages(vec);
-  request_all_renders(vec);
+  auto layouts = compute_layouts_sync(vec);
+  model_->set_messages(vec, std::move(layouts));
 
   auto_scroll_ = true;
   scroll_to_bottom();
@@ -130,8 +141,8 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
   mutating_ = true;
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  model_->prepend_messages(vec);
-  request_all_renders(vec);
+  auto layouts = compute_layouts_sync(vec);
+  model_->prepend_messages(vec, std::move(layouts));
 
   auto row = model_->row_for_id(anchor_id);
   QTimer::singleShot(0, this, [this, row]() {

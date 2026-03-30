@@ -10,6 +10,9 @@
 
 namespace kind::gui {
 
+// Compute a RenderedMessage synchronously. Safe to call from any thread.
+RenderedMessage compute_layout(const kind::Message& message, int viewport_width, const QFont& font);
+
 class RenderWorker : public QObject {
   Q_OBJECT
 

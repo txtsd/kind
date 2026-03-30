@@ -58,6 +58,7 @@ private:
   void scroll_to_bottom();
   void request_render(kind::Snowflake message_id, const kind::Message& msg);
   void request_all_renders(const std::vector<kind::Message>& messages);
+  std::vector<RenderedMessage> compute_layouts_sync(const std::vector<kind::Message>& messages);
   JumpPill* jump_pill_;
   int unread_count_{0};
   void position_jump_pill();

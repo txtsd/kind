@@ -9,7 +9,7 @@
 namespace kind::gui {
 
 struct RenderedMessage {
-  std::shared_ptr<QTextLayout> text_layout{std::make_shared<QTextLayout>()};
+  std::shared_ptr<QTextLayout> text_layout;
   QString time_str;
   QString author_str;
   int time_width{0};
