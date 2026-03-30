@@ -1,5 +1,7 @@
 #include "models/channel_model.hpp"
 
+#include "permissions.hpp"
+
 #include <algorithm>
 #include <map>
 
@@ -35,13 +37,23 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
       return QVariant::fromValue(static_cast<qulonglong>(channel.parent_id.value()));
     }
     return {};
+  case LockedRole: {
+    auto it = permissions_.find(channel.id);
+    if (it != permissions_.end()) {
+      return !kind::can_view_channel(it->second);
+    }
+    return false;
+  }
   default:
     return {};
   }
 }
 
-void ChannelModel::set_channels(const std::vector<kind::Channel>& channels) {
+void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
+                                const std::unordered_map<kind::Snowflake, uint64_t>& permissions,
+                                bool hide_locked) {
   beginResetModel();
+  permissions_ = permissions;
 
   // Separate categories from regular channels
   std::vector<kind::Channel> categories;
@@ -49,6 +61,14 @@ void ChannelModel::set_channels(const std::vector<kind::Channel>& channels) {
   std::map<kind::Snowflake, std::vector<kind::Channel>> by_parent;
 
   for (const auto& ch : channels) {
+    // Filter out locked non-category channels when hide_locked is enabled
+    if (hide_locked && ch.type != 4) {
+      auto it = permissions_.find(ch.id);
+      if (it != permissions_.end() && !kind::can_view_channel(it->second)) {
+        continue;
+      }
+    }
+
     if (ch.type == 4) {
       categories.push_back(ch);
     } else if (!ch.parent_id.has_value()) {

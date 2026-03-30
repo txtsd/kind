@@ -13,13 +13,19 @@ ChannelList::ChannelList(QWidget* parent)
   connect(selectionModel(), &QItemSelectionModel::currentChanged, this, &ChannelList::on_selection_changed);
 }
 
-void ChannelList::set_channels(const QVector<kind::Channel>& channels) {
+void ChannelList::set_channels(const QVector<kind::Channel>& channels,
+                               const std::unordered_map<kind::Snowflake, uint64_t>& permissions,
+                               bool hide_locked) {
   std::vector<kind::Channel> vec(channels.begin(), channels.end());
-  model_->set_channels(vec);
+  model_->set_channels(vec, permissions, hide_locked);
 }
 
 void ChannelList::on_selection_changed(const QModelIndex& current, const QModelIndex& /*previous*/) {
   if (current.isValid()) {
+    bool locked = current.data(ChannelModel::LockedRole).toBool();
+    if (locked) {
+      return;
+    }
     auto channel_id = model_->channel_id_at(current.row());
     emit channel_selected(channel_id);
   }

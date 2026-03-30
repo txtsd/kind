@@ -7,6 +7,7 @@
 
 #include <QListView>
 #include <QVector>
+#include <unordered_map>
 
 namespace kind::gui {
 
@@ -19,7 +20,9 @@ public:
   ChannelModel* channel_model() const { return model_; }
 
 public slots:
-  void set_channels(const QVector<kind::Channel>& channels);
+  void set_channels(const QVector<kind::Channel>& channels,
+                    const std::unordered_map<kind::Snowflake, uint64_t>& permissions = {},
+                    bool hide_locked = false);
 
 signals:
   void channel_selected(kind::Snowflake channel_id);

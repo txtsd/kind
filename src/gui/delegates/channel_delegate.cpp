@@ -64,8 +64,12 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
                                     const QString& prefix) const {
   painter->save();
 
-  // Background highlight for selected or hovered items
-  if (option.state & QStyle::State_Selected) {
+  bool locked = index.data(ChannelModel::LockedRole).toBool();
+
+  // Background highlight for selected or hovered items (skip for locked channels)
+  if (locked) {
+    painter->fillRect(option.rect, option.palette.base());
+  } else if (option.state & QStyle::State_Selected) {
     painter->fillRect(option.rect, option.palette.highlight());
   } else if (option.state & QStyle::State_MouseOver) {
     auto hover_color = option.palette.highlight().color();
@@ -76,13 +80,15 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   }
 
   QString name = index.data(Qt::DisplayRole).toString();
-  QString display_text = prefix + name;
+  QString display_text = locked ? QStringLiteral("\U0001F512 ") + name : prefix + name;
 
   QFont channel_font = option.font;
   QFontMetrics fm(channel_font);
 
   painter->setFont(channel_font);
-  if (option.state & QStyle::State_Selected) {
+  if (locked) {
+    painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
+  } else if (option.state & QStyle::State_Selected) {
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::HighlightedText));
   } else {
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
