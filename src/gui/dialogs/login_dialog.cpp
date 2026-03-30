@@ -1,8 +1,5 @@
 #include "login_dialog.hpp"
 
-#include "client.hpp"
-#include "config/config_manager.hpp"
-
 #include <QFormLayout>
 #include <QSettings>
 #include <QVBoxLayout>
@@ -140,23 +137,16 @@ void LoginDialog::enable_login() {
   credential_login_button_->setEnabled(true);
 }
 
-void LoginDialog::load_saved_token(kind::Client& client) {
-  auto saved = client.saved_token();
-  if (!saved) {
-    return;
-  }
+void LoginDialog::load_saved_token(const std::string& token, const std::string& token_type) {
+  token_input_->setText(QString::fromStdString(token));
 
-  token_input_->setText(QString::fromStdString(saved->token));
-
-  // Select the correct token type in the combo box
   for (int i = 0; i < token_type_combo_->count(); ++i) {
-    if (token_type_combo_->itemData(i).toString().toStdString() == saved->token_type) {
+    if (token_type_combo_->itemData(i).toString().toStdString() == token_type) {
       token_type_combo_->setCurrentIndex(i);
       break;
     }
   }
 
-  // Switch to token tab
   tab_widget_->setCurrentIndex(0);
 }
 

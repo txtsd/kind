@@ -25,7 +25,7 @@ public:
   void show_mfa_input();
   void enable_login();
 
-  void load_saved_token(kind::Client& client);
+  void load_saved_token(const std::string& token, const std::string& token_type);
   bool auto_login_enabled() const;
 
 signals:

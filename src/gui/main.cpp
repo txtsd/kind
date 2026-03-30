@@ -127,18 +127,51 @@ int main(int argc, char* argv[]) {
   // On login success, close dialog
   QObject::connect(&app, &kind::gui::App::login_success, &login_dialog, &QDialog::accept);
 
-  // Wire app signals to widgets
-  QObject::connect(&app, &kind::gui::App::ready, server_list, &kind::gui::ServerList::set_guilds);
+  // Wire app signals to widgets — preserve current guild selection on updates
+  auto update_guild_list = [server_list, &current_guild_id](const QVector<kind::Guild>& guilds) {
+    // Block selection signals while updating the list to avoid re-triggering guild_selected
+    server_list->blockSignals(true);
+    server_list->set_guilds(guilds);
 
-  QObject::connect(&app, &kind::gui::App::guilds_updated, server_list, &kind::gui::ServerList::set_guilds);
+    // Re-select the previously selected guild if it still exists
+    if (current_guild_id != 0) {
+      auto* model = server_list->guild_model();
+      for (int row = 0; row < model->rowCount(); ++row) {
+        auto idx = model->index(row);
+        auto gid = idx.data(kind::gui::GuildModel::GuildIdRole).value<qulonglong>();
+        if (gid == current_guild_id) {
+          server_list->setCurrentIndex(idx);
+          break;
+        }
+      }
+    }
+    server_list->blockSignals(false);
+  };
+
+  QObject::connect(&app, &kind::gui::App::ready, update_guild_list);
+  QObject::connect(&app, &kind::gui::App::guilds_updated, update_guild_list);
 
   QObject::connect(&app, &kind::gui::App::channels_updated,
-                   [channel_list, &current_guild_id, &compute_channel_permissions, &config](
+                   [channel_list, &current_guild_id, &current_channel_id,
+                    &compute_channel_permissions, &config](
                        kind::Snowflake guild_id, const QVector<kind::Channel>& channels) {
                      if (guild_id == current_guild_id) {
+                       channel_list->blockSignals(true);
                        auto perms = compute_channel_permissions(guild_id, channels);
                        bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
                        channel_list->set_channels(channels, perms, hide_locked);
+
+                       // Re-select the previously selected channel
+                       if (current_channel_id != 0) {
+                         auto* model = channel_list->channel_model();
+                         for (int row = 0; row < model->rowCount(); ++row) {
+                           if (model->channel_id_at(row) == current_channel_id) {
+                             channel_list->setCurrentIndex(model->index(row));
+                             break;
+                           }
+                         }
+                       }
+                       channel_list->blockSignals(false);
                      }
                    });
 
@@ -264,7 +297,7 @@ int main(int argc, char* argv[]) {
 
   // Populate login dialog with saved token if available
   if (saved_token) {
-    login_dialog.load_saved_token(client);
+    login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
   }
 
   // Pass --no-autologin to force show the login dialog
