@@ -1,5 +1,7 @@
 #include "message_view.hpp"
 
+#include <QDateTime>
+#include <QLocale>
 #include <QScrollBar>
 #include <QTimer>
 
@@ -24,9 +26,10 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
   }
 
   for (const auto& msg : messages) {
-    auto* label = new QLabel(format_message(msg), container_);
+    auto* label = new QLabel(container_);
     label->setWordWrap(true);
     label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    configure_message_label(label, msg);
     layout_->insertWidget(layout_->count() - 1, label);
   }
 
@@ -34,9 +37,10 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
 }
 
 void MessageView::add_message(const kind::Message& msg) {
-  auto* label = new QLabel(format_message(msg), container_);
+  auto* label = new QLabel(container_);
   label->setWordWrap(true);
   label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  configure_message_label(label, msg);
   layout_->insertWidget(layout_->count() - 1, label);
 
   // Cap widget count to prevent unbounded memory growth.
@@ -54,10 +58,30 @@ void MessageView::scroll_to_bottom() {
   QTimer::singleShot(0, this, [this]() { verticalScrollBar()->setValue(verticalScrollBar()->maximum()); });
 }
 
-QString MessageView::format_message(const kind::Message& msg) {
-  return QString("[%1] %2: %3")
-      .arg(QString::fromStdString(msg.timestamp), QString::fromStdString(msg.author.username),
-           QString::fromStdString(msg.content));
+void MessageView::configure_message_label(QLabel* label, const kind::Message& msg) {
+  auto raw_timestamp = QString::fromStdString(msg.timestamp);
+  auto dt = QDateTime::fromString(raw_timestamp, Qt::ISODateWithMs);
+  if (!dt.isValid()) {
+    dt = QDateTime::fromString(raw_timestamp, Qt::ISODate);
+  }
+
+  QString short_time;
+  QString tooltip;
+  if (dt.isValid()) {
+    auto local = dt.toLocalTime();
+    short_time = local.toString("HH:mm");
+    tooltip = QLocale().toString(local, "dddd, MMMM d, yyyy 'at' h:mm AP");
+  } else {
+    short_time = raw_timestamp;
+  }
+
+  label->setText(
+      QString("[%1] %2: %3")
+          .arg(short_time, QString::fromStdString(msg.author.username), QString::fromStdString(msg.content)));
+
+  if (!tooltip.isEmpty()) {
+    label->setToolTip(tooltip);
+  }
 }
 
 } // namespace kind::gui
