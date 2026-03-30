@@ -7,6 +7,7 @@ target_sources(kind-core PRIVATE
   permissions.cpp
   client.cpp
   cache/disk_cache.cpp
+  cache/database_manager.cpp
   json/parsers.cpp
   auth/auth_manager.cpp
   auth/keychain_token_store.cpp

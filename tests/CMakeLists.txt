@@ -10,6 +10,7 @@ add_executable(kind-tests
   core/auth_test.cpp
   core/permissions_test.cpp
   core/client_test.cpp
+  core/database_test.cpp
   gui/message_model_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
 )
@@ -26,6 +27,7 @@ target_link_libraries(kind-tests
     Qt6::Core
     Qt6::Gui
     Qt6::Test
+    Qt6::Sql
 )
 
 gtest_discover_tests(kind-tests)
