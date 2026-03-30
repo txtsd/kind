@@ -1,4 +1,5 @@
 #include "cache/database_manager.hpp"
+#include "cache/database_reader.hpp"
 #include "cache/database_writer.hpp"
 
 #include "logging.hpp"
@@ -66,6 +67,7 @@ TEST_F(DatabaseManagerTest, CreatesSchemaOnFirstRun) {
   EXPECT_NE(std::find(tables.begin(), tables.end(), "schema_version"), tables.end());
   EXPECT_NE(std::find(tables.begin(), tables.end(), "guild_order"), tables.end());
   EXPECT_NE(std::find(tables.begin(), tables.end(), "permission_overwrites"), tables.end());
+  EXPECT_NE(std::find(tables.begin(), tables.end(), "app_state"), tables.end());
 
   db.close();
 }
@@ -358,4 +360,275 @@ TEST_F(DatabaseWriterTest, WriteRoles) {
   EXPECT_FALSE(q.next());
 
   db.close();
+}
+
+// --- DatabaseReader tests ---
+
+class DatabaseReaderTest : public ::testing::Test {
+protected:
+  static inline QCoreApplication* app_ = nullptr;
+  std::filesystem::path db_dir_;
+  std::filesystem::path db_path_;
+
+  static void SetUpTestSuite() {
+    if (QCoreApplication::instance() == nullptr) {
+      static int argc = 1;
+      static char arg0[] = "kind-tests";
+      static char* argv[] = {arg0, nullptr};
+      app_ = new QCoreApplication(argc, argv);
+    }
+    kind::log::init();
+  }
+
+  void SetUp() override {
+    db_dir_ = std::filesystem::temp_directory_path() / "kind_dbr_test";
+    std::filesystem::remove_all(db_dir_);
+    db_path_ = db_dir_ / "test.db";
+    kind::DatabaseManager mgr(db_path_);
+    mgr.initialize();
+  }
+
+  void TearDown() override {
+    for (const auto& name : QSqlDatabase::connectionNames()) {
+      QSqlDatabase::removeDatabase(name);
+    }
+    std::filesystem::remove_all(db_dir_);
+  }
+};
+
+TEST_F(DatabaseReaderTest, ReadGuildsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Guild g;
+    g.id = 100;
+    g.name = "Guild A";
+    g.icon_hash = "ic";
+    g.owner_id = 1;
+    emit writer.guild_write_requested(g);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto guilds = reader.guilds();
+  ASSERT_EQ(guilds.size(), 1u);
+  EXPECT_EQ(guilds[0].id, 100u);
+  EXPECT_EQ(guilds[0].name, "Guild A");
+  EXPECT_EQ(guilds[0].icon_hash, "ic");
+  EXPECT_EQ(guilds[0].owner_id, 1u);
+}
+
+TEST_F(DatabaseReaderTest, ReadGuildOrderRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    std::vector<kind::Snowflake> order = {30, 10, 20};
+    emit writer.guild_order_write_requested(order);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto order = reader.guild_order();
+  ASSERT_EQ(order.size(), 3u);
+  EXPECT_EQ(order[0], 30u);
+  EXPECT_EQ(order[1], 10u);
+  EXPECT_EQ(order[2], 20u);
+}
+
+TEST_F(DatabaseReaderTest, ReadChannelsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Channel ch;
+    ch.id = 200;
+    ch.guild_id = 100;
+    ch.name = "general";
+    ch.type = 0;
+    ch.position = 1;
+    ch.parent_id = 50;
+    emit writer.channel_write_requested(ch);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto channels = reader.channels(100);
+  ASSERT_EQ(channels.size(), 1u);
+  EXPECT_EQ(channels[0].id, 200u);
+  EXPECT_EQ(channels[0].guild_id, 100u);
+  EXPECT_EQ(channels[0].name, "general");
+  EXPECT_EQ(channels[0].type, 0);
+  EXPECT_EQ(channels[0].position, 1);
+  ASSERT_TRUE(channels[0].parent_id.has_value());
+  EXPECT_EQ(*channels[0].parent_id, 50u);
+}
+
+TEST_F(DatabaseReaderTest, ReadRolesRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    std::vector<kind::Role> roles;
+    roles.push_back({.id = 1, .name = "Admin", .permissions = 8, .position = 2});
+    roles.push_back({.id = 2, .name = "Member", .permissions = 0, .position = 1});
+    emit writer.roles_write_requested(100, roles);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto roles = reader.roles(100);
+  ASSERT_EQ(roles.size(), 2u);
+
+  // Sort by position for deterministic comparison
+  std::sort(roles.begin(), roles.end(),
+            [](const auto& a, const auto& b) { return a.position < b.position; });
+  EXPECT_EQ(roles[0].name, "Member");
+  EXPECT_EQ(roles[1].name, "Admin");
+  EXPECT_EQ(roles[1].permissions, 8u);
+}
+
+TEST_F(DatabaseReaderTest, ReadPermissionOverwritesRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    std::vector<kind::PermissionOverwrite> overwrites;
+    overwrites.push_back({.id = 10, .type = 0, .allow = 1024, .deny = 0});
+    overwrites.push_back({.id = 20, .type = 1, .allow = 0, .deny = 2048});
+    emit writer.overwrites_write_requested(200, overwrites);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto ows = reader.permission_overwrites(200);
+  ASSERT_EQ(ows.size(), 2u);
+
+  // Sort by id for deterministic comparison
+  std::sort(ows.begin(), ows.end(),
+            [](const auto& a, const auto& b) { return a.id < b.id; });
+  EXPECT_EQ(ows[0].id, 10u);
+  EXPECT_EQ(ows[0].type, 0);
+  EXPECT_EQ(ows[0].allow, 1024u);
+  EXPECT_EQ(ows[1].id, 20u);
+  EXPECT_EQ(ows[1].deny, 2048u);
+}
+
+TEST_F(DatabaseReaderTest, MemberRolesRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    emit writer.member_roles_write_requested(100, {10, 20, 30});
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto roles = reader.member_roles(100);
+  ASSERT_EQ(roles.size(), 3u);
+  EXPECT_EQ(roles[0], 10u);
+  EXPECT_EQ(roles[1], 20u);
+  EXPECT_EQ(roles[2], 30u);
+}
+
+TEST_F(DatabaseReaderTest, CurrentUserRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::User user;
+    user.id = 42;
+    user.username = "alice";
+    user.discriminator = "0001";
+    user.avatar_hash = "ava";
+    user.bot = false;
+    emit writer.current_user_write_requested(user);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto user = reader.current_user();
+  ASSERT_TRUE(user.has_value());
+  EXPECT_EQ(user->id, 42u);
+  EXPECT_EQ(user->username, "alice");
+  EXPECT_EQ(user->discriminator, "0001");
+}
+
+TEST_F(DatabaseReaderTest, CurrentUserReturnsNulloptWhenEmpty) {
+  kind::DatabaseReader reader(db_path_.string());
+  auto user = reader.current_user();
+  EXPECT_FALSE(user.has_value());
+}
+
+TEST_F(DatabaseReaderTest, MessagePagination) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    for (int i = 1; i <= 10; ++i) {
+      kind::Message msg;
+      msg.id = static_cast<kind::Snowflake>(i);
+      msg.channel_id = 42;
+      msg.author.id = 1;
+      msg.author.username = "user";
+      msg.content = "msg " + std::to_string(i);
+      msg.timestamp = "2026-01-01T00:00:00.000Z";
+      emit writer.message_write_requested(msg);
+    }
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+
+  // Latest 3 messages (chronological order)
+  auto page1 = reader.messages(42, {}, 3);
+  ASSERT_EQ(page1.size(), 3u);
+  EXPECT_EQ(page1[0].id, 8u);
+  EXPECT_EQ(page1[1].id, 9u);
+  EXPECT_EQ(page1[2].id, 10u);
+
+  // 3 messages before id 8
+  auto page2 = reader.messages(42, 8, 3);
+  ASSERT_EQ(page2.size(), 3u);
+  EXPECT_EQ(page2[0].id, 5u);
+  EXPECT_EQ(page2[1].id, 6u);
+  EXPECT_EQ(page2[2].id, 7u);
+}
+
+TEST_F(DatabaseReaderTest, MessagesJoinAuthor) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 100;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "alice";
+    msg.author.discriminator = "0001";
+    msg.author.avatar_hash = "ava";
+    msg.author.bot = false;
+    msg.content = "hello";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    msg.edited_timestamp = "2026-01-01T00:01:00.000Z";
+    msg.pinned = true;
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_EQ(msgs[0].author.username, "alice");
+  EXPECT_EQ(msgs[0].author.discriminator, "0001");
+  EXPECT_EQ(msgs[0].author.avatar_hash, "ava");
+  EXPECT_FALSE(msgs[0].author.bot);
+  EXPECT_TRUE(msgs[0].pinned);
+  ASSERT_TRUE(msgs[0].edited_timestamp.has_value());
+  EXPECT_EQ(*msgs[0].edited_timestamp, "2026-01-01T00:01:00.000Z");
+}
+
+TEST_F(DatabaseReaderTest, DeletedMessageLoadsCorrectly) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 500;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "u";
+    msg.content = "deleted";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+    emit writer.message_delete_requested(42, 500);
+    writer.flush_sync();
+  }
+
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_TRUE(msgs[0].deleted);
 }

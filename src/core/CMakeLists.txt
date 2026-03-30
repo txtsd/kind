@@ -9,6 +9,7 @@ target_sources(kind-core PRIVATE
   cache/disk_cache.cpp
   cache/database_manager.cpp
   cache/database_writer.cpp
+  cache/database_reader.cpp
   json/parsers.cpp
   auth/auth_manager.cpp
   auth/keychain_token_store.cpp

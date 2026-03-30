@@ -142,6 +142,12 @@ void DatabaseManager::create_schema() {
       "  mention_count INTEGER DEFAULT 0"
       ")");
 
+  q.exec(
+      "CREATE TABLE IF NOT EXISTS app_state ("
+      "  key   TEXT PRIMARY KEY,"
+      "  value TEXT"
+      ")");
+
   q.exec("INSERT OR IGNORE INTO schema_version (version) VALUES (1)");
 }
 

@@ -1,0 +1,43 @@
+#pragma once
+
+#include "models/channel.hpp"
+#include "models/guild.hpp"
+#include "models/message.hpp"
+#include "models/permission_overwrite.hpp"
+#include "models/role.hpp"
+#include "models/snowflake.hpp"
+#include "models/user.hpp"
+
+#include <QString>
+
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace kind {
+
+class DatabaseReader {
+public:
+  explicit DatabaseReader(const std::string& db_path);
+  ~DatabaseReader();
+
+  DatabaseReader(const DatabaseReader&) = delete;
+  DatabaseReader& operator=(const DatabaseReader&) = delete;
+
+  std::vector<Guild> guilds() const;
+  std::vector<Snowflake> guild_order() const;
+  std::vector<Channel> channels(Snowflake guild_id) const;
+  std::vector<Role> roles(Snowflake guild_id) const;
+  std::vector<PermissionOverwrite> permission_overwrites(Snowflake channel_id) const;
+  std::vector<Snowflake> member_roles(Snowflake guild_id) const;
+  std::optional<User> current_user() const;
+  std::vector<Message> messages(Snowflake channel_id,
+                                std::optional<Snowflake> before = {},
+                                int limit = 50) const;
+
+private:
+  std::string db_path_;
+  QString connection_name_;
+};
+
+} // namespace kind

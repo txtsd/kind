@@ -150,7 +150,17 @@ void DatabaseWriteWorker::write_user(kind::User user) {
 }
 
 void DatabaseWriteWorker::write_current_user(kind::User user) {
-  write_user(std::move(user));
+  write_user(user);
+
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery sq(db);
+  sq.prepare("INSERT OR REPLACE INTO app_state (key, value) VALUES ('current_user_id', :uid)");
+  sq.bindValue(":uid", QString::number(user.id));
+  if (!sq.exec()) {
+    log::cache()->warn("Writer: failed to store current_user_id: {}",
+                       sq.lastError().text().toStdString());
+  }
 }
 
 void DatabaseWriteWorker::write_roles(kind::Snowflake guild_id, std::vector<kind::Role> roles) {
