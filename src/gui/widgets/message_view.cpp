@@ -56,7 +56,8 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
-  save_scroll_state();
+  // TODO: restore per-channel scroll position from scroll_positions_ map
+  // save_scroll_state();
 
   current_channel_id_ = channel_id;
   loading_more_ = false;
@@ -64,23 +65,13 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
 
-  auto it = scroll_positions_.find(channel_id);
-  if (it != scroll_positions_.end()) {
-    int saved = it.value();
-    QTimer::singleShot(0, this, [this, saved]() {
-      verticalScrollBar()->setValue(saved);
-      auto_scroll_ = (saved >= verticalScrollBar()->maximum() - 5);
-    });
-  } else {
-    auto_scroll_ = true;
-    scroll_to_bottom();
-  }
+  auto_scroll_ = true;
+  scroll_to_bottom();
 }
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
   int old_max = verticalScrollBar()->maximum();
   int old_val = verticalScrollBar()->value();
-  bool was_at_bottom = (old_val >= old_max - 5);
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
@@ -92,13 +83,9 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
       verticalScrollBar()->setValue(old_val + delta);
       loading_more_ = false;
     });
-  } else if (was_at_bottom) {
+  } else {
     auto_scroll_ = true;
     scroll_to_bottom();
-  } else {
-    QTimer::singleShot(0, this, [this, old_val]() {
-      verticalScrollBar()->setValue(old_val);
-    });
   }
 }
 
@@ -126,7 +113,7 @@ void MessageView::save_scroll_state() {
 }
 
 void MessageView::scroll_to_bottom() {
-  QTimer::singleShot(0, this, [this]() { verticalScrollBar()->setValue(verticalScrollBar()->maximum()); });
+  QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
 }
 
 } // namespace kind::gui
