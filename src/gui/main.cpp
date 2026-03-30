@@ -222,11 +222,10 @@ int main(int argc, char* argv[]) {
 
   // Shared actions for guild/channel selection (used by signals and restore)
   auto select_guild_action = [&client, &current_guild_id, &current_channel_id,
-                              server_list, channel_list,
+                              server_list, channel_list, message_view, message_input,
                               &compute_channel_permissions, &config](
                                  kind::Snowflake guild_id) {
     current_guild_id = guild_id;
-    client.save_last_selection(guild_id, current_channel_id);
 
     // Visually select the guild in the server list
     server_list->blockSignals(true);
@@ -240,6 +239,7 @@ int main(int argc, char* argv[]) {
     }
     server_list->blockSignals(false);
 
+    bool channel_found = false;
     auto cached_channels = client.channels(guild_id);
     if (!cached_channels.empty()) {
       channel_list->blockSignals(true);
@@ -254,6 +254,7 @@ int main(int argc, char* argv[]) {
         for (int row = 0; row < chan_model->rowCount(); ++row) {
           if (chan_model->channel_id_at(row) == current_channel_id) {
             channel_list->setCurrentIndex(chan_model->index(row));
+            channel_found = true;
             break;
           }
         }
@@ -261,6 +262,14 @@ int main(int argc, char* argv[]) {
       channel_list->blockSignals(false);
     }
 
+    // Clear message pane if no channel is selected in this guild
+    if (!channel_found) {
+      current_channel_id = 0;
+      message_view->switch_channel(0, {});
+      message_input->set_read_only(true);
+    }
+
+    client.save_last_selection(guild_id, current_channel_id);
     client.select_guild(guild_id);
   };
 
