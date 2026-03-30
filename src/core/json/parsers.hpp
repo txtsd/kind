@@ -19,6 +19,9 @@ std::optional<User> parse_user(const QJsonObject& obj);
 // Parse a User from a raw JSON string. Returns std::nullopt on parse failure.
 std::optional<User> parse_user(const std::string& json);
 
+// Merge a partial user JSON into an existing User, only updating fields present in the JSON.
+void merge_user(User& existing, const QJsonObject& obj);
+
 // Parse a Guild from a JSON object. Returns std::nullopt on invalid JSON.
 std::optional<Guild> parse_guild(const QJsonObject& obj);
 

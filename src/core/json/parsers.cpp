@@ -21,6 +21,24 @@ std::optional<User> parse_user(const QJsonObject& obj) {
   return user;
 }
 
+void merge_user(User& existing, const QJsonObject& obj) {
+  if (obj.contains("id")) {
+    existing.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  }
+  if (obj.contains("username")) {
+    existing.username = obj["username"].toString().toStdString();
+  }
+  if (obj.contains("discriminator")) {
+    existing.discriminator = obj["discriminator"].toString().toStdString();
+  }
+  if (obj.contains("avatar")) {
+    existing.avatar_hash = obj["avatar"].toString().toStdString();
+  }
+  if (obj.contains("bot")) {
+    existing.bot = obj["bot"].toBool(false);
+  }
+}
+
 std::optional<User> parse_user(const std::string& json) {
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
   if (doc.isNull()) {
