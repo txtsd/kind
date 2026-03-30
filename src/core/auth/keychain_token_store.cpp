@@ -25,6 +25,8 @@ void KeychainTokenStore::save_token(std::string_view token, std::string_view tok
 
   if (job.error() != QKeychain::NoError) {
     log::auth()->error("Failed to save token to keychain: {}", job.errorString().toStdString());
+  } else {
+    log::auth()->info("Token saved to system keychain");
   }
 }
 
@@ -51,6 +53,7 @@ std::optional<TokenStore::StoredToken> KeychainTokenStore::load_token() const {
     return std::nullopt;
   }
 
+  log::auth()->info("Token loaded from system keychain");
   return StoredToken{
       .token = value.substr(newline + 1),
       .token_type = value.substr(0, newline),
