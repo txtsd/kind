@@ -236,6 +236,15 @@ void DataStore::add_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
+    // Apply pending delete if this message was deleted before being cached
+    auto pending_it = pending_deletes_.find(channel_id);
+    if (pending_it != pending_deletes_.end() && pending_it->second.count(msg.id)) {
+      msg.deleted = true;
+      pending_it->second.erase(msg.id);
+      if (pending_it->second.empty()) {
+        pending_deletes_.erase(pending_it);
+      }
+    }
     auto& deque = channel_messages_[channel_id];
     // Insert at the correct position by Snowflake ID (chronological order)
     auto it = std::lower_bound(deque.begin(), deque.end(), msg,
@@ -273,14 +282,20 @@ void DataStore::update_message(Message msg) {
 void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
   {
     std::unique_lock lock(mutex_);
+    bool found = false;
     auto it = channel_messages_.find(channel_id);
     if (it != channel_messages_.end()) {
       for (auto& msg : it->second) {
         if (msg.id == message_id) {
           msg.deleted = true;
+          found = true;
           break;
         }
       }
+    }
+    // Track the delete so messages fetched later arrive pre-marked
+    if (!found) {
+      pending_deletes_[channel_id].insert(message_id);
     }
   }
   // No on_messages_updated — the gateway's on_message_delete handles the GUI.
@@ -290,6 +305,16 @@ void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
   std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
+    // Apply any pending deletes to incoming messages
+    auto pending_it = pending_deletes_.find(channel_id);
+    if (pending_it != pending_deletes_.end()) {
+      for (auto& msg : msgs) {
+        if (pending_it->second.count(msg.id)) {
+          msg.deleted = true;
+        }
+      }
+      pending_deletes_.erase(pending_it);
+    }
     auto& deque = channel_messages_[channel_id];
     deque.assign(msgs.begin(), msgs.end());
     if (!observers_.empty()) {
@@ -306,6 +331,9 @@ void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> m
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
 
+    // Apply any pending deletes to incoming messages
+    auto pending_it = pending_deletes_.find(channel_id);
+
     // Build a set of existing IDs to skip duplicates
     std::unordered_set<Snowflake> existing_ids;
     for (const auto& m : deque) {
@@ -314,12 +342,21 @@ void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> m
 
     for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
       if (existing_ids.find(it->id) == existing_ids.end()) {
+        if (pending_it != pending_deletes_.end() && pending_it->second.count(it->id)) {
+          it->deleted = true;
+          pending_it->second.erase(it->id);
+        }
         added.push_back(*it);
         deque.push_front(std::move(*it));
       }
     }
     // added is in reverse insertion order; reverse to match deque front order
     std::reverse(added.begin(), added.end());
+
+    // Clean up empty pending sets
+    if (pending_it != pending_deletes_.end() && pending_it->second.empty()) {
+      pending_deletes_.erase(pending_it);
+    }
   }
   if (!added.empty()) {
     observers_.notify(

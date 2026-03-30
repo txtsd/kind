@@ -11,6 +11,7 @@
 #include <map>
 #include <optional>
 #include <shared_mutex>
+#include <unordered_set>
 #include <vector>
 
 namespace kind {
@@ -55,6 +56,7 @@ private:
   std::map<Snowflake, std::deque<Message>> channel_messages_;
   std::map<Snowflake, User> users_;
   std::vector<Snowflake> guild_order_;
+  std::map<Snowflake, std::unordered_set<Snowflake>> pending_deletes_;
 
   ObserverList<StoreObserver> observers_;
 };
