@@ -23,11 +23,18 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     painter->fillRect(option.rect, option.palette.base());
   }
 
+  bool is_deleted = index.data(MessageModel::DeletedRole).toBool();
+  bool is_edited = index.data(MessageModel::EditedRole).toBool();
+
   QFont base_font = option.font;
   QFont bold_font = base_font;
   bold_font.setBold(true);
   QFontMetrics base_fm(base_font);
   QFontMetrics bold_fm(bold_font);
+
+  // When deleted, override text color to a muted grey
+  QColor text_color = is_deleted ? QColor(128, 128, 128) : option.palette.color(QPalette::Normal, QPalette::Text);
+  QColor dim_color = is_deleted ? QColor(128, 128, 128) : option.palette.color(QPalette::Disabled, QPalette::Text);
 
   // Parse timestamp
   auto raw_ts = index.data(MessageModel::TimestampRole).toString();
@@ -41,20 +48,25 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
   auto author = index.data(MessageModel::AuthorRole).toString();
   auto content = index.data(MessageModel::ContentRole).toString();
 
+  // Append "(edited)" so it wraps naturally with the message content
+  if (is_edited) {
+    content += " (edited)";
+  }
+
   int x = option.rect.left() + padding_;
   int y = option.rect.top() + padding_;
   int available_width = option.rect.width() - 2 * padding_;
 
   // Draw timestamp in grey
   painter->setFont(base_font);
-  painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
+  painter->setPen(dim_color);
   int ts_width = base_fm.horizontalAdvance(time_str);
   painter->drawText(x, y + base_fm.ascent(), time_str);
   x += ts_width;
 
   // Draw author in bold
   painter->setFont(bold_font);
-  painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
+  painter->setPen(text_color);
   QString author_sep = author + ": ";
   int author_width = bold_fm.horizontalAdvance(author_sep);
   painter->drawText(x, y + bold_fm.ascent(), author_sep);
@@ -62,7 +74,7 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
 
   // Draw content with word wrapping
   painter->setFont(base_font);
-  painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
+  painter->setPen(text_color);
 
   int content_start_x = x;
   int remaining_first_line = available_width - (ts_width + author_width);
@@ -138,6 +150,11 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem& option, const QModel
 
   auto author = index.data(MessageModel::AuthorRole).toString();
   auto content = index.data(MessageModel::ContentRole).toString();
+  bool is_edited = index.data(MessageModel::EditedRole).toBool();
+
+  if (is_edited) {
+    content += " (edited)";
+  }
 
   int available_width = option.rect.width() > 0 ? option.rect.width() : 400;
   int usable_width = available_width - 2 * padding_;
