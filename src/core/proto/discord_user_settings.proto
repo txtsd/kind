@@ -1,0 +1,27 @@
+// Guild folder definitions derived from discord-protos
+// Copyright (c) 2022-present dolfies, MIT License
+// https://github.com/discord-userdoccers/discord-protos
+
+syntax = "proto3";
+
+package kind.proto;
+
+import "google/protobuf/wrappers.proto";
+
+message GuildFolder {
+  repeated fixed64 guild_ids = 1;
+  optional google.protobuf.Int64Value id = 2;
+  optional google.protobuf.StringValue name = 3;
+  optional google.protobuf.UInt64Value color = 4;
+}
+
+message GuildFolders {
+  repeated GuildFolder folders = 1;
+  repeated fixed64 guild_positions = 2;
+}
+
+// Minimal subset of PreloadedUserSettings, only the fields we need.
+// Full schema: https://github.com/discord-userdoccers/discord-protos
+message PreloadedUserSettings {
+  optional GuildFolders guild_folders = 14;
+}

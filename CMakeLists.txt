@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(KIND_BUILD_GUI "Build the Qt6 GUI frontend" ON)
-option(KIND_BUILD_TUI "Build the FTXUI TUI frontend" ON)
+option(KIND_BUILD_TUI "Build the FTXUI TUI frontend" OFF)
 option(KIND_BUILD_TESTS "Build tests" ON)
 option(KIND_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(KIND_ENABLE_TSAN "Enable ThreadSanitizer" OFF)

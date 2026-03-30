@@ -17,6 +17,15 @@ target_sources(kind-core PRIVATE
   gateway/qt_gateway_client.cpp
 )
 
+qt_add_protobuf(kind-core-proto
+  PROTO_FILES proto/discord_user_settings.proto
+  PROTO_INCLUDES /usr/include
+)
+
+target_link_libraries(kind-core-proto
+  PUBLIC Qt6::ProtobufWellKnownTypes
+)
+
 target_include_directories(kind-core
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -31,4 +40,7 @@ target_link_libraries(kind-core
     Qt6::Core
     Qt6::Network
     Qt6::WebSockets
+    Qt6::Protobuf
+    Qt6::ProtobufWellKnownTypes
+    kind-core-proto
 )
