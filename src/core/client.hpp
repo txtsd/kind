@@ -80,6 +80,8 @@ public:
   void load_cache();
   void save_cache();
   void save_last_selection(Snowflake guild_id, Snowflake channel_id);
+  void save_guild_channel(Snowflake guild_id, Snowflake channel_id);
+  Snowflake last_channel_for_guild(Snowflake guild_id) const;
   struct LastSelection {
     Snowflake guild_id{0};
     Snowflake channel_id{0};

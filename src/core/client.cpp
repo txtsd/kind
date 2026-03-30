@@ -657,6 +657,24 @@ void Client::save_last_selection(Snowflake guild_id, Snowflake channel_id) {
   }
 }
 
+void Client::save_guild_channel(Snowflake guild_id, Snowflake channel_id) {
+  if (db_writer_) {
+    auto key = "guild_channel_" + std::to_string(guild_id);
+    emit db_writer_->app_state_write_requested(QString::fromStdString(key), QString::number(channel_id));
+  }
+}
+
+Snowflake Client::last_channel_for_guild(Snowflake guild_id) const {
+  if (db_reader_) {
+    auto key = "guild_channel_" + std::to_string(guild_id);
+    auto val = db_reader_->app_state(key);
+    if (val) {
+      return std::stoull(*val);
+    }
+  }
+  return 0;
+}
+
 Client::LastSelection Client::last_selection() const {
   LastSelection sel;
   if (db_reader_) {

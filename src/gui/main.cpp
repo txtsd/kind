@@ -239,6 +239,9 @@ int main(int argc, char* argv[]) {
     }
     server_list->blockSignals(false);
 
+    // Look up the last channel selected in this guild
+    auto last_channel = client.last_channel_for_guild(guild_id);
+
     bool channel_found = false;
     auto cached_channels = client.channels(guild_id);
     if (!cached_channels.empty()) {
@@ -248,12 +251,12 @@ int main(int argc, char* argv[]) {
       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
       channel_list->set_channels(qvec, perms, hide_locked);
 
-      // Re-select the current channel if it exists in this guild
-      if (current_channel_id != 0) {
+      if (last_channel != 0) {
         auto* chan_model = channel_list->channel_model();
         for (int row = 0; row < chan_model->rowCount(); ++row) {
-          if (chan_model->channel_id_at(row) == current_channel_id) {
+          if (chan_model->channel_id_at(row) == last_channel) {
             channel_list->setCurrentIndex(chan_model->index(row));
+            current_channel_id = last_channel;
             channel_found = true;
             break;
           }
@@ -262,8 +265,13 @@ int main(int argc, char* argv[]) {
       channel_list->blockSignals(false);
     }
 
-    // Clear message pane if no channel is selected in this guild
-    if (!channel_found) {
+    if (channel_found) {
+      // Load messages for the restored channel
+      auto cached_msgs = client.messages(last_channel, {}, 50);
+      QVector<kind::Message> qvec(cached_msgs.begin(), cached_msgs.end());
+      message_view->switch_channel(last_channel, qvec);
+      client.select_channel(last_channel);
+    } else {
       current_channel_id = 0;
       message_view->switch_channel(0, {});
       message_input->set_read_only(true);
@@ -278,6 +286,7 @@ int main(int argc, char* argv[]) {
                                    kind::Snowflake channel_id) {
     current_channel_id = channel_id;
     client.save_last_selection(current_guild_id, channel_id);
+    client.save_guild_channel(current_guild_id, channel_id);
 
     // Visually select the channel in the channel list
     channel_list->blockSignals(true);
