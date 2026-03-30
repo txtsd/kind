@@ -80,7 +80,12 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   });
 }
 
-std::vector<RenderedMessage> MessageView::compute_layouts_sync(const std::vector<kind::Message>& messages) {
+std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind::Message>& messages) {
+  // Sort by Snowflake ID before computing layouts so they align with the
+  // model's internal order (MessageModel::set_messages also sorts by ID)
+  std::sort(messages.begin(), messages.end(),
+            [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   QFont view_font = font();
   std::vector<RenderedMessage> layouts;
