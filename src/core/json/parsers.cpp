@@ -55,6 +55,14 @@ std::optional<Guild> parse_guild(const QJsonObject& obj) {
     guild.owner_id = static_cast<Snowflake>(obj["owner_id"].toString().toULongLong());
   }
 
+  auto roles_array = obj["roles"].toArray();
+  for (const auto& val : roles_array) {
+    auto role = parse_role(val.toObject());
+    if (role) {
+      guild.roles.push_back(std::move(*role));
+    }
+  }
+
   auto channels_array = obj["channels"].toArray();
   for (const auto& val : channels_array) {
     auto channel = parse_channel(val.toObject());
@@ -79,6 +87,14 @@ std::optional<Channel> parse_channel(const QJsonObject& obj) {
   channel.position = obj["position"].toInt();
   if (obj.contains("parent_id") && !obj["parent_id"].isNull()) {
     channel.parent_id = static_cast<Snowflake>(obj["parent_id"].toString().toULongLong());
+  }
+
+  auto overwrites_array = obj["permission_overwrites"].toArray();
+  for (const auto& val : overwrites_array) {
+    auto ow = parse_overwrite(val.toObject());
+    if (ow) {
+      channel.permission_overwrites.push_back(std::move(*ow));
+    }
   }
   return channel;
 }
@@ -120,6 +136,32 @@ std::optional<Message> parse_message(const std::string& json) {
     return std::nullopt;
   }
   return parse_message(doc.object());
+}
+
+std::optional<Role> parse_role(const QJsonObject& obj) {
+  if (obj.isEmpty()) {
+    return std::nullopt;
+  }
+
+  Role role;
+  role.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  role.name = obj["name"].toString().toStdString();
+  role.permissions = obj["permissions"].toString().toULongLong();
+  role.position = obj["position"].toInt();
+  return role;
+}
+
+std::optional<PermissionOverwrite> parse_overwrite(const QJsonObject& obj) {
+  if (obj.isEmpty()) {
+    return std::nullopt;
+  }
+
+  PermissionOverwrite ow;
+  ow.id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+  ow.type = obj["type"].toInt();
+  ow.allow = obj["allow"].toString().toULongLong();
+  ow.deny = obj["deny"].toString().toULongLong();
+  return ow;
 }
 
 } // namespace kind::json_parse
