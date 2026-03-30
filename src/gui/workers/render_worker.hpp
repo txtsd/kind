@@ -30,6 +30,11 @@ public:
   explicit RenderThread(QObject* parent = nullptr);
   ~RenderThread() override;
 
+  RenderThread(const RenderThread&) = delete;
+  RenderThread& operator=(const RenderThread&) = delete;
+  RenderThread(RenderThread&&) = delete;
+  RenderThread& operator=(RenderThread&&) = delete;
+
   void request_render(kind::Snowflake message_id, const kind::Message& message,
                       int viewport_width, const QFont& font);
 

@@ -85,7 +85,7 @@ void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
       line.setLineWidth(usable_width);
       line.setPosition(QPointF(0, y_offset));
     }
-    y_offset += line.height();
+    y_offset += static_cast<int>(line.height());
   }
   result.text_layout->endLayout();
 
