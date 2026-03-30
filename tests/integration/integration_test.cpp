@@ -137,7 +137,10 @@ protected:
     std::filesystem::remove_all(config_dir_);
   }
 
-  void create_client() { client_ = std::make_unique<kind::Client>(*config_); }
+  void create_client() {
+    // Use a test-specific keychain service name to avoid touching the user's real token
+    client_ = std::make_unique<kind::Client>(*config_, "kind-test");
+  }
 
   std::unique_ptr<kind::test::MockDiscordServer> server_;
   std::unique_ptr<kind::ConfigManager> config_;

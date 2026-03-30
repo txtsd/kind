@@ -290,14 +290,14 @@ private:
 // Client construction
 // ============================================================
 
-Client::Client(ConfigManager& config) : config_(config) {
+Client::Client(ConfigManager& config, const std::string& keychain_service) : config_(config) {
   auto api_base = config.get_or<std::string>("network.api_base_url", std::string(endpoints::api_base));
   auto max_messages = static_cast<std::size_t>(config.get_or<int64_t>("behavior.max_messages_per_channel", 500));
   auto reconnect_base = config.get_or<int64_t>("behavior.reconnect_base_delay_ms", 1000);
   auto reconnect_max = config.get_or<int64_t>("behavior.reconnect_max_delay_ms", 30000);
   auto reconnect_retries = config.get_or<int64_t>("behavior.reconnect_max_retries", 10);
 
-  token_store_ = std::make_unique<KeychainTokenStore>();
+  token_store_ = std::make_unique<KeychainTokenStore>(keychain_service);
 
   auto qt_rest = std::make_unique<QtRestClient>();
   qt_rest->set_base_url(api_base);
