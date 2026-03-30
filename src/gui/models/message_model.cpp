@@ -73,17 +73,20 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
 }
 
 void MessageModel::append_message(const kind::Message& msg) {
-  // Guard against duplicates (the store observer and gateway observer both fire
-  // for the same incoming message)
+  // Guard against duplicates
   for (const auto& existing : messages_) {
     if (existing.id == msg.id) {
       return;
     }
   }
 
-  int row = static_cast<int>(messages_.size());
+  // Insert at the correct position by Snowflake ID (chronological order)
+  auto it = std::lower_bound(messages_.begin(), messages_.end(), msg,
+                             [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+  int row = static_cast<int>(std::distance(messages_.begin(), it));
+
   beginInsertRows(QModelIndex(), row, row);
-  messages_.push_back(msg);
+  messages_.insert(it, msg);
   endInsertRows();
 
   // Trim from the front if over capacity

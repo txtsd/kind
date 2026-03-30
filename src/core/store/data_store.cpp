@@ -237,7 +237,10 @@ void DataStore::add_message(Message msg) {
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
-    deque.push_back(std::move(msg));
+    // Insert at the correct position by Snowflake ID (chronological order)
+    auto it = std::lower_bound(deque.begin(), deque.end(), msg,
+                               [](const Message& a, const Message& b) { return a.id < b.id; });
+    deque.insert(it, std::move(msg));
     while (deque.size() > max_messages_per_channel_) {
       deque.pop_front();
     }
