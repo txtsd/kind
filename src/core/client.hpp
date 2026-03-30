@@ -10,6 +10,7 @@
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -67,6 +68,10 @@ public:
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});
   void logout();
 
+  // Disk cache
+  void load_cache();
+  void save_cache();
+
   // State accessors (thread-safe, returns copies)
   std::vector<Guild> guilds() const;
   std::vector<Channel> channels(Snowflake guild_id) const;
@@ -92,6 +97,10 @@ private:
   // External observer lists
   ObserverList<AuthObserver> auth_observers_;
   ObserverList<GatewayObserver> gateway_observers_;
+
+  // Active selection tracking for stale response discarding
+  std::atomic<Snowflake> active_guild_id_{0};
+  std::atomic<Snowflake> active_channel_id_{0};
 };
 
 } // namespace kind

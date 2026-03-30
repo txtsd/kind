@@ -2,6 +2,7 @@
 
 #include "auth/auth_manager.hpp"
 #include "auth/token_store.hpp"
+#include "cache/disk_cache.hpp"
 #include "config/config_manager.hpp"
 #include "gateway/gateway_client.hpp"
 #include "gateway/gateway_events.hpp"
@@ -334,7 +335,14 @@ void Client::send_message(Snowflake channel_id, std::string_view content) {
 }
 
 void Client::select_guild(Snowflake guild_id) {
+  active_guild_id_.store(guild_id);
+
   rest_->get(endpoints::guild_channels(guild_id), [this, guild_id](RestClient::Response response) {
+    // Discard if user has already switched to a different guild
+    if (active_guild_id_.load() != guild_id) {
+      return;
+    }
+
     if (!response) {
       spdlog::warn("Failed to fetch channels for guild {}: {}", guild_id, response.error().message);
       return;
@@ -362,7 +370,38 @@ void Client::select_guild(Snowflake guild_id) {
 }
 
 void Client::select_channel(Snowflake channel_id) {
-  fetch_message_history(channel_id);
+  active_channel_id_.store(channel_id);
+
+  std::string path = endpoints::channel_messages(channel_id);
+  rest_->get(path, [this, channel_id](RestClient::Response response) {
+    // Discard if user has already switched to a different channel
+    if (active_channel_id_.load() != channel_id) {
+      return;
+    }
+
+    if (!response) {
+      spdlog::warn("Failed to fetch messages for channel {}: {}", channel_id, response.error().message);
+      return;
+    }
+
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    if (doc.isNull() || !doc.isArray()) {
+      spdlog::warn("Failed to parse message history JSON");
+      return;
+    }
+
+    auto arr = doc.array();
+    std::vector<Message> messages;
+    messages.reserve(arr.size());
+    for (const auto& val : arr) {
+      auto msg = json_parse::parse_message(val.toObject());
+      if (msg) {
+        msg->channel_id = channel_id;
+        messages.push_back(std::move(*msg));
+      }
+    }
+    store_->add_messages_before(channel_id, std::move(messages));
+  });
 }
 
 void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before) {
@@ -378,12 +417,8 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
     }
 
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
-    if (doc.isNull()) {
-      spdlog::warn("Failed to parse message history JSON: document is null");
-      return;
-    }
-    if (!doc.isArray()) {
-      spdlog::warn("Failed to parse message history JSON: expected array");
+    if (doc.isNull() || !doc.isArray()) {
+      spdlog::warn("Failed to parse message history JSON");
       return;
     }
 
@@ -403,6 +438,16 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
 
 void Client::logout() {
   auth_->logout();
+}
+
+void Client::load_cache() {
+  DiskCache cache;
+  cache.load(*store_);
+}
+
+void Client::save_cache() {
+  DiskCache cache;
+  cache.save(*store_);
 }
 
 // ============================================================
