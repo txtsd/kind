@@ -252,14 +252,19 @@ void DataStore::update_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
-    auto it = channel_messages_.find(channel_id);
-    if (it != channel_messages_.end()) {
-      for (auto& existing : it->second) {
-        if (existing.id == msg.id) {
-          existing = std::move(msg);
-          break;
-        }
+    auto& deque = channel_messages_[channel_id];
+    for (auto& existing : deque) {
+      if (existing.id == msg.id) {
+        existing = std::move(msg);
+        return;
       }
+    }
+    // Not cached: insert at the correct sorted position
+    auto it = std::lower_bound(deque.begin(), deque.end(), msg,
+                               [](const Message& a, const Message& b) { return a.id < b.id; });
+    deque.insert(it, std::move(msg));
+    while (deque.size() > max_messages_per_channel_) {
+      deque.pop_front();
     }
   }
   // No on_messages_updated — the gateway's on_message_update handles the GUI.

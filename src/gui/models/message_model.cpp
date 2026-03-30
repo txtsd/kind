@@ -107,6 +107,8 @@ void MessageModel::update_message(const kind::Message& msg) {
       return;
     }
   }
+  // Message not cached yet; insert it at the correct sorted position
+  append_message(msg);
 }
 
 void MessageModel::mark_deleted(kind::Snowflake message_id) {
