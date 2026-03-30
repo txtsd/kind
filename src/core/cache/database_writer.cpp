@@ -281,6 +281,16 @@ void DatabaseWriteWorker::mark_message_deleted(kind::Snowflake channel_id,
   q.exec();
 }
 
+void DatabaseWriteWorker::write_app_state(QString key, QString value) {
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.prepare("INSERT OR REPLACE INTO app_state (key, value) VALUES (:key, :value)");
+  q.bindValue(":key", key);
+  q.bindValue(":value", value);
+  q.exec();
+}
+
 void DatabaseWriteWorker::flush() {
   emit flushed();
 }
@@ -315,6 +325,8 @@ DatabaseWriter::DatabaseWriter(const std::string& db_path, QObject* parent)
           &DatabaseWriteWorker::delete_channel);
   connect(this, &DatabaseWriter::message_delete_requested, worker_,
           &DatabaseWriteWorker::mark_message_deleted);
+  connect(this, &DatabaseWriter::app_state_write_requested, worker_,
+          &DatabaseWriteWorker::write_app_state);
   connect(this, &DatabaseWriter::flush_requested, worker_, &DatabaseWriteWorker::flush);
 
   thread_.start();

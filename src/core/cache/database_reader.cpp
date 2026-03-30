@@ -222,4 +222,16 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
   return result;
 }
 
+std::optional<std::string> DatabaseReader::app_state(const std::string& key) const {
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.prepare("SELECT value FROM app_state WHERE key = :key");
+  q.bindValue(":key", QString::fromStdString(key));
+  q.exec();
+  if (q.next()) {
+    return q.value(0).toString().toStdString();
+  }
+  return std::nullopt;
+}
+
 } // namespace kind

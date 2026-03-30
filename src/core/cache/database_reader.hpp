@@ -34,6 +34,7 @@ public:
   std::vector<Message> messages(Snowflake channel_id,
                                 std::optional<Snowflake> before = {},
                                 int limit = 50) const;
+  std::optional<std::string> app_state(const std::string& key) const;
 
 private:
   std::string db_path_;

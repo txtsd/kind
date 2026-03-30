@@ -189,9 +189,10 @@ int main(int argc, char* argv[]) {
 
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
-                   [&client, &current_guild_id, channel_list, &compute_channel_permissions, &config](
-                       kind::Snowflake guild_id) {
+                   [&client, &current_guild_id, &current_channel_id, channel_list,
+                    &compute_channel_permissions, &config](kind::Snowflake guild_id) {
                      current_guild_id = guild_id;
+                     client.save_last_selection(guild_id, current_channel_id);
 
                      // Display cached channels immediately
                      auto cached_channels = client.channels(guild_id);
@@ -210,6 +211,7 @@ int main(int argc, char* argv[]) {
                    [&client, &current_channel_id, &current_guild_id,
                     message_view, message_input](kind::Snowflake channel_id) {
                      current_channel_id = channel_id;
+                     client.save_last_selection(current_guild_id, channel_id);
 
                      // Check send permission for this channel
                      auto all_guilds = client.guilds();
@@ -292,6 +294,32 @@ int main(int argc, char* argv[]) {
     if (login_dialog.exec() != QDialog::Accepted) {
       return 0;
     }
+  }
+
+  // Restore last selected guild and channel
+  auto last = client.last_selection();
+  if (last.guild_id != 0) {
+    current_guild_id = last.guild_id;
+
+    auto cached_channels = client.channels(last.guild_id);
+    if (!cached_channels.empty()) {
+      QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
+      auto perms = compute_channel_permissions(last.guild_id, qvec);
+      bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
+      channel_list->set_channels(qvec, perms, hide_locked);
+    }
+
+    if (last.channel_id != 0) {
+      current_channel_id = last.channel_id;
+
+      auto cached_msgs = client.messages(last.channel_id, {}, 50);
+      QVector<kind::Message> qvec(cached_msgs.begin(), cached_msgs.end());
+      message_view->switch_channel(last.channel_id, qvec);
+
+      client.select_channel(last.channel_id);
+    }
+
+    client.select_guild(last.guild_id);
   }
 
   main_window.show();

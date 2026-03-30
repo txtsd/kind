@@ -650,6 +650,28 @@ void Client::save_cache() {
   }
 }
 
+void Client::save_last_selection(Snowflake guild_id, Snowflake channel_id) {
+  if (db_writer_) {
+    emit db_writer_->app_state_write_requested("last_guild_id", QString::number(guild_id));
+    emit db_writer_->app_state_write_requested("last_channel_id", QString::number(channel_id));
+  }
+}
+
+Client::LastSelection Client::last_selection() const {
+  LastSelection sel;
+  if (db_reader_) {
+    auto guild = db_reader_->app_state("last_guild_id");
+    if (guild) {
+      sel.guild_id = std::stoull(*guild);
+    }
+    auto channel = db_reader_->app_state("last_channel_id");
+    if (channel) {
+      sel.channel_id = std::stoull(*channel);
+    }
+  }
+  return sel;
+}
+
 // ============================================================
 // State accessors
 // ============================================================

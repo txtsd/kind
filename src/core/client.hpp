@@ -76,9 +76,15 @@ public:
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});
   void logout();
 
-  // Disk cache
+  // Persistence
   void load_cache();
   void save_cache();
+  void save_last_selection(Snowflake guild_id, Snowflake channel_id);
+  struct LastSelection {
+    Snowflake guild_id{0};
+    Snowflake channel_id{0};
+  };
+  LastSelection last_selection() const;
 
   // State accessors (thread-safe, returns copies)
   std::vector<Guild> guilds() const;
