@@ -26,6 +26,9 @@ public:
   std::optional<User> user(Snowflake user_id) const;
   std::optional<User> current_user() const;
 
+  // Guild ordering (from user_settings_proto)
+  void set_guild_order(const std::vector<Snowflake>& ordered_ids);
+
   // Mutations (called by gateway event handlers)
   void set_current_user(User user);
   void upsert_guild(Guild guild);
@@ -50,6 +53,7 @@ private:
   std::map<Snowflake, std::vector<Channel>> guild_channels_;
   std::map<Snowflake, std::deque<Message>> channel_messages_;
   std::map<Snowflake, User> users_;
+  std::vector<Snowflake> guild_order_;
 
   ObserverList<StoreObserver> observers_;
 };

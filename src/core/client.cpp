@@ -13,10 +13,14 @@
 #include "store/data_store.hpp"
 
 #include "json/parsers.hpp"
+#include "discord_user_settings.qpb.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProtobufSerializer>
 #include <spdlog/spdlog.h>
+#include <algorithm>
+#include <set>
 #include <string>
 
 namespace kind {
@@ -121,6 +125,54 @@ private:
       if (guild) {
         client_.store_->upsert_guild(*guild);
         guilds.push_back(std::move(*guild));
+      }
+    }
+
+    // Decode guild ordering from user_settings_proto (user tokens only)
+    auto settings_proto_b64 = obj["user_settings_proto"].toString();
+    if (!settings_proto_b64.isEmpty()) {
+      auto proto_bytes = QByteArray::fromBase64(settings_proto_b64.toUtf8());
+      kind::proto::PreloadedUserSettings settings;
+      QProtobufSerializer serializer;
+      if (serializer.deserialize(&settings, proto_bytes)) {
+        if (settings.hasGuildFolders()) {
+          auto& gf = settings.guildFolders();
+
+          // Build ordered list from folders
+          std::vector<Snowflake> folder_ids;
+          std::set<Snowflake> in_folder;
+          for (const auto& folder : gf.folders()) {
+            for (auto gid : folder.guildIds()) {
+              auto id = static_cast<Snowflake>(gid);
+              folder_ids.push_back(id);
+              in_folder.insert(id);
+            }
+          }
+
+          // Guilds not in any folder go at the top, newest first.
+          // READY array has them oldest-first, so we reverse.
+          std::vector<Snowflake> unsorted;
+          for (const auto& g : guilds) {
+            if (in_folder.find(g.id) == in_folder.end()) {
+              unsorted.push_back(g.id);
+            }
+          }
+          std::reverse(unsorted.begin(), unsorted.end());
+
+          // Final order: unsorted guilds first, then folder order
+          std::vector<Snowflake> ordered_ids;
+          ordered_ids.reserve(unsorted.size() + folder_ids.size());
+          ordered_ids.insert(ordered_ids.end(), unsorted.begin(), unsorted.end());
+          ordered_ids.insert(ordered_ids.end(), folder_ids.begin(), folder_ids.end());
+
+          if (!ordered_ids.empty()) {
+            client_.store_->set_guild_order(ordered_ids);
+            guilds = client_.store_->guilds();
+          }
+        }
+      } else {
+        spdlog::warn("Failed to decode user_settings_proto: {}",
+                     serializer.lastErrorString().toStdString());
       }
     }
 
