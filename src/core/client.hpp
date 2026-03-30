@@ -41,7 +41,8 @@ struct ClientDeps {
 class Client {
 public:
   // Production constructor: creates real Qt-backed components
-  explicit Client(ConfigManager& config, const std::string& keychain_service = "kind");
+  explicit Client(ConfigManager& config, const std::string& keychain_service = "kind",
+                  const std::string& db_path_override = "");
 
   // Test constructor: accepts pre-created (mock) components
   Client(ConfigManager& config, ClientDeps deps);

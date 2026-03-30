@@ -138,8 +138,9 @@ protected:
   }
 
   void create_client() {
-    // Use a test-specific keychain service name to avoid touching the user's real token
-    client_ = std::make_unique<kind::Client>(*config_, "kind-test");
+    // Use test-specific keychain and database to avoid touching the user's real data
+    auto test_db = (config_dir_ / "test.db").string();
+    client_ = std::make_unique<kind::Client>(*config_, "kind-test", test_db);
   }
 
   std::unique_ptr<kind::test::MockDiscordServer> server_;

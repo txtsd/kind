@@ -339,7 +339,8 @@ private:
 // Client construction
 // ============================================================
 
-Client::Client(ConfigManager& config, const std::string& keychain_service) : config_(config) {
+Client::Client(ConfigManager& config, const std::string& keychain_service,
+               const std::string& db_path_override) : config_(config) {
   auto api_base = config.get_or<std::string>("network.api_base_url", std::string(endpoints::api_base));
   auto max_messages = static_cast<std::size_t>(config.get_or<int64_t>("behavior.max_messages_per_channel", 500));
   auto reconnect_base = config.get_or<int64_t>("behavior.reconnect_base_delay_ms", 1000);
@@ -369,7 +370,9 @@ Client::Client(ConfigManager& config, const std::string& keychain_service) : con
 
   store_ = std::make_unique<DataStore>(max_messages);
 
-  auto db_path = platform_paths().state_dir / "kind.db";
+  auto db_path = db_path_override.empty()
+      ? platform_paths().state_dir / "kind.db"
+      : std::filesystem::path(db_path_override);
   db_manager_ = std::make_unique<DatabaseManager>(db_path);
   db_manager_->initialize();
   db_writer_ = std::make_unique<DatabaseWriter>(db_path.string());
