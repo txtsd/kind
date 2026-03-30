@@ -1,6 +1,11 @@
 #include "login_dialog.hpp"
 
+#include "auth/token_store.hpp"
+#include "client.hpp"
+#include "config/config_manager.hpp"
+
 #include <QFormLayout>
+#include <QSettings>
 #include <QVBoxLayout>
 
 namespace kind::gui {
@@ -48,6 +53,18 @@ void LoginDialog::setup_ui() {
   tab_widget_->addTab(cred_tab, "Credentials");
 
   main_layout->addWidget(tab_widget_);
+
+  // Auto-login checkbox
+  auto_login_checkbox_ = new QCheckBox("Auto-login with saved token", this);
+  main_layout->addWidget(auto_login_checkbox_);
+
+  // Persist checkbox state via QSettings
+  QSettings settings("kind", "kind");
+  auto_login_checkbox_->setChecked(settings.value("auto_login", false).toBool());
+  connect(auto_login_checkbox_, &QCheckBox::toggled, [](bool checked) {
+    QSettings s("kind", "kind");
+    s.setValue("auto_login", checked);
+  });
 
   // MFA section (hidden by default)
   mfa_widget_ = new QWidget(this);
@@ -122,6 +139,32 @@ void LoginDialog::show_mfa_input() {
 void LoginDialog::enable_login() {
   token_login_button_->setEnabled(true);
   credential_login_button_->setEnabled(true);
+}
+
+void LoginDialog::load_saved_token(kind::Client& client) {
+  // Access the token store through a temporary TokenStore with the same path
+  kind::TokenStore store;
+  auto saved = store.load_token();
+  if (!saved) {
+    return;
+  }
+
+  token_input_->setText(QString::fromStdString(saved->token));
+
+  // Select the correct token type in the combo box
+  for (int i = 0; i < token_type_combo_->count(); ++i) {
+    if (token_type_combo_->itemData(i).toString().toStdString() == saved->token_type) {
+      token_type_combo_->setCurrentIndex(i);
+      break;
+    }
+  }
+
+  // Switch to token tab
+  tab_widget_->setCurrentIndex(0);
+}
+
+bool LoginDialog::auto_login_enabled() const {
+  return auto_login_checkbox_->isChecked();
 }
 
 } // namespace kind::gui

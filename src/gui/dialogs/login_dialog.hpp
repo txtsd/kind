@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QLabel>
@@ -7,6 +8,10 @@
 #include <QPushButton>
 #include <QTabWidget>
 #include <QWidget>
+
+namespace kind {
+class Client;
+}
 
 namespace kind::gui {
 
@@ -19,6 +24,9 @@ public:
   void show_error(const QString& message);
   void show_mfa_input();
   void enable_login();
+
+  void load_saved_token(kind::Client& client);
+  bool auto_login_enabled() const;
 
 signals:
   void token_login_requested(QString token, QString token_type);
@@ -45,6 +53,9 @@ private:
   QWidget* mfa_widget_{};
   QLineEdit* mfa_input_{};
   QPushButton* mfa_submit_button_{};
+
+  // Auto-login
+  QCheckBox* auto_login_checkbox_{};
 
   // Status
   QLabel* status_label_{};

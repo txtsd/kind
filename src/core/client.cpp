@@ -362,6 +362,15 @@ void Client::remove_store_observer(StoreObserver* obs) {
 // Actions
 // ============================================================
 
+bool Client::try_saved_login() {
+  auto saved = token_store_->load_token();
+  if (!saved) {
+    return false;
+  }
+  auth_->login_with_token(saved->token, saved->token_type);
+  return true;
+}
+
 void Client::login_with_token(std::string_view token, std::string_view token_type) {
   auth_->login_with_token(token, token_type);
 }

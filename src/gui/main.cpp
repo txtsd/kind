@@ -155,9 +155,35 @@ int main(int argc, char* argv[]) {
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
-  // Show login dialog (modal)
-  if (login_dialog.exec() != QDialog::Accepted) {
-    return 0;
+  // Populate login dialog with saved token if available
+  login_dialog.load_saved_token(client);
+
+  // Pass --no-autologin to force show the login dialog
+  bool force_dialog = qapp.arguments().contains("--no-autologin");
+
+  // If auto-login is enabled and we have a saved token, try it
+  if (!force_dialog && login_dialog.auto_login_enabled() && client.try_saved_login()) {
+    QEventLoop wait;
+    bool login_ok = false;
+    QObject::connect(&app, &kind::gui::App::login_success, &wait, [&]() {
+      login_ok = true;
+      wait.quit();
+    });
+    QObject::connect(&app, &kind::gui::App::login_failure, &wait, [&]() {
+      wait.quit();
+    });
+    wait.exec();
+
+    if (!login_ok) {
+      // Auto-login failed, show dialog
+      if (login_dialog.exec() != QDialog::Accepted) {
+        return 0;
+      }
+    }
+  } else {
+    if (login_dialog.exec() != QDialog::Accepted) {
+      return 0;
+    }
   }
 
   main_window.show();
