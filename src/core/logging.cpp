@@ -1,9 +1,13 @@
 #include "logging.hpp"
 
+#include "config/platform_paths.hpp"
+
+#include <filesystem>
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-
 #include <string_view>
+#include <vector>
 
 namespace kind::log {
 
@@ -18,11 +22,42 @@ static spdlog::level::level_enum parse_level(std::string_view str) {
   return spdlog::level::info;
 }
 
+// Shared sinks: terminal (color) + rotating file
+static std::vector<spdlog::sink_ptr>& sinks() {
+  static std::vector<spdlog::sink_ptr> instance;
+  return instance;
+}
+
+static void ensure_sinks() {
+  if (!sinks().empty()) {
+    return;
+  }
+
+  // Terminal sink
+  auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+  console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
+  sinks().push_back(console_sink);
+
+  // Rotating file sink: 5 MB per file, 10 rotated files
+  auto log_dir = platform_paths().state_dir / "logs";
+  std::filesystem::create_directories(log_dir);
+  auto log_path = (log_dir / "kind.log").string();
+
+  auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+      log_path, 5 * 1024 * 1024, 10);
+  file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
+  // File sink captures all levels; terminal level is controlled per-logger
+  file_sink->set_level(spdlog::level::trace);
+  sinks().push_back(file_sink);
+}
+
 static std::shared_ptr<spdlog::logger> get_or_create(const std::string& name) {
   auto logger = spdlog::get(name);
   if (!logger) {
-    logger = spdlog::stdout_color_mt(name);
-    logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
+    ensure_sinks();
+    logger = std::make_shared<spdlog::logger>(name, sinks().begin(), sinks().end());
+    logger->set_level(spdlog::level::info);
+    spdlog::register_logger(logger);
   }
   return logger;
 }
