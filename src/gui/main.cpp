@@ -242,10 +242,23 @@ int main(int argc, char* argv[]) {
 
     auto cached_channels = client.channels(guild_id);
     if (!cached_channels.empty()) {
+      channel_list->blockSignals(true);
       QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
       auto perms = compute_channel_permissions(guild_id, qvec);
       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
       channel_list->set_channels(qvec, perms, hide_locked);
+
+      // Re-select the current channel if it exists in this guild
+      if (current_channel_id != 0) {
+        auto* chan_model = channel_list->channel_model();
+        for (int row = 0; row < chan_model->rowCount(); ++row) {
+          if (chan_model->channel_id_at(row) == current_channel_id) {
+            channel_list->setCurrentIndex(chan_model->index(row));
+            break;
+          }
+        }
+      }
+      channel_list->blockSignals(false);
     }
 
     client.select_guild(guild_id);
