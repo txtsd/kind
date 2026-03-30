@@ -253,9 +253,19 @@ void QtGatewayClient::send_identify() {
   properties["browser"] = "Chrome";
   properties["device"] = "";
   properties["system_locale"] = "en-US";
+  // clang-format off
   properties["browser_user_agent"] =
+#if defined(_WIN32)
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+#elif defined(__APPLE__)
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+#else
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+#endif
+  // clang-format on
   properties["browser_version"] = "131.0.0.0";
   properties["os_version"] = "";
   properties["referrer"] = "";

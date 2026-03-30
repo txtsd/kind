@@ -4,13 +4,43 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimeZone>
 #include <QTimer>
 #include <QUrl>
 
 namespace kind {
 
 QtRestClient::QtRestClient(QObject* parent)
-    : QObject(parent), network_manager_(std::make_unique<QNetworkAccessManager>(this)) {}
+    : QObject(parent),
+      network_manager_(std::make_unique<QNetworkAccessManager>(this)),
+      super_properties_(build_super_properties()) {}
+
+QByteArray QtRestClient::build_super_properties() {
+  QJsonObject props;
+#if defined(_WIN32)
+  props["os"] = "Windows";
+#elif defined(__APPLE__)
+  props["os"] = "Mac OS X";
+#else
+  props["os"] = "Linux";
+#endif
+  props["browser"] = "Chrome";
+  props["device"] = "";
+  props["system_locale"] = "en-US";
+  props["browser_user_agent"] = user_agent_;
+  props["browser_version"] = "131.0.0.0";
+  props["os_version"] = "";
+  props["referrer"] = "";
+  props["referring_domain"] = "";
+  props["referrer_current"] = "";
+  props["referring_domain_current"] = "";
+  props["release_channel"] = "stable";
+  props["client_build_number"] = 349382;
+  props["client_event_source"] = QJsonValue::Null;
+
+  QJsonDocument doc(props);
+  return doc.toJson(QJsonDocument::Compact).toBase64();
+}
 
 void QtRestClient::get(std::string_view path, Callback cb) {
   send_request(HttpMethod::Get, path, {}, std::move(cb));
@@ -170,6 +200,15 @@ QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body
     } else {
       // User tokens are sent raw, no prefix
       auth = token_;
+
+      // User tokens need additional headers to mimic the web client
+      request.setRawHeader("X-Super-Properties", super_properties_);
+      request.setRawHeader("X-Discord-Locale", "en-US");
+      request.setRawHeader("X-Discord-Timezone",
+                           QTimeZone::systemTimeZone().id());
+      request.setRawHeader("X-Debug-Options", "bugReporterEnabled");
+      request.setRawHeader("Origin", "https://discord.com");
+      request.setRawHeader("Referer", "https://discord.com/channels/@me");
     }
     request.setRawHeader("Authorization", QByteArray::fromStdString(auth));
   }
