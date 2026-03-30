@@ -20,13 +20,23 @@ int main(int argc, char* argv[]) {
 
   kind::ConfigManager config;
   kind::Client client(config);
+  client.load_cache();
   kind::gui::App app(client);
+
+  // Display cached guilds immediately before Discord connects
+  auto cached_guilds = client.guilds();
+  QVector<kind::Guild> cached_guild_vec(cached_guilds.begin(), cached_guilds.end());
 
   // Widgets
   auto* server_list = new kind::gui::ServerList();
   auto* channel_list = new kind::gui::ChannelList();
   auto* message_view = new kind::gui::MessageView();
   auto* message_input = new kind::gui::MessageInput();
+
+  // Populate server list from disk cache immediately
+  if (!cached_guild_vec.isEmpty()) {
+    server_list->set_guilds(cached_guild_vec);
+  }
 
   // Message area: view + input stacked vertically
   auto* message_area = new QWidget();
@@ -106,8 +116,17 @@ int main(int argc, char* argv[]) {
 
   // Wire widget signals to client actions
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected,
-                   [&client, &current_guild_id](kind::Snowflake guild_id) {
+                   [&client, &current_guild_id, channel_list](kind::Snowflake guild_id) {
                      current_guild_id = guild_id;
+
+                     // Display cached channels immediately
+                     auto cached_channels = client.channels(guild_id);
+                     if (!cached_channels.empty()) {
+                       QVector<kind::Channel> qvec(cached_channels.begin(), cached_channels.end());
+                       channel_list->set_channels(qvec);
+                     }
+
+                     // Fetch fresh channels; channels_updated signal will refresh
                      client.select_guild(guild_id);
                    });
 
@@ -132,6 +151,9 @@ int main(int argc, char* argv[]) {
                        client.send_message(current_channel_id, content.toStdString());
                      }
                    });
+
+  // Save cache on application exit
+  QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
   // Show login dialog (modal)
   if (login_dialog.exec() != QDialog::Accepted) {
