@@ -36,6 +36,7 @@ public:
   std::optional<kind::Snowflake> oldest_message_id() const;
   void prepend_messages(const std::vector<kind::Message>& messages);
   std::optional<int> row_for_id(kind::Snowflake id) const;
+  const std::vector<kind::Message>& messages() const { return messages_; }
 
 public slots:
   void on_layout_ready(kind::Snowflake message_id, kind::gui::RenderedMessage layout);

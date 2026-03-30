@@ -2,7 +2,9 @@
 
 #include "delegates/message_delegate.hpp"
 #include "models/message_model.hpp"
+#include "workers/render_worker.hpp"
 
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QTimer>
 
@@ -11,6 +13,16 @@ namespace kind::gui {
 MessageView::MessageView(QWidget* parent) : QListView(parent) {
   model_ = new MessageModel(this);
   delegate_ = new MessageDelegate(this);
+  render_thread_ = new RenderThread(this);
+
+  connect(render_thread_, &RenderThread::layout_ready, model_, &MessageModel::on_layout_ready);
+
+  resize_timer_ = new QTimer(this);
+  resize_timer_->setSingleShot(true);
+  resize_timer_->setInterval(150);
+  connect(resize_timer_, &QTimer::timeout, this, [this]() {
+    request_all_renders(model_->messages());
+  });
 
   setModel(model_);
   setItemDelegate(delegate_);
@@ -65,6 +77,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
+  request_all_renders(vec);
 
   auto_scroll_ = true;
   scroll_to_bottom();
@@ -73,6 +86,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
+  request_all_renders(vec);
 
   auto_scroll_ = true;
   scroll_to_bottom();
@@ -88,6 +102,7 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->prepend_messages(vec);
+  request_all_renders(vec);
 
   // Scroll to the item that was previously at the top of the viewport.
   // It was at row 0 before the prepend, now it is at row prepend_count.
@@ -99,11 +114,13 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
 
 void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
+  request_render(msg.id, msg);
   // auto_scroll_ is handled by the rowsInserted connection
 }
 
 void MessageView::update_message(const kind::Message& msg) {
   model_->update_message(msg);
+  request_render(msg.id, msg);
 }
 
 void MessageView::mark_deleted(kind::Snowflake /*channel_id*/, kind::Snowflake message_id) {
@@ -122,6 +139,22 @@ void MessageView::save_scroll_state() {
 
 void MessageView::scroll_to_bottom() {
   QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
+}
+
+void MessageView::request_render(kind::Snowflake message_id, const kind::Message& msg) {
+  int width = viewport()->width() > 0 ? viewport()->width() : 400;
+  render_thread_->request_render(message_id, msg, width, font());
+}
+
+void MessageView::request_all_renders(const std::vector<kind::Message>& messages) {
+  for (const auto& msg : messages) {
+    request_render(msg.id, msg);
+  }
+}
+
+void MessageView::resizeEvent(QResizeEvent* event) {
+  QListView::resizeEvent(event);
+  resize_timer_->start();
 }
 
 } // namespace kind::gui

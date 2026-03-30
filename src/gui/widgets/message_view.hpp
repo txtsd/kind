@@ -2,10 +2,15 @@
 
 #include "models/message.hpp"
 #include "models/snowflake.hpp"
+#include "workers/render_worker.hpp"
 
 #include <QHash>
 #include <QListView>
 #include <QVector>
+
+#include <vector>
+
+class QTimer;
 
 namespace kind::gui {
 
@@ -35,6 +40,8 @@ public slots:
 private:
   MessageModel* model_;
   MessageDelegate* delegate_;
+  RenderThread* render_thread_;
+  QTimer* resize_timer_;
   bool auto_scroll_{true};
   bool prepending_{false};
   kind::Snowflake current_channel_id_{0};
@@ -42,6 +49,9 @@ private:
 
   void save_scroll_state();
   void scroll_to_bottom();
+  void request_render(kind::Snowflake message_id, const kind::Message& msg);
+  void request_all_renders(const std::vector<kind::Message>& messages);
+  void resizeEvent(QResizeEvent* event) override;
 };
 
 } // namespace kind::gui
