@@ -556,16 +556,15 @@ void Client::select_channel(Snowflake channel_id) {
 }
 
 void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before) {
-  // Try the database first for instant history
+  // Serve from database immediately for instant display
   if (db_reader_) {
     auto db_msgs = db_reader_->messages(channel_id, before, 50);
     if (!db_msgs.empty()) {
       store_->add_messages_before(channel_id, std::move(db_msgs));
-      return;
     }
   }
 
-  // Fall back to REST if DB has nothing for this range
+  // Always validate against REST in the background
   std::string path = endpoints::channel_messages(channel_id);
   if (before) {
     path += "?before=" + std::to_string(*before);
