@@ -57,9 +57,10 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     }
 
     // When scrolled to the very top, request older messages
-    if (value == 0 && model_->rowCount() > 0) {
+    if (value == 0 && model_->rowCount() > 0 && !fetching_history_) {
       auto oldest = model_->oldest_message_id();
       if (oldest.has_value()) {
+        fetching_history_ = true;
         emit load_more_requested(oldest.value());
       }
     }
@@ -99,6 +100,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
   unread_count_ = 0;
   jump_pill_->set_count(0);
+  fetching_history_ = false;
 
   save_scroll_state();
   current_channel_id_ = channel_id;
@@ -138,6 +140,8 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
 }
 
 void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
+  fetching_history_ = false;
+
   if (messages.isEmpty()) {
     return;
   }

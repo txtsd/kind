@@ -50,6 +50,7 @@ private:
 
   bool auto_scroll_{true};
   bool mutating_{false};
+  bool fetching_history_{false};
   kind::Snowflake current_channel_id_{0};
   QHash<kind::Snowflake, ScrollAnchor> scroll_anchors_;
 
