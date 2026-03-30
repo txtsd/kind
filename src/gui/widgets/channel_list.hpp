@@ -1,18 +1,22 @@
 #pragma once
 
+#include "delegates/channel_delegate.hpp"
 #include "models/channel.hpp"
+#include "models/channel_model.hpp"
 #include "models/snowflake.hpp"
 
-#include <QListWidget>
+#include <QListView>
 #include <QVector>
 
 namespace kind::gui {
 
-class ChannelList : public QListWidget {
+class ChannelList : public QListView {
   Q_OBJECT
 
 public:
   explicit ChannelList(QWidget* parent = nullptr);
+
+  ChannelModel* channel_model() const { return model_; }
 
 public slots:
   void set_channels(const QVector<kind::Channel>& channels);
@@ -21,7 +25,9 @@ signals:
   void channel_selected(kind::Snowflake channel_id);
 
 private:
-  void on_selection_changed();
+  ChannelModel* model_;
+  ChannelDelegate* delegate_;
+  void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
 };
 
 } // namespace kind::gui

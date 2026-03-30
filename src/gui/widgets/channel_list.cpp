@@ -2,26 +2,25 @@
 
 namespace kind::gui {
 
-ChannelList::ChannelList(QWidget* parent) : QListWidget(parent) {
+ChannelList::ChannelList(QWidget* parent)
+    : QListView(parent), model_(new ChannelModel(this)), delegate_(new ChannelDelegate(this)) {
   setMaximumWidth(200);
   setMinimumWidth(120);
+  setModel(model_);
+  setItemDelegate(delegate_);
+  setMouseTracking(true);
 
-  connect(this, &QListWidget::currentItemChanged, this, &ChannelList::on_selection_changed);
+  connect(selectionModel(), &QItemSelectionModel::currentChanged, this, &ChannelList::on_selection_changed);
 }
 
 void ChannelList::set_channels(const QVector<kind::Channel>& channels) {
-  clear();
-  for (const auto& channel : channels) {
-    auto display_name = QString("# %1").arg(QString::fromStdString(channel.name));
-    auto* item = new QListWidgetItem(display_name, this);
-    item->setData(Qt::UserRole, QVariant::fromValue(channel.id));
-  }
+  std::vector<kind::Channel> vec(channels.begin(), channels.end());
+  model_->set_channels(vec);
 }
 
-void ChannelList::on_selection_changed() {
-  auto* item = currentItem();
-  if (item) {
-    auto channel_id = item->data(Qt::UserRole).value<kind::Snowflake>();
+void ChannelList::on_selection_changed(const QModelIndex& current, const QModelIndex& /*previous*/) {
+  if (current.isValid()) {
+    auto channel_id = model_->channel_id_at(current.row());
     emit channel_selected(channel_id);
   }
 }

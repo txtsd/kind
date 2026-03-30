@@ -1,87 +1,53 @@
-#include "message_view.hpp"
+#include "widgets/message_view.hpp"
 
-#include <QDateTime>
-#include <QLocale>
+#include "delegates/message_delegate.hpp"
+#include "models/message_model.hpp"
+
 #include <QScrollBar>
 #include <QTimer>
 
 namespace kind::gui {
 
-MessageView::MessageView(QWidget* parent) : QScrollArea(parent) {
-  container_ = new QWidget(this);
-  layout_ = new QVBoxLayout(container_);
-  layout_->setAlignment(Qt::AlignTop);
-  layout_->addStretch();
+MessageView::MessageView(QWidget* parent) : QListView(parent) {
+  model_ = new MessageModel(this);
+  delegate_ = new MessageDelegate(this);
 
-  setWidget(container_);
-  setWidgetResizable(true);
+  setModel(model_);
+  setItemDelegate(delegate_);
+
+  setSelectionMode(QAbstractItemView::NoSelection);
+  setEditTriggers(QAbstractItemView::NoEditTriggers);
+  setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  setUniformItemSizes(false);
+  setWordWrap(true);
+  setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+  // Track whether the user is scrolled to the bottom for auto-scroll
+  connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+          [this](int value) { auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5); });
+
+  // Auto-scroll when new rows are inserted, if already at bottom
+  connect(model_, &QAbstractItemModel::rowsInserted, this, [this]() {
+    if (auto_scroll_) {
+      scroll_to_bottom();
+    }
+  });
 }
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
-  // Remove all existing message labels (keep the stretch at the end)
-  while (layout_->count() > 1) {
-    auto* item = layout_->takeAt(0);
-    delete item->widget();
-    delete item;
-  }
-
-  for (const auto& msg : messages) {
-    auto* label = new QLabel(container_);
-    label->setWordWrap(true);
-    label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    configure_message_label(label, msg);
-    layout_->insertWidget(layout_->count() - 1, label);
-  }
-
+  std::vector<kind::Message> vec(messages.begin(), messages.end());
+  model_->set_messages(vec);
+  auto_scroll_ = true;
   scroll_to_bottom();
 }
 
 void MessageView::add_message(const kind::Message& msg) {
-  auto* label = new QLabel(container_);
-  label->setWordWrap(true);
-  label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  configure_message_label(label, msg);
-  layout_->insertWidget(layout_->count() - 1, label);
-
-  // Cap widget count to prevent unbounded memory growth.
-  // Layout has message widgets plus one trailing stretch item.
-  while (layout_->count() - 1 > max_messages_) {
-    auto* item = layout_->takeAt(0);
-    delete item->widget();
-    delete item;
-  }
-
-  scroll_to_bottom();
+  model_->append_message(msg);
+  // auto_scroll_ is handled by the rowsInserted connection
 }
 
 void MessageView::scroll_to_bottom() {
   QTimer::singleShot(0, this, [this]() { verticalScrollBar()->setValue(verticalScrollBar()->maximum()); });
-}
-
-void MessageView::configure_message_label(QLabel* label, const kind::Message& msg) {
-  auto raw_timestamp = QString::fromStdString(msg.timestamp);
-  auto dt = QDateTime::fromString(raw_timestamp, Qt::ISODateWithMs);
-  if (!dt.isValid()) {
-    dt = QDateTime::fromString(raw_timestamp, Qt::ISODate);
-  }
-
-  QString short_time;
-  QString tooltip;
-  if (dt.isValid()) {
-    auto local = dt.toLocalTime();
-    short_time = local.toString("HH:mm");
-    tooltip = QLocale().toString(local, "dddd, MMMM d, yyyy 'at' h:mm AP");
-  } else {
-    short_time = raw_timestamp;
-  }
-
-  label->setText(
-      QString("[%1] %2: %3")
-          .arg(short_time, QString::fromStdString(msg.author.username), QString::fromStdString(msg.content)));
-
-  if (!tooltip.isEmpty()) {
-    label->setToolTip(tooltip);
-  }
 }
 
 } // namespace kind::gui
