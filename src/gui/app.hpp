@@ -48,6 +48,7 @@ signals:
   void guilds_updated(QVector<kind::Guild> guilds);
   void channels_updated(kind::Snowflake guild_id, QVector<kind::Channel> channels);
   void messages_updated(kind::Snowflake channel_id, QVector<kind::Message> messages);
+  void messages_prepended(kind::Snowflake channel_id, QVector<kind::Message> new_messages);
 
 private:
   kind::Client& client_;
@@ -74,6 +75,7 @@ private:
   void on_guilds_updated(const std::vector<kind::Guild>& guilds) override;
   void on_channels_updated(kind::Snowflake guild_id, const std::vector<kind::Channel>& channels) override;
   void on_messages_updated(kind::Snowflake channel_id, const std::vector<kind::Message>& messages) override;
+  void on_messages_prepended(kind::Snowflake channel_id, const std::vector<kind::Message>& new_messages) override;
 };
 
 } // namespace kind::gui

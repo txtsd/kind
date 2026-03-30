@@ -128,6 +128,14 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
+  QObject::connect(
+      &app, &kind::gui::App::messages_prepended,
+      [message_view, &current_channel_id](kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
+        if (channel_id == current_channel_id) {
+          message_view->prepend_messages(messages);
+        }
+      });
+
   // Load older messages when scrolled to top
   QObject::connect(message_view, &kind::gui::MessageView::load_more_requested,
                    [&client, &current_channel_id](kind::Snowflake before_id) {

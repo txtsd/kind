@@ -13,6 +13,7 @@ public:
   MOCK_METHOD(void, on_guilds_updated, (const std::vector<kind::Guild>&), (override));
   MOCK_METHOD(void, on_channels_updated, (kind::Snowflake, const std::vector<kind::Channel>&), (override));
   MOCK_METHOD(void, on_messages_updated, (kind::Snowflake, const std::vector<kind::Message>&), (override));
+  MOCK_METHOD(void, on_messages_prepended, (kind::Snowflake, const std::vector<kind::Message>&), (override));
 };
 
 // --- Helpers ---
@@ -279,13 +280,19 @@ TEST(DataStoreTier2, ObserverNotifiedOnChannelChange) {
   store.remove_observer(&observer);
 }
 
-TEST(DataStoreTier2, ObserverNotifiedOnMessageChange) {
+TEST(DataStoreTier2, AddMessageDoesNotNotifyObserver) {
   kind::DataStore store;
   MockStoreObserver observer;
   store.add_observer(&observer);
 
-  EXPECT_CALL(observer, on_messages_updated(10, testing::_)).Times(1);
+  // Individual message mutations no longer fire on_messages_updated;
+  // the gateway observer signals handle the GUI instead.
+  EXPECT_CALL(observer, on_messages_updated(testing::_, testing::_)).Times(0);
   store.add_message(make_message(100, 10));
+
+  auto msgs = store.messages(10);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_EQ(msgs[0].id, 100u);
 
   store.remove_observer(&observer);
 }

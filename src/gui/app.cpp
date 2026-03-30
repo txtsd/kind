@@ -109,4 +109,10 @@ void App::on_messages_updated(kind::Snowflake channel_id, const std::vector<kind
       this, [this, cid = channel_id, v = std::move(vec)]() { emit messages_updated(cid, v); }, Qt::QueuedConnection);
 }
 
+void App::on_messages_prepended(kind::Snowflake channel_id, const std::vector<kind::Message>& new_messages) {
+  QVector<kind::Message> vec(new_messages.begin(), new_messages.end());
+  QMetaObject::invokeMethod(
+      this, [this, cid = channel_id, v = std::move(vec)]() { emit messages_prepended(cid, v); }, Qt::QueuedConnection);
+}
+
 } // namespace kind::gui

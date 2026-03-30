@@ -27,6 +27,7 @@ signals:
 
 public slots:
   void set_messages(const QVector<kind::Message>& messages);
+  void prepend_messages(const QVector<kind::Message>& messages);
   void add_message(const kind::Message& msg);
   void update_message(const kind::Message& msg);
   void mark_deleted(kind::Snowflake channel_id, kind::Snowflake message_id);
@@ -35,7 +36,6 @@ private:
   MessageModel* model_;
   MessageDelegate* delegate_;
   bool auto_scroll_{true};
-  bool loading_more_{false};
   kind::Snowflake current_channel_id_{0};
   QHash<kind::Snowflake, int> scroll_positions_;
 

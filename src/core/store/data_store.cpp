@@ -234,7 +234,6 @@ void DataStore::remove_channel(Snowflake id) {
 
 void DataStore::add_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
-  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
@@ -242,17 +241,12 @@ void DataStore::add_message(Message msg) {
     while (deque.size() > max_messages_per_channel_) {
       deque.pop_front();
     }
-    if (!observers_.empty()) {
-      message_snapshot.assign(deque.begin(), deque.end());
-    }
   }
-  observers_.notify(
-      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
+  // No on_messages_updated — the gateway's on_message_create handles the GUI.
 }
 
 void DataStore::update_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
-  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto it = channel_messages_.find(channel_id);
@@ -263,17 +257,12 @@ void DataStore::update_message(Message msg) {
           break;
         }
       }
-      if (!observers_.empty()) {
-        message_snapshot.assign(it->second.begin(), it->second.end());
-      }
     }
   }
-  observers_.notify(
-      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
+  // No on_messages_updated — the gateway's on_message_update handles the GUI.
 }
 
 void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
-  std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
     auto it = channel_messages_.find(channel_id);
@@ -284,13 +273,9 @@ void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
           break;
         }
       }
-      if (!observers_.empty()) {
-        message_snapshot.assign(it->second.begin(), it->second.end());
-      }
     }
   }
-  observers_.notify(
-      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
+  // No on_messages_updated — the gateway's on_message_delete handles the GUI.
 }
 
 void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
@@ -308,7 +293,7 @@ void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
 }
 
 void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> msgs) {
-  std::vector<Message> message_snapshot;
+  std::vector<Message> added;
   {
     std::unique_lock lock(mutex_);
     auto& deque = channel_messages_[channel_id];
@@ -321,15 +306,17 @@ void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> m
 
     for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
       if (existing_ids.find(it->id) == existing_ids.end()) {
+        added.push_back(*it);
         deque.push_front(std::move(*it));
       }
     }
-    if (!observers_.empty()) {
-      message_snapshot.assign(deque.begin(), deque.end());
-    }
+    // added is in reverse insertion order; reverse to match deque front order
+    std::reverse(added.begin(), added.end());
   }
-  observers_.notify(
-      [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
+  if (!added.empty()) {
+    observers_.notify(
+        [channel_id, &added](StoreObserver* o) { o->on_messages_prepended(channel_id, added); });
+  }
 }
 
 // --- Observer management ---

@@ -28,10 +28,9 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5);
 
     // When scrolled to the very top, request older messages
-    if (value == 0 && !loading_more_) {
+    if (value == 0 && model_->rowCount() > 0) {
       auto oldest = model_->oldest_message_id();
       if (oldest.has_value()) {
-        loading_more_ = true;
         emit load_more_requested(oldest.value());
       }
     }
@@ -60,7 +59,6 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   // save_scroll_state();
 
   current_channel_id_ = channel_id;
-  loading_more_ = false;
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
@@ -70,23 +68,30 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 }
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
+  std::vector<kind::Message> vec(messages.begin(), messages.end());
+  model_->set_messages(vec);
+
+  auto_scroll_ = true;
+  scroll_to_bottom();
+}
+
+void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
+  if (messages.isEmpty()) {
+    return;
+  }
+
+  // Capture scroll state before inserting rows
   int old_max = verticalScrollBar()->maximum();
   int old_val = verticalScrollBar()->value();
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  model_->set_messages(vec);
+  model_->prepend_messages(vec);
 
-  if (loading_more_) {
-    // Older messages were prepended. Adjust scroll so the viewport stays put.
-    QTimer::singleShot(0, this, [this, old_max, old_val]() {
-      int delta = verticalScrollBar()->maximum() - old_max;
-      verticalScrollBar()->setValue(old_val + delta);
-      loading_more_ = false;
-    });
-  } else {
-    auto_scroll_ = true;
-    scroll_to_bottom();
-  }
+  // Adjust scroll so the viewport stays put after rows are inserted at the top
+  QTimer::singleShot(0, this, [this, old_max, old_val]() {
+    int delta = verticalScrollBar()->maximum() - old_max;
+    verticalScrollBar()->setValue(old_val + delta);
+  });
 }
 
 void MessageView::add_message(const kind::Message& msg) {
