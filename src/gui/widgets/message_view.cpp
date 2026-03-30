@@ -37,7 +37,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   // Track whether the user is scrolled to the bottom for auto-scroll,
   // and detect scroll-to-top for loading older messages
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
-    if (prepending_) {
+    if (mutating_) {
       return;
     }
     auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5);
@@ -53,24 +53,39 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
 
   // Auto-scroll when new rows are inserted, if already at bottom
   connect(model_, &QAbstractItemModel::rowsInserted, this, [this]() {
-    if (auto_scroll_ && !prepending_) {
+    if (auto_scroll_ && !mutating_) {
       scroll_to_bottom();
     }
   });
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
-  // TODO: restore per-channel scroll position from scroll_positions_ map
-  // save_scroll_state();
-
+  save_scroll_state();
   current_channel_id_ = channel_id;
 
+  mutating_ = true;
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->set_messages(vec);
   request_all_renders(vec);
 
+  auto anchor_it = scroll_anchors_.find(channel_id);
+  if (anchor_it != scroll_anchors_.end() && !anchor_it->at_bottom) {
+    auto row = model_->row_for_id(anchor_it->message_id);
+    if (row) {
+      QTimer::singleShot(0, this, [this, r = *row]() {
+        scrollTo(model_->index(r, 0), QAbstractItemView::PositionAtTop);
+        auto_scroll_ = false;
+        mutating_ = false;
+      });
+      return;
+    }
+  }
+
   auto_scroll_ = true;
-  scroll_to_bottom();
+  QTimer::singleShot(0, this, [this]() {
+    scrollToBottom();
+    mutating_ = false;
+  });
 }
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
@@ -87,18 +102,19 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
     return;
   }
 
-  int prepend_count = messages.size();
-  prepending_ = true;
+  auto anchor_id = anchor_message_id();
+  mutating_ = true;
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   model_->prepend_messages(vec);
   request_all_renders(vec);
 
-  // Scroll to the item that was previously at the top of the viewport.
-  // It was at row 0 before the prepend, now it is at row prepend_count.
-  QTimer::singleShot(0, this, [this, prepend_count]() {
-    scrollTo(model_->index(prepend_count, 0), QAbstractItemView::PositionAtTop);
-    prepending_ = false;
+  auto row = model_->row_for_id(anchor_id);
+  QTimer::singleShot(0, this, [this, row]() {
+    if (row) {
+      scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtTop);
+    }
+    mutating_ = false;
   });
 }
 
@@ -117,13 +133,22 @@ void MessageView::mark_deleted(kind::Snowflake /*channel_id*/, kind::Snowflake m
   model_->mark_deleted(message_id);
 }
 
+kind::Snowflake MessageView::anchor_message_id() const {
+  auto idx = indexAt(QPoint(0, 0));
+  if (idx.isValid()) {
+    return idx.data(MessageModel::MessageIdRole).value<qulonglong>();
+  }
+  return 0;
+}
+
 void MessageView::save_scroll_state() {
-  if (current_channel_id_ != 0) {
-    if (auto_scroll_) {
-      scroll_positions_.remove(current_channel_id_);
-    } else {
-      scroll_positions_[current_channel_id_] = verticalScrollBar()->value();
-    }
+  if (current_channel_id_ == 0) {
+    return;
+  }
+  if (auto_scroll_) {
+    scroll_anchors_[current_channel_id_] = {0, true};
+  } else {
+    scroll_anchors_[current_channel_id_] = {anchor_message_id(), false};
   }
 }
 

@@ -42,11 +42,17 @@ private:
   MessageDelegate* delegate_;
   RenderThread* render_thread_;
   QTimer* resize_timer_;
-  bool auto_scroll_{true};
-  bool prepending_{false};
-  kind::Snowflake current_channel_id_{0};
-  QHash<kind::Snowflake, int> scroll_positions_;
+  struct ScrollAnchor {
+    kind::Snowflake message_id{0};
+    bool at_bottom{true};
+  };
 
+  bool auto_scroll_{true};
+  bool mutating_{false};
+  kind::Snowflake current_channel_id_{0};
+  QHash<kind::Snowflake, ScrollAnchor> scroll_anchors_;
+
+  kind::Snowflake anchor_message_id() const;
   void save_scroll_state();
   void scroll_to_bottom();
   void request_render(kind::Snowflake message_id, const kind::Message& msg);
