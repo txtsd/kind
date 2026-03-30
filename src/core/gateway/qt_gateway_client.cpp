@@ -212,28 +212,15 @@ void QtGatewayClient::handle_reconnect() {
 void QtGatewayClient::handle_invalid_session(bool resumable) {
   spdlog::warn("Gateway: invalid session, resumable={}", resumable);
 
-  if (resumable) {
-    resuming_ = true;
-    heartbeat_->stop();
-    socket_->close();
-  } else {
-    // Wait 1-5 seconds then re-identify
+  if (!resumable) {
     session_id_.clear();
     sequence_.reset();
-    resuming_ = false;
-
-    static thread_local std::mt19937 gen{std::random_device{}()};
-    std::uniform_int_distribution<int> dist(1000, 5000);
-    int delay = dist(gen);
-
-    heartbeat_->stop();
-    socket_->close();
-
-    QTimer::singleShot(delay, this, [this]() {
-      std::string url = gateway_url_ + "?v=10&encoding=json";
-      socket_->open(QUrl(QString::fromStdString(url)));
-    });
   }
+
+  resuming_ = resumable;
+  heartbeat_->stop();
+  socket_->close();
+  // on_disconnected will call attempt_reconnect with backoff
 }
 
 void QtGatewayClient::handle_heartbeat_ack() {
