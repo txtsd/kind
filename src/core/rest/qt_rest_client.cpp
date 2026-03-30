@@ -4,8 +4,8 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QTimeZone>
 #include <QTimer>
+#include <QTimeZone>
 #include <QUrl>
 
 namespace kind {
@@ -204,8 +204,7 @@ QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body
       // User tokens need additional headers to mimic the web client
       request.setRawHeader("X-Super-Properties", super_properties_);
       request.setRawHeader("X-Discord-Locale", "en-US");
-      request.setRawHeader("X-Discord-Timezone",
-                           QTimeZone::systemTimeZone().id());
+      request.setRawHeader("X-Discord-Timezone", QTimeZone::systemTimeZone().id());
       request.setRawHeader("X-Debug-Options", "bugReporterEnabled");
       request.setRawHeader("Origin", "https://discord.com");
       request.setRawHeader("Referer", "https://discord.com/channels/@me");

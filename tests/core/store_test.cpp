@@ -19,20 +19,29 @@ public:
 
 static kind::Guild make_guild(kind::Snowflake id, const std::string& name = "guild",
                               std::vector<kind::Channel> channels = {}) {
-  return kind::Guild{.id = id, .name = name, .channels = std::move(channels)};
+  return kind::Guild{.id = id, .name = name, .icon_hash = {}, .owner_id = {}, .channels = std::move(channels)};
 }
 
 static kind::Channel make_channel(kind::Snowflake id, kind::Snowflake guild_id, const std::string& name = "channel") {
-  return kind::Channel{.id = id, .guild_id = guild_id, .name = name};
+  return kind::Channel{
+      .id = id, .guild_id = guild_id, .name = name, .type = 0, .position = 0, .parent_id = std::nullopt};
 }
 
 static kind::Message make_message(kind::Snowflake id, kind::Snowflake channel_id,
                                   const std::string& content = "hello") {
-  return kind::Message{.id = id, .channel_id = channel_id, .content = content};
+  return kind::Message{.id = id,
+                       .channel_id = channel_id,
+                       .author = {},
+                       .content = content,
+                       .timestamp = {},
+                       .edited_timestamp = std::nullopt,
+                       .pinned = false,
+                       .attachments = {},
+                       .embeds = {}};
 }
 
 static kind::User make_user(kind::Snowflake id, const std::string& username = "user") {
-  return kind::User{.id = id, .username = username};
+  return kind::User{.id = id, .username = username, .discriminator = {}, .avatar_hash = {}, .bot = false};
 }
 
 // =============================================================================

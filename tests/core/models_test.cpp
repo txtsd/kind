@@ -103,7 +103,8 @@ TEST(Message, CopySemantics) {
   kind::Message m;
   m.id = 1;
   m.content = "hello";
-  m.attachments.push_back(kind::Attachment{.id = 10, .filename = "pic.png"});
+  m.attachments.push_back(kind::Attachment{
+      .id = 10, .filename = "pic.png", .url = {}, .size = 0, .width = std::nullopt, .height = std::nullopt});
   kind::Message m2 = m;
   EXPECT_EQ(m2.id, 1u);
   EXPECT_EQ(m2.content, "hello");
@@ -274,6 +275,10 @@ TEST(Message, TenThousandAttachments) {
     m.attachments.push_back(kind::Attachment{
         .id = static_cast<kind::Snowflake>(i),
         .filename = "file_" + std::to_string(i) + ".bin",
+        .url = {},
+        .size = 0,
+        .width = std::nullopt,
+        .height = std::nullopt,
     });
   }
   ASSERT_EQ(m.attachments.size(), 10000u);
@@ -307,7 +312,8 @@ TEST(Message, MovedFromDoesNotCrash) {
   kind::Message m;
   m.id = 777;
   m.content = "some content";
-  m.attachments.push_back(kind::Attachment{.id = 1});
+  m.attachments.push_back(
+      kind::Attachment{.id = 1, .filename = {}, .url = {}, .size = 0, .width = std::nullopt, .height = std::nullopt});
   kind::Message m2 = std::move(m);
   // Accessing moved-from object must not crash.
   // Values are unspecified but the object must be in a valid state.

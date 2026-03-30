@@ -280,20 +280,15 @@ void QtGatewayClient::send_identify() {
   d["token"] = QString::fromStdString(token_);
   d["capabilities"] = 30717;
   d["properties"] = properties;
-  d["presence"] = QJsonObject{
-      {"status", "online"},
-      {"since", 0},
-      {"activities", QJsonArray()},
-      {"afk", false}};
+  d["presence"] = QJsonObject{{"status", "online"}, {"since", 0}, {"activities", QJsonArray()}, {"afk", false}};
   d["compress"] = false;
-  d["client_state"] = QJsonObject{
-      {"guild_versions", QJsonObject()},
-      {"highest_last_message_id", "0"},
-      {"read_state_version", 0},
-      {"user_guild_settings_version", -1},
-      {"user_settings_version", -1},
-      {"private_channels_version", "0"},
-      {"api_code_version", 0}};
+  d["client_state"] = QJsonObject{{"guild_versions", QJsonObject()},
+                                  {"highest_last_message_id", "0"},
+                                  {"read_state_version", 0},
+                                  {"user_guild_settings_version", -1},
+                                  {"user_settings_version", -1},
+                                  {"private_channels_version", "0"},
+                                  {"api_code_version", 0}};
 
   // Only send intents for bot tokens; user tokens don't use them
   if (!token_type_bot_) {
