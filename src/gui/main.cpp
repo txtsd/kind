@@ -222,10 +222,23 @@ int main(int argc, char* argv[]) {
 
   // Shared actions for guild/channel selection (used by signals and restore)
   auto select_guild_action = [&client, &current_guild_id, &current_channel_id,
-                              channel_list, &compute_channel_permissions, &config](
+                              server_list, channel_list,
+                              &compute_channel_permissions, &config](
                                  kind::Snowflake guild_id) {
     current_guild_id = guild_id;
     client.save_last_selection(guild_id, current_channel_id);
+
+    // Visually select the guild in the server list
+    server_list->blockSignals(true);
+    auto* guild_model = server_list->guild_model();
+    for (int row = 0; row < guild_model->rowCount(); ++row) {
+      auto idx = guild_model->index(row);
+      if (idx.data(kind::gui::GuildModel::GuildIdRole).value<qulonglong>() == guild_id) {
+        server_list->setCurrentIndex(idx);
+        break;
+      }
+    }
+    server_list->blockSignals(false);
 
     auto cached_channels = client.channels(guild_id);
     if (!cached_channels.empty()) {
@@ -239,9 +252,21 @@ int main(int argc, char* argv[]) {
   };
 
   auto select_channel_action = [&client, &current_channel_id, &current_guild_id,
-                                message_view, message_input](kind::Snowflake channel_id) {
+                                channel_list, message_view, message_input](
+                                   kind::Snowflake channel_id) {
     current_channel_id = channel_id;
     client.save_last_selection(current_guild_id, channel_id);
+
+    // Visually select the channel in the channel list
+    channel_list->blockSignals(true);
+    auto* chan_model = channel_list->channel_model();
+    for (int row = 0; row < chan_model->rowCount(); ++row) {
+      if (chan_model->channel_id_at(row) == channel_id) {
+        channel_list->setCurrentIndex(chan_model->index(row));
+        break;
+      }
+    }
+    channel_list->blockSignals(false);
 
     auto all_guilds = client.guilds();
     std::vector<kind::Role> guild_roles;
