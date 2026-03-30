@@ -120,13 +120,16 @@ void DiskCache::save(const DataStore& store) {
     root["user"] = user_to_json(*user);
   }
 
-  // Guilds
+  // Guilds (saved in display order)
   auto all_guilds = store.guilds();
   QJsonArray guilds_array;
+  QJsonArray guild_order_array;
   for (const auto& guild : all_guilds) {
     guilds_array.append(guild_to_json(guild));
+    guild_order_array.append(QString::number(guild.id));
   }
   root["guilds"] = guilds_array;
+  root["guild_order"] = guild_order_array;
 
   // Channels grouped by guild_id
   QJsonObject channels_obj;
@@ -224,6 +227,22 @@ void DiskCache::load(DataStore& store) {
     auto guild = guild_from_json(val.toObject());
     if (guild.id != 0) {
       store.upsert_guild(guild);
+    }
+  }
+
+  // Restore guild order
+  auto guild_order_array = root["guild_order"].toArray();
+  if (!guild_order_array.isEmpty()) {
+    std::vector<kind::Snowflake> order;
+    order.reserve(guild_order_array.size());
+    for (const auto& val : guild_order_array) {
+      auto id = val.toString().toULongLong();
+      if (id != 0) {
+        order.push_back(id);
+      }
+    }
+    if (!order.empty()) {
+      store.set_guild_order(order);
     }
   }
 
