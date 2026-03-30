@@ -5,6 +5,15 @@
 
 namespace kind {
 
+void RateLimiter::refill_tokens(std::chrono::steady_clock::time_point now) {
+  auto elapsed = now - last_refill_;
+  auto refill = static_cast<int>(elapsed / refill_interval_);
+  if (refill > 0) {
+    tokens_ = std::min(max_tokens_, tokens_ + refill);
+    last_refill_ += refill * refill_interval_;
+  }
+}
+
 std::optional<std::chrono::milliseconds> RateLimiter::check(const std::string& route) {
   std::lock_guard lock(mutex_);
 
@@ -34,6 +43,23 @@ std::optional<std::chrono::milliseconds> RateLimiter::check(const std::string& r
   }
 
   return std::nullopt;
+}
+
+std::optional<std::chrono::milliseconds> RateLimiter::acquire() {
+  std::lock_guard lock(mutex_);
+
+  auto now = std::chrono::steady_clock::now();
+  refill_tokens(now);
+
+  if (tokens_ > 0) {
+    tokens_--;
+    return std::nullopt;
+  }
+
+  // No tokens: wait until the next refill
+  auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+      last_refill_ + refill_interval_ - now);
+  return std::max(wait, std::chrono::milliseconds(1));
 }
 
 void RateLimiter::update(const std::string& route, const std::string& bucket, int remaining, int64_t reset_after_ms) {

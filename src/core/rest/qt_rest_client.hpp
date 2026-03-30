@@ -36,6 +36,7 @@ private:
   };
 
   void send_request(HttpMethod method, std::string_view path, const std::string& body, Callback cb);
+  void enqueue_request(PendingRequest request);
   void execute_request(PendingRequest request);
   void handle_response(QNetworkReply* reply, PendingRequest request);
   void update_rate_limits(QNetworkReply* reply, const std::string& route);

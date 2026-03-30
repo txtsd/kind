@@ -68,11 +68,21 @@ void QtRestClient::set_base_url(std::string_view url) {
 }
 
 void QtRestClient::send_request(HttpMethod method, std::string_view path, const std::string& body, Callback cb) {
-  PendingRequest request{method, std::string(path), body, std::move(cb)};
+  enqueue_request(PendingRequest{method, std::string(path), body, std::move(cb)});
+}
 
-  auto wait = rate_limiter_.check(request.path);
-  if (wait.has_value()) {
-    schedule_retry(std::move(request), *wait);
+void QtRestClient::enqueue_request(PendingRequest request) {
+  // Per-route bucket check (from response headers)
+  auto route_wait = rate_limiter_.check(request.path);
+  if (route_wait.has_value()) {
+    schedule_retry(std::move(request), *route_wait);
+    return;
+  }
+
+  // Preemptive token bucket (prevents bursting before buckets are known)
+  auto token_wait = rate_limiter_.acquire();
+  if (token_wait.has_value()) {
+    schedule_retry(std::move(request), *token_wait);
     return;
   }
 
@@ -184,7 +194,7 @@ void QtRestClient::update_rate_limits(QNetworkReply* reply, const std::string& r
 }
 
 void QtRestClient::schedule_retry(PendingRequest request, std::chrono::milliseconds delay) {
-  QTimer::singleShot(delay, this, [this, req = std::move(request)]() mutable { execute_request(std::move(req)); });
+  QTimer::singleShot(delay, this, [this, req = std::move(request)]() mutable { enqueue_request(std::move(req)); });
 }
 
 QNetworkRequest QtRestClient::build_request(std::string_view path, bool has_body) const {

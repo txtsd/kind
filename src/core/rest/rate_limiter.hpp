@@ -19,6 +19,10 @@ public:
   // Returns nullopt if OK, or duration to wait if rate limited.
   std::optional<std::chrono::milliseconds> check(const std::string& route);
 
+  // Consume a token from the preemptive bucket. Returns nullopt if a
+  // token was available, or the wait time until one refills.
+  std::optional<std::chrono::milliseconds> acquire();
+
   // Update bucket state from response headers.
   void update(const std::string& route, const std::string& bucket, int remaining, int64_t reset_after_ms);
 
@@ -29,10 +33,18 @@ public:
   bool is_globally_limited() const;
 
 private:
+  void refill_tokens(std::chrono::steady_clock::time_point now);
+
   mutable std::mutex mutex_;
   std::unordered_map<std::string, std::string> route_to_bucket_;
   std::unordered_map<std::string, BucketState> buckets_;
   std::chrono::steady_clock::time_point global_reset_at_;
+
+  // Preemptive token bucket: prevents bursting before bucket info is known
+  static constexpr int max_tokens_ = 5;
+  static constexpr auto refill_interval_ = std::chrono::milliseconds(1000);
+  int tokens_ = max_tokens_;
+  std::chrono::steady_clock::time_point last_refill_ = std::chrono::steady_clock::now();
 };
 
 } // namespace kind
