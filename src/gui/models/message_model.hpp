@@ -18,6 +18,8 @@ public:
     TimestampRole,
     MessageIdRole,
     ChannelIdRole,
+    DeletedRole,
+    EditedRole,
   };
 
   explicit MessageModel(QObject* parent = nullptr);
@@ -27,6 +29,8 @@ public:
 
   void set_messages(const std::vector<kind::Message>& messages);
   void append_message(const kind::Message& msg);
+  void update_message(const kind::Message& msg);
+  void mark_deleted(kind::Snowflake message_id);
   std::optional<kind::Snowflake> oldest_message_id() const;
   void prepend_messages(const std::vector<kind::Message>& messages);
 

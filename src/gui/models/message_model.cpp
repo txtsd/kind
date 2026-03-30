@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QLocale>
+#include <algorithm>
 
 namespace kind::gui {
 
@@ -53,6 +54,10 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return QVariant::fromValue(static_cast<qulonglong>(msg.id));
   case ChannelIdRole:
     return QVariant::fromValue(static_cast<qulonglong>(msg.channel_id));
+  case DeletedRole:
+    return msg.deleted;
+  case EditedRole:
+    return msg.edited_timestamp.has_value();
   default:
     return {};
   }
@@ -61,10 +66,21 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
 void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
   beginResetModel();
   messages_ = messages;
+  // Ensure oldest first (smallest Snowflake ID = oldest)
+  std::sort(messages_.begin(), messages_.end(),
+            [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
   endResetModel();
 }
 
 void MessageModel::append_message(const kind::Message& msg) {
+  // Guard against duplicates (the store observer and gateway observer both fire
+  // for the same incoming message)
+  for (const auto& existing : messages_) {
+    if (existing.id == msg.id) {
+      return;
+    }
+  }
+
   int row = static_cast<int>(messages_.size());
   beginInsertRows(QModelIndex(), row, row);
   messages_.push_back(msg);
@@ -76,6 +92,28 @@ void MessageModel::append_message(const kind::Message& msg) {
     beginRemoveRows(QModelIndex(), 0, excess - 1);
     messages_.erase(messages_.begin(), messages_.begin() + excess);
     endRemoveRows();
+  }
+}
+
+void MessageModel::update_message(const kind::Message& msg) {
+  for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
+    if (messages_[static_cast<size_t>(i)].id == msg.id) {
+      messages_[static_cast<size_t>(i)] = msg;
+      auto idx = index(i);
+      emit dataChanged(idx, idx);
+      return;
+    }
+  }
+}
+
+void MessageModel::mark_deleted(kind::Snowflake message_id) {
+  for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
+    if (messages_[static_cast<size_t>(i)].id == message_id) {
+      messages_[static_cast<size_t>(i)].deleted = true;
+      auto idx = index(i);
+      emit dataChanged(idx, idx);
+      return;
+    }
   }
 }
 
