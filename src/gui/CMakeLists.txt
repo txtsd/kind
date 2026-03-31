@@ -32,6 +32,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   widgets/status_bar.cpp
   renderers/text_block_renderer.hpp
   renderers/text_block_renderer.cpp
+  renderers/reply_block_renderer.hpp
+  renderers/reply_block_renderer.cpp
   renderers/system_message_renderer.hpp
   renderers/system_message_renderer.cpp
   workers/render_worker.hpp
