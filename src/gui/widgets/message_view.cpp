@@ -106,8 +106,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   std::vector<RenderedMessage> layouts;
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
-    auto images = collect_images(msg);
-    layouts.push_back(compute_layout(msg, width, view_font, images));
+    layouts.push_back(compute_layout(msg, width, view_font));
     request_missing_images(msg);
   }
   return layouts;
@@ -183,8 +182,7 @@ void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  auto images = collect_images(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
   request_missing_images(msg);
 
   if (!auto_scroll_) {
@@ -198,8 +196,7 @@ void MessageView::update_message(const kind::Message& msg) {
   model_->update_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  auto images = collect_images(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
   request_missing_images(msg);
 }
 
