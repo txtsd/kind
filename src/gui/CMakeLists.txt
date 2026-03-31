@@ -38,6 +38,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   renderers/system_message_renderer.cpp
   renderers/embed_block_renderer.hpp
   renderers/embed_block_renderer.cpp
+  renderers/attachment_block_renderer.hpp
+  renderers/attachment_block_renderer.cpp
   workers/render_worker.hpp
   workers/render_worker.cpp
 )

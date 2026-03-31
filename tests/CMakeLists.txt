@@ -18,11 +18,13 @@ add_executable(kind-tests
   gui/reply_block_renderer_test.cpp
   gui/system_message_renderer_test.cpp
   gui/embed_block_renderer_test.cpp
+  gui/attachment_block_renderer_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/system_message_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/embed_block_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/attachment_block_renderer.cpp
 )
 
 set_target_properties(kind-tests PROPERTIES AUTOMOC ON)
