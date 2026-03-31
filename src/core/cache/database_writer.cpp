@@ -172,6 +172,7 @@ void DatabaseWriteWorker::write_current_user(kind::User user) {
 void DatabaseWriteWorker::write_roles(kind::Snowflake guild_id, std::vector<kind::Role> roles) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  db.transaction();
 
   QSqlQuery del(db);
   del.prepare("DELETE FROM roles WHERE guild_id = :gid");
@@ -192,12 +193,14 @@ void DatabaseWriteWorker::write_roles(kind::Snowflake guild_id, std::vector<kind
                          q.lastError().text().toStdString());
     }
   }
+  db.commit();
 }
 
 void DatabaseWriteWorker::write_permission_overwrites(
     kind::Snowflake channel_id, std::vector<kind::PermissionOverwrite> overwrites) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  db.transaction();
 
   QSqlQuery del(db);
   del.prepare("DELETE FROM permission_overwrites WHERE channel_id = :cid");
@@ -218,6 +221,7 @@ void DatabaseWriteWorker::write_permission_overwrites(
                          q.lastError().text().toStdString());
     }
   }
+  db.commit();
 }
 
 void DatabaseWriteWorker::write_member_roles(kind::Snowflake guild_id,
@@ -245,6 +249,7 @@ void DatabaseWriteWorker::write_member_roles(kind::Snowflake guild_id,
 void DatabaseWriteWorker::write_guild_order(std::vector<kind::Snowflake> ordered_ids) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  db.transaction();
 
   QSqlQuery del(db);
   del.exec("DELETE FROM guild_order");
@@ -256,6 +261,7 @@ void DatabaseWriteWorker::write_guild_order(std::vector<kind::Snowflake> ordered
     q.bindValue(":gid", static_cast<qint64>(ordered_ids[static_cast<size_t>(i)]));
     q.exec();
   }
+  db.commit();
 }
 
 void DatabaseWriteWorker::delete_guild(kind::Snowflake id) {
@@ -349,9 +355,10 @@ DatabaseWriter::~DatabaseWriter() {
 
 void DatabaseWriter::flush_sync() {
   QEventLoop loop;
-  connect(worker_, &DatabaseWriteWorker::flushed, &loop, &QEventLoop::quit);
+  auto conn = connect(worker_, &DatabaseWriteWorker::flushed, &loop, &QEventLoop::quit);
   emit flush_requested();
   loop.exec();
+  disconnect(conn);
 }
 
 } // namespace kind

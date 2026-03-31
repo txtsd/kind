@@ -1,8 +1,8 @@
 #pragma once
 
 #include "models/message.hpp"
+#include "models/rendered_message.hpp"
 #include "models/snowflake.hpp"
-#include "workers/render_worker.hpp"
 
 #include <QHash>
 #include <QListView>
@@ -41,8 +41,9 @@ public slots:
 private:
   MessageModel* model_;
   MessageDelegate* delegate_;
-  RenderThread* render_thread_;
   QTimer* resize_timer_;
+  JumpPill* jump_pill_;
+
   struct ScrollAnchor {
     kind::Snowflake message_id{0};
     bool at_bottom{true};
@@ -51,18 +52,15 @@ private:
   bool auto_scroll_{true};
   bool mutating_{false};
   bool fetching_history_{false};
+  int unread_count_{0};
   kind::Snowflake current_channel_id_{0};
   QHash<kind::Snowflake, ScrollAnchor> scroll_anchors_;
 
   kind::Snowflake anchor_message_id() const;
   void save_scroll_state();
   void scroll_to_bottom();
-  void request_render(kind::Snowflake message_id, const kind::Message& msg);
-  void request_all_renders(const std::vector<kind::Message>& messages);
-  std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
-  JumpPill* jump_pill_;
-  int unread_count_{0};
   void position_jump_pill();
+  std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
 };
 

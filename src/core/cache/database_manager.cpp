@@ -47,12 +47,18 @@ void DatabaseManager::create_schema() {
   QSqlDatabase db = QSqlDatabase::database("db_init");
   QSqlQuery q(db);
 
-  q.exec(
+  auto exec = [&](const char* sql) {
+    if (!q.exec(sql)) {
+      log::cache()->error("Schema creation failed: {}", q.lastError().text().toStdString());
+    }
+  };
+
+  exec(
       "CREATE TABLE IF NOT EXISTS schema_version ("
       "  version INTEGER PRIMARY KEY"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS guilds ("
       "  id       INTEGER PRIMARY KEY,"
       "  name     TEXT NOT NULL,"
@@ -61,13 +67,13 @@ void DatabaseManager::create_schema() {
       "  data     TEXT"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS guild_order ("
       "  position INTEGER PRIMARY KEY,"
       "  guild_id INTEGER NOT NULL REFERENCES guilds(id)"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS roles ("
       "  id          INTEGER PRIMARY KEY,"
       "  guild_id    INTEGER NOT NULL REFERENCES guilds(id),"
@@ -77,7 +83,7 @@ void DatabaseManager::create_schema() {
       "  data        TEXT"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS channels ("
       "  id        INTEGER PRIMARY KEY,"
       "  guild_id  INTEGER,"
@@ -88,7 +94,7 @@ void DatabaseManager::create_schema() {
       "  data      TEXT"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS permission_overwrites ("
       "  channel_id INTEGER NOT NULL REFERENCES channels(id),"
       "  target_id  INTEGER NOT NULL,"
@@ -98,7 +104,7 @@ void DatabaseManager::create_schema() {
       "  PRIMARY KEY (channel_id, target_id)"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS users ("
       "  id            INTEGER PRIMARY KEY,"
       "  username      TEXT NOT NULL,"
@@ -108,7 +114,7 @@ void DatabaseManager::create_schema() {
       "  data          TEXT"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS messages ("
       "  id         INTEGER PRIMARY KEY,"
       "  channel_id INTEGER NOT NULL,"
@@ -121,11 +127,11 @@ void DatabaseManager::create_schema() {
       "  data       TEXT"
       ")");
 
-  q.exec(
+  exec(
       "CREATE INDEX IF NOT EXISTS idx_messages_channel "
       "ON messages(channel_id, id DESC)");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS members ("
       "  guild_id INTEGER NOT NULL,"
       "  user_id  INTEGER NOT NULL,"
@@ -135,20 +141,20 @@ void DatabaseManager::create_schema() {
       "  PRIMARY KEY (guild_id, user_id)"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS read_state ("
       "  channel_id    INTEGER PRIMARY KEY,"
       "  last_read_id  INTEGER,"
       "  mention_count INTEGER DEFAULT 0"
       ")");
 
-  q.exec(
+  exec(
       "CREATE TABLE IF NOT EXISTS app_state ("
       "  key   TEXT PRIMARY KEY,"
       "  value TEXT"
       ")");
 
-  q.exec("INSERT OR IGNORE INTO schema_version (version) VALUES (1)");
+  exec("INSERT OR IGNORE INTO schema_version (version) VALUES (1)");
 }
 
 } // namespace kind

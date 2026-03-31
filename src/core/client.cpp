@@ -23,10 +23,17 @@
 #include <QProtobufSerializer>
 #include "logging.hpp"
 #include <algorithm>
+#include <charconv>
 #include <set>
 #include <string>
 
 namespace kind {
+
+static Snowflake safe_stoull(const std::string& str) {
+  Snowflake result = 0;
+  auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+  return (ec == std::errc{}) ? result : 0;
+}
 
 // ============================================================
 // AuthBridge: translates AuthManager events into gateway
@@ -686,7 +693,7 @@ Snowflake Client::last_channel_for_guild(Snowflake guild_id) const {
     auto key = "guild_channel_" + std::to_string(guild_id);
     auto val = db_reader_->app_state(key);
     if (val) {
-      return std::stoull(*val);
+      return safe_stoull(*val);
     }
   }
   return 0;
@@ -697,11 +704,11 @@ Client::LastSelection Client::last_selection() const {
   if (db_reader_) {
     auto guild = db_reader_->app_state("last_guild_id");
     if (guild) {
-      sel.guild_id = std::stoull(*guild);
+      sel.guild_id = safe_stoull(*guild);
     }
     auto channel = db_reader_->app_state("last_channel_id");
     if (channel) {
-      sel.channel_id = std::stoull(*channel);
+      sel.channel_id = safe_stoull(*channel);
     }
   }
   return sel;

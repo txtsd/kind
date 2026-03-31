@@ -14,15 +14,15 @@ namespace kind::gui {
 MessageView::MessageView(QWidget* parent) : QListView(parent) {
   model_ = new MessageModel(this);
   delegate_ = new MessageDelegate(this);
-  render_thread_ = new RenderThread(this);
-
-  connect(render_thread_, &RenderThread::layout_ready, model_, &MessageModel::on_layout_ready);
 
   resize_timer_ = new QTimer(this);
   resize_timer_->setSingleShot(true);
   resize_timer_->setInterval(150);
   connect(resize_timer_, &QTimer::timeout, this, [this]() {
-    request_all_renders(model_->messages());
+    // Re-compute all layouts at new width
+    auto msgs = model_->messages();
+    auto layouts = compute_layouts_sync(msgs);
+    model_->set_messages(msgs, std::move(layouts));
   });
 
   jump_pill_ = new JumpPill(this);
@@ -164,8 +164,10 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
 
 void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
-  request_render(msg.id, msg);
-  // auto_scroll_ is handled by the rowsInserted connection
+
+  // Compute layout on UI thread (QTextLayout is not thread-safe)
+  int width = viewport()->width() > 0 ? viewport()->width() : 400;
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
 
   if (!auto_scroll_) {
     unread_count_++;
@@ -176,7 +178,9 @@ void MessageView::add_message(const kind::Message& msg) {
 
 void MessageView::update_message(const kind::Message& msg) {
   model_->update_message(msg);
-  request_render(msg.id, msg);
+
+  int width = viewport()->width() > 0 ? viewport()->width() : 400;
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
 }
 
 void MessageView::mark_deleted(kind::Snowflake /*channel_id*/, kind::Snowflake message_id) {
@@ -206,16 +210,6 @@ void MessageView::scroll_to_bottom() {
   QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
 }
 
-void MessageView::request_render(kind::Snowflake message_id, const kind::Message& msg) {
-  int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  render_thread_->request_render(message_id, msg, width, font());
-}
-
-void MessageView::request_all_renders(const std::vector<kind::Message>& messages) {
-  for (const auto& msg : messages) {
-    request_render(msg.id, msg);
-  }
-}
 
 void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
