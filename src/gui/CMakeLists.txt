@@ -43,6 +43,7 @@ target_include_directories(kind-gui
 target_link_libraries(kind-gui
   PRIVATE
     kind-core
+    Qt6::Network
     Qt6::Widgets
 )
 

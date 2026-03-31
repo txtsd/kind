@@ -4,6 +4,7 @@
 #include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
 #include "permissions.hpp"
+#include "rest/qt_rest_client.hpp"
 #include "version.hpp"
 #include "widgets/channel_list.hpp"
 #include "widgets/message_input.hpp"
@@ -159,6 +160,15 @@ int main(int argc, char* argv[]) {
 
   auto* about_qt_action = help_menu->addAction("About &Qt");
   QObject::connect(about_qt_action, &QAction::triggered, &qapp, &QApplication::aboutQt);
+
+  // Wire REST request tracking to status bar loading indicator
+  auto* rest_qt = dynamic_cast<kind::QtRestClient*>(client.rest_client());
+  if (rest_qt) {
+    QObject::connect(rest_qt, &kind::QtRestClient::request_started,
+                     status_bar, &kind::gui::StatusBar::on_request_started);
+    QObject::connect(rest_qt, &kind::QtRestClient::request_finished,
+                     status_bar, &kind::gui::StatusBar::on_request_finished);
+  }
 
   // Login dialog
   kind::gui::LoginDialog login_dialog;

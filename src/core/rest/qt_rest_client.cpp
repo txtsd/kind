@@ -10,6 +10,16 @@
 
 namespace kind {
 
+static QString label_for_path(const std::string& path) {
+  auto qpath = QString::fromStdString(path);
+  if (qpath.contains("/messages")) return "Messages";
+  if (qpath.contains("/channels")) return "Channels";
+  if (qpath.contains("/guilds")) return "Guilds";
+  if (qpath.contains("/users/@me")) return "User profile";
+  if (qpath.contains("/auth")) return "Authentication";
+  return "Request";
+}
+
 QtRestClient::QtRestClient(QObject* parent)
     : QObject(parent),
       network_manager_(std::make_unique<QNetworkAccessManager>(this)),
@@ -90,6 +100,9 @@ void QtRestClient::enqueue_request(PendingRequest request) {
 }
 
 void QtRestClient::execute_request(PendingRequest request) {
+  auto label = label_for_path(request.path);
+  emit request_started(label);
+
   bool has_body = (request.method == HttpMethod::Post || request.method == HttpMethod::Patch);
   QNetworkRequest net_request = build_request(request.path, has_body);
   QNetworkReply* reply = nullptr;
@@ -112,6 +125,7 @@ void QtRestClient::execute_request(PendingRequest request) {
   }
 
   if (!reply) {
+    emit request_finished(label);
     if (request.callback) {
       request.callback(std::unexpected(RestError{0, "Failed to create network request", ""}));
     }
@@ -123,6 +137,7 @@ void QtRestClient::execute_request(PendingRequest request) {
 }
 
 void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request) {
+  emit request_finished(label_for_path(request.path));
   reply->deleteLater();
 
   int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

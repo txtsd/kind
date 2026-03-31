@@ -25,6 +25,10 @@ public:
   void set_token(std::string_view token, std::string_view token_type) override;
   void set_base_url(std::string_view url) override;
 
+signals:
+  void request_started(QString label);
+  void request_finished(QString label);
+
 private:
   enum class HttpMethod { Get, Post, Patch, Delete };
 

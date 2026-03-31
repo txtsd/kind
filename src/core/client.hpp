@@ -102,6 +102,9 @@ public:
   bool is_connected() const;
   int latency_ms() const;
 
+  // Returns the REST client for signal connections (loading indicator).
+  RestClient* rest_client() const { return rest_.get(); }
+
 private:
   void wire_bridges();
 
