@@ -61,24 +61,53 @@ RenderedMessage compute_layout(
       }
     }
 
-    result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-        parsed, viewport_width, font, author, time_str, time_tooltip));
+    // Hide message text when content is a single URL that produced an image/gifv embed
+    bool suppress_text = false;
+    if (!message.content.empty()
+        && message.content.starts_with("http")
+        && message.content.find(' ') == std::string::npos
+        && message.content.find('\n') == std::string::npos) {
+      for (const auto& embed : message.embeds) {
+        if ((embed.type == "image" || embed.type == "gifv")
+            && embed.url.has_value() && *embed.url == message.content) {
+          suppress_text = true;
+          break;
+        }
+      }
+    }
+
+    if (!suppress_text) {
+      result.blocks.push_back(std::make_shared<TextBlockRenderer>(
+          parsed, viewport_width, font, author, time_str, time_tooltip));
+    } else {
+      // Still need timestamp + author line, just with empty content
+      kind::ParsedContent empty_content;
+      result.blocks.push_back(std::make_shared<TextBlockRenderer>(
+          empty_content, viewport_width, font, author, time_str, time_tooltip));
+    }
   }
 
   // Embeds
   for (const auto& embed : message.embeds) {
     QPixmap embed_img;
     QPixmap embed_thumb;
-    if (embed.image && !embed.image->url.empty()) {
-      auto it = images.find(embed.image->url);
-      if (it != images.end()) {
-        embed_img = it->second;
+    if (embed.image) {
+      // Prefer proxy_url as image map key (matches what we request)
+      std::string key = embed.image->proxy_url.value_or(embed.image->url);
+      if (!key.empty()) {
+        auto it = images.find(key);
+        if (it != images.end()) {
+          embed_img = it->second;
+        }
       }
     }
-    if (embed.thumbnail && !embed.thumbnail->url.empty()) {
-      auto it = images.find(embed.thumbnail->url);
-      if (it != images.end()) {
-        embed_thumb = it->second;
+    if (embed.thumbnail) {
+      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
+      if (!key.empty()) {
+        auto it = images.find(key);
+        if (it != images.end()) {
+          embed_thumb = it->second;
+        }
       }
     }
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
@@ -100,8 +129,19 @@ RenderedMessage compute_layout(
 
   // Reactions
   if (!message.reactions.empty()) {
+    std::unordered_map<std::string, QPixmap> emoji_images;
+    for (const auto& reaction : message.reactions) {
+      if (reaction.emoji_id.has_value()) {
+        auto url = "https://cdn.discordapp.com/emojis/"
+                   + std::to_string(*reaction.emoji_id) + ".webp?size=48";
+        auto it = images.find(url);
+        if (it != images.end()) {
+          emoji_images[reaction.emoji_name] = it->second;
+        }
+      }
+    }
     result.blocks.push_back(std::make_shared<ReactionBlockRenderer>(
-        message.reactions, font));
+        message.reactions, font, std::move(emoji_images)));
   }
 
   // Stickers
