@@ -37,8 +37,10 @@ static const QColor image_placeholder_color(0x40, 0x40, 0x44);
 
 EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_width,
                                        const QFont& font, const QPixmap& image,
-                                       const QPixmap& thumbnail)
-    : embed_(embed), font_(font), image_(image), thumbnail_(thumbnail) {
+                                       const QPixmap& thumbnail,
+                                       std::vector<QPixmap> extra_images)
+    : embed_(embed), font_(font), image_(image), thumbnail_(thumbnail),
+      extra_images_(std::move(extra_images)) {
   bold_font_ = font_;
   bold_font_.setBold(true);
 
@@ -270,6 +272,21 @@ int EmbedBlockRenderer::compute_layout() {
     } else {
       y += image_placeholder_height_ + section_spacing_;
     }
+  }
+
+  // Extra images from same-URL embeds (e.g. Tumblr multi-image)
+  if (!extra_images_.empty()) {
+    constexpr int strip_height = 120;
+    constexpr int strip_gap = 4;
+    // Compute strip height (all images scaled to strip_height)
+    int strip_w = 0;
+    for (const auto& img : extra_images_) {
+      if (!img.isNull()) {
+        strip_w += img.width() * strip_height / std::max(img.height(), 1) + strip_gap;
+      }
+    }
+    (void)strip_w;
+    y += strip_height + section_spacing_;
   }
 
   // Footer
@@ -540,6 +557,22 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     painter->setPen(dim_text_color);
     painter->drawText(placeholder, Qt::AlignCenter, QStringLiteral("Video"));
     y += ph_h + section_spacing_;
+  }
+
+  // Extra images from same-URL embeds (horizontal strip)
+  if (!extra_images_.empty()) {
+    constexpr int strip_height = 120;
+    constexpr int strip_gap = 4;
+    int sx = x_base;
+    for (const auto& img : extra_images_) {
+      if (img.isNull()) continue;
+      int scaled_w = img.width() * strip_height / std::max(img.height(), 1);
+      scaled_w = std::min(scaled_w, content_width - (sx - x_base));
+      if (scaled_w <= 0) break;
+      painter->drawPixmap(sx, y, scaled_w, strip_height, img);
+      sx += scaled_w + strip_gap;
+    }
+    y += strip_height + section_spacing_;
   }
 
   // Footer

@@ -13,7 +13,8 @@ namespace kind::gui {
 class EmbedBlockRenderer : public BlockRenderer {
 public:
   EmbedBlockRenderer(const kind::Embed& embed, int viewport_width, const QFont& font,
-                     const QPixmap& image = {}, const QPixmap& thumbnail = {});
+                     const QPixmap& image = {}, const QPixmap& thumbnail = {},
+                     std::vector<QPixmap> extra_images = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -38,6 +39,7 @@ private:
   QFont small_bold_font_;
   QPixmap image_;
   QPixmap thumbnail_;
+  std::vector<QPixmap> extra_images_;
   QColor sidebar_color_;
 
   bool bare_image_{false};  // true for "image" and "gifv" embed types (no card)

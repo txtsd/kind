@@ -3,6 +3,7 @@
 #include "renderers/attachment_block_renderer.hpp"
 #include "renderers/component_block_renderer.hpp"
 #include "renderers/embed_block_renderer.hpp"
+#include "renderers/image_strip_renderer.hpp"
 #include "renderers/reaction_block_renderer.hpp"
 #include "renderers/reply_block_renderer.hpp"
 #include "renderers/sticker_block_renderer.hpp"
@@ -12,6 +13,8 @@
 
 #include <QDateTime>
 #include <QFontMetrics>
+
+#include <unordered_set>
 
 namespace kind::gui {
 
@@ -121,6 +124,9 @@ RenderedMessage compute_layout(
   // Embeds
   int bare_image_count = 0;
   int bare_image_skipped = 0;
+  std::unordered_set<std::string> seen_embed_urls;
+  std::vector<QPixmap> extra_same_url_images;
+  int first_same_url_embed_idx = -1;
   for (const auto& embed : message.embeds) {
     QPixmap embed_img;
     QPixmap embed_thumb;
@@ -164,8 +170,52 @@ RenderedMessage compute_layout(
       }
     }
 
+    // Collapse multiple embeds sharing the same URL (e.g. Tumblr multi-image)
+    // Render the first fully, collect extra images for it
+    if (embed.url.has_value() && !embed.url->empty()) {
+      auto [iter, inserted] = seen_embed_urls.insert(*embed.url);
+      if (!inserted) {
+        if (!embed_img.isNull()) {
+          extra_same_url_images.push_back(embed_img);
+        } else if (!embed_thumb.isNull()) {
+          extra_same_url_images.push_back(embed_thumb);
+        }
+        continue;
+      }
+      first_same_url_embed_idx = static_cast<int>(result.blocks.size());
+    }
+
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
         embed, viewport_width, font, embed_img, embed_thumb));
+  }
+
+  // Attach extra same-URL images to the first embed that had that URL
+  if (!extra_same_url_images.empty() && first_same_url_embed_idx >= 0
+      && first_same_url_embed_idx < static_cast<int>(result.blocks.size())) {
+    // Re-create the embed renderer with the extra images
+    // We need the original embed data, so grab it from the message
+    auto& first_embed = message.embeds[0]; // The first embed with a URL
+    QPixmap first_img, first_thumb;
+    if (first_embed.image) {
+      std::string key = add_image_size(first_embed.image->proxy_url.value_or(first_embed.image->url), 520);
+      auto img_it = images.find(key);
+      if (img_it != images.end()) first_img = img_it->second;
+    }
+    if (first_embed.thumbnail) {
+      bool sq = true;
+      if (first_embed.thumbnail->width.has_value() && first_embed.thumbnail->height.has_value()) {
+        double ratio = static_cast<double>(*first_embed.thumbnail->width) /
+                       std::max(*first_embed.thumbnail->height, 1);
+        sq = (ratio >= 0.8 && ratio <= 1.2);
+      }
+      int ts = (first_embed.type == "video" || !sq) ? 520 : 128;
+      std::string key = add_image_size(first_embed.thumbnail->proxy_url.value_or(first_embed.thumbnail->url), ts);
+      auto img_it = images.find(key);
+      if (img_it != images.end()) first_thumb = img_it->second;
+    }
+    result.blocks[first_same_url_embed_idx] = std::make_shared<EmbedBlockRenderer>(
+        first_embed, viewport_width, font, first_img, first_thumb,
+        std::move(extra_same_url_images));
   }
 
   // Show indicator for skipped bare-image embeds
