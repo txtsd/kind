@@ -72,6 +72,7 @@ public:
   void login_with_credentials(std::string_view email, std::string_view password);
   void submit_mfa_code(std::string_view code);
   void send_message(Snowflake channel_id, std::string_view content);
+  void toggle_reaction(Snowflake channel_id, Snowflake message_id, const std::string& emoji, bool add);
   void select_guild(Snowflake guild_id);
   void select_channel(Snowflake channel_id);
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});

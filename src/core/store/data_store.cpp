@@ -318,6 +318,41 @@ void DataStore::update_message(Message msg) {
   // No on_messages_updated — the gateway's on_message_update handles the GUI.
 }
 
+void DataStore::update_reaction(Snowflake channel_id, Snowflake message_id,
+                                const std::string& emoji_name,
+                                std::optional<Snowflake> emoji_id,
+                                int delta, bool me_changed) {
+  {
+    std::unique_lock lock(mutex_);
+    auto ch_it = channel_messages_.find(channel_id);
+    if (ch_it == channel_messages_.end()) {
+      return;
+    }
+    for (auto& msg : ch_it->second) {
+      if (msg.id != message_id) {
+        continue;
+      }
+      for (auto it = msg.reactions.begin(); it != msg.reactions.end(); ++it) {
+        if (it->emoji_name == emoji_name) {
+          it->count += delta;
+          if (me_changed) {
+            it->me = (delta > 0);
+          }
+          if (it->count <= 0) {
+            msg.reactions.erase(it);
+          }
+          return;
+        }
+      }
+      // Reaction not found; add it if delta is positive
+      if (delta > 0) {
+        msg.reactions.push_back({emoji_name, emoji_id, delta, me_changed});
+      }
+      return;
+    }
+  }
+}
+
 void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
   {
     std::unique_lock lock(mutex_);

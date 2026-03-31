@@ -19,6 +19,7 @@ public:
 
   void get(std::string_view path, Callback cb) override;
   void post(std::string_view path, const std::string& body, Callback cb) override;
+  void put(std::string_view path, const std::string& body, Callback cb) override;
   void patch(std::string_view path, const std::string& body, Callback cb) override;
   void del(std::string_view path, Callback cb) override;
 
@@ -30,7 +31,7 @@ signals:
   void request_finished(QString label);
 
 private:
-  enum class HttpMethod { Get, Post, Patch, Delete };
+  enum class HttpMethod { Get, Post, Put, Patch, Delete };
 
   struct PendingRequest {
     HttpMethod method;

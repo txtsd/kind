@@ -111,6 +111,10 @@ public:
       handle_guild_create(data_json);
     } else if (event_name == gateway::events::ChannelUpdate) {
       handle_channel_update(data_json);
+    } else if (event_name == gateway::events::MessageReactionAdd) {
+      handle_reaction_add(data_json);
+    } else if (event_name == gateway::events::MessageReactionRemove) {
+      handle_reaction_remove(data_json);
     } else if (event_name == gateway::events::TypingStart) {
       handle_typing_start(data_json);
     } else if (event_name == gateway::events::PresenceUpdate) {
@@ -336,6 +340,46 @@ private:
     client_.gateway_observers_.notify([&channel](GatewayObserver* obs) { obs->on_channel_update(*channel); });
   }
 
+  void handle_reaction_add(const std::string& data_json) {
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) {
+      return;
+    }
+    auto obj = doc.object();
+    auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
+    auto message_id = static_cast<Snowflake>(obj["message_id"].toString().toULongLong());
+    auto user_id = static_cast<Snowflake>(obj["user_id"].toString().toULongLong());
+    auto emoji_obj = obj["emoji"].toObject();
+    auto emoji_name = emoji_obj["name"].toString().toStdString();
+    std::optional<Snowflake> emoji_id;
+    if (!emoji_obj["id"].isNull()) {
+      emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
+    }
+    auto current = client_.store_->current_user();
+    bool is_me = current && current->id == user_id;
+    client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, 1, is_me);
+  }
+
+  void handle_reaction_remove(const std::string& data_json) {
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) {
+      return;
+    }
+    auto obj = doc.object();
+    auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
+    auto message_id = static_cast<Snowflake>(obj["message_id"].toString().toULongLong());
+    auto user_id = static_cast<Snowflake>(obj["user_id"].toString().toULongLong());
+    auto emoji_obj = obj["emoji"].toObject();
+    auto emoji_name = emoji_obj["name"].toString().toStdString();
+    std::optional<Snowflake> emoji_id;
+    if (!emoji_obj["id"].isNull()) {
+      emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
+    }
+    auto current = client_.store_->current_user();
+    bool is_me = current && current->id == user_id;
+    client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, -1, is_me);
+  }
+
   void handle_typing_start(const std::string& data_json) {
     auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
     if (doc.isNull() || !doc.isObject()) {
@@ -493,6 +537,26 @@ void Client::login_with_credentials(std::string_view email, std::string_view pas
 
 void Client::submit_mfa_code(std::string_view code) {
   auth_->submit_mfa_code(code);
+}
+
+void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
+                             const std::string& emoji, bool add) {
+  auto path = endpoints::reaction_url(channel_id, message_id, emoji);
+  if (add) {
+    rest_->put(path, "", [channel_id, message_id](RestClient::Response response) {
+      if (!response) {
+        log::client()->warn("Failed to add reaction on message {} in channel {}: {}", message_id, channel_id,
+                            response.error().message);
+      }
+    });
+  } else {
+    rest_->del(path, [channel_id, message_id](RestClient::Response response) {
+      if (!response) {
+        log::client()->warn("Failed to remove reaction on message {} in channel {}: {}", message_id, channel_id,
+                            response.error().message);
+      }
+    });
+  }
 }
 
 void Client::send_message(Snowflake channel_id, std::string_view content) {

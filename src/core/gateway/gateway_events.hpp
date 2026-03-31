@@ -44,6 +44,8 @@ inline constexpr std::string_view GuildDelete = "GUILD_DELETE";
 inline constexpr std::string_view ChannelCreate = "CHANNEL_CREATE";
 inline constexpr std::string_view ChannelUpdate = "CHANNEL_UPDATE";
 inline constexpr std::string_view ChannelDelete = "CHANNEL_DELETE";
+inline constexpr std::string_view MessageReactionAdd = "MESSAGE_REACTION_ADD";
+inline constexpr std::string_view MessageReactionRemove = "MESSAGE_REACTION_REMOVE";
 inline constexpr std::string_view TypingStart = "TYPING_START";
 inline constexpr std::string_view PresenceUpdate = "PRESENCE_UPDATE";
 } // namespace events

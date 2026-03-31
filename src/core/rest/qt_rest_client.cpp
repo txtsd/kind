@@ -60,6 +60,10 @@ void QtRestClient::post(std::string_view path, const std::string& body, Callback
   send_request(HttpMethod::Post, path, body, std::move(cb));
 }
 
+void QtRestClient::put(std::string_view path, const std::string& body, Callback cb) {
+  send_request(HttpMethod::Put, path, body, std::move(cb));
+}
+
 void QtRestClient::patch(std::string_view path, const std::string& body, Callback cb) {
   send_request(HttpMethod::Patch, path, body, std::move(cb));
 }
@@ -103,7 +107,8 @@ void QtRestClient::execute_request(PendingRequest request) {
   auto label = label_for_path(request.path);
   emit request_started(label);
 
-  bool has_body = (request.method == HttpMethod::Post || request.method == HttpMethod::Patch);
+  bool has_body = (request.method == HttpMethod::Post || request.method == HttpMethod::Put ||
+                   request.method == HttpMethod::Patch);
   QNetworkRequest net_request = build_request(request.path, has_body);
   QNetworkReply* reply = nullptr;
 
@@ -113,6 +118,9 @@ void QtRestClient::execute_request(PendingRequest request) {
     break;
   case HttpMethod::Post:
     reply = network_manager_->post(net_request, QByteArray::fromStdString(request.body));
+    break;
+  case HttpMethod::Put:
+    reply = network_manager_->put(net_request, QByteArray::fromStdString(request.body));
     break;
   case HttpMethod::Patch: {
     QByteArray data = QByteArray::fromStdString(request.body);

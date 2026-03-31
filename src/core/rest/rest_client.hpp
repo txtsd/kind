@@ -17,6 +17,7 @@ public:
 
   virtual void get(std::string_view path, Callback cb) = 0;
   virtual void post(std::string_view path, const std::string& body, Callback cb) = 0;
+  virtual void put(std::string_view path, const std::string& body, Callback cb) = 0;
   virtual void patch(std::string_view path, const std::string& body, Callback cb) = 0;
   virtual void del(std::string_view path, Callback cb) = 0;
 

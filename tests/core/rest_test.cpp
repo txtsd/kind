@@ -17,6 +17,7 @@ class MockRestClient : public kind::RestClient {
 public:
   MOCK_METHOD(void, get, (std::string_view, Callback), (override));
   MOCK_METHOD(void, post, (std::string_view, const std::string&, Callback), (override));
+  MOCK_METHOD(void, put, (std::string_view, const std::string&, Callback), (override));
   MOCK_METHOD(void, patch, (std::string_view, const std::string&, Callback), (override));
   MOCK_METHOD(void, del, (std::string_view, Callback), (override));
   MOCK_METHOD(void, set_token, (std::string_view, std::string_view), (override));
