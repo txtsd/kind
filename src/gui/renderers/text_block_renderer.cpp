@@ -216,36 +216,42 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
       }
     } else if (std::holds_alternative<CodeBlock>(block)) {
       const auto& cb = std::get<CodeBlock>(block);
-      // Add blank line before code block for visual separation
+      // Add separator if there is preceding text
       if (!full_text.isEmpty() && !full_text.endsWith('\n')) {
         full_text += '\n';
       }
-      full_text += '\n'; // Extra blank line above for background padding
 
-      int start = full_text.size();
+      // Record the start of the background area (includes padding line above)
+      int bg_start = full_text.size();
+      full_text += '\n'; // Padding line above code
+
+      int code_start = full_text.size();
       QString code_text = QString::fromStdString(cb.code);
+      // Strip trailing newline from code so it doesn't add extra bottom space
+      if (code_text.endsWith('\n')) {
+        code_text.chop(1);
+      }
       full_text += code_text;
-      int length = code_text.size();
+      int code_length = code_text.size();
 
-      CodeBlockInfo cbi;
-      cbi.start = start;
-      cbi.length = length;
-      code_blocks_.push_back(cbi);
-
-      // Style the entire code block as monospace
+      // Style the code as monospace
       QTextLayout::FormatRange range;
-      range.start = start;
-      range.length = length;
+      range.start = code_start;
+      range.length = code_length;
       QTextCharFormat fmt;
       fmt.setFont(mono_font);
       range.format = fmt;
       format_ranges.push_back(range);
 
-      // Trailing newlines for background padding and separation
-      if (!code_text.endsWith('\n')) {
-        full_text += '\n';
-      }
-      full_text += '\n'; // Extra blank line below for background padding
+      full_text += '\n'; // Padding line below code
+      int bg_end = full_text.size();
+
+      CodeBlockInfo cbi;
+      cbi.start = bg_start;
+      cbi.length = bg_end - bg_start;
+      code_blocks_.push_back(cbi);
+
+      full_text += '\n'; // Separator after code block
     }
   }
 
