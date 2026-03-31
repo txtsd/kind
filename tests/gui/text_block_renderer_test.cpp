@@ -82,6 +82,15 @@ TEST_F(TextBlockRendererTest, StrikethroughDoesNotCrash) {
   SUCCEED();
 }
 
+TEST_F(TextBlockRendererTest, NewlinesIncreaseHeight) {
+  auto single = kind::markdown::parse("line one");
+  auto multi = kind::markdown::parse("line one\nline two\nline three");
+  kind::gui::TextBlockRenderer single_r(single, 800, QFont(), "u: ", "");
+  kind::gui::TextBlockRenderer multi_r(multi, 800, QFont(), "u: ", "");
+  // Three lines must be taller than one line
+  EXPECT_GT(multi_r.height(800), single_r.height(800));
+}
+
 TEST_F(TextBlockRendererTest, MixedFormattingDoesNotCrash) {
   auto content = kind::markdown::parse("**bold** *italic* __under__ ~~strike~~ `code`");
   kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");

@@ -240,6 +240,9 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
     }
   }
 
+  // QTextLayout uses QChar::LineSeparator for line breaks, not \n
+  full_text.replace('\n', QChar::LineSeparator);
+
   // Build the QTextLayout
   text_layout_ = std::make_shared<QTextLayout>();
   text_layout_->setFont(font);
