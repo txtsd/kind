@@ -69,6 +69,7 @@ int main(int argc, char* argv[]) {
   auto* server_list = new kind::gui::ServerList();
   auto* channel_list = new kind::gui::ChannelList();
   auto* message_view = new kind::gui::MessageView();
+  message_view->set_image_cache(client.image_cache());
   auto* message_input = new kind::gui::MessageInput();
 
   // Populate server list from disk cache immediately

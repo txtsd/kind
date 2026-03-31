@@ -1,5 +1,6 @@
 #include "widgets/message_view.hpp"
 
+#include "cache/image_cache.hpp"
 #include "delegates/message_delegate.hpp"
 #include "models/message_model.hpp"
 #include "widgets/jump_pill.hpp"
@@ -102,7 +103,9 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   std::vector<RenderedMessage> layouts;
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
-    layouts.push_back(compute_layout(msg, width, view_font));
+    auto images = collect_images(msg);
+    layouts.push_back(compute_layout(msg, width, view_font, images));
+    request_missing_images(msg);
   }
   return layouts;
 }
@@ -111,6 +114,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   unread_count_ = 0;
   jump_pill_->set_count(0);
   fetching_history_ = false;
+  pending_images_.clear();
 
   save_scroll_state();
   current_channel_id_ = channel_id;
@@ -175,9 +179,10 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
 void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
 
-  // Compute layout on UI thread (QTextLayout is not thread-safe)
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
+  auto images = collect_images(msg);
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  request_missing_images(msg);
 
   if (!auto_scroll_) {
     unread_count_++;
@@ -190,7 +195,9 @@ void MessageView::update_message(const kind::Message& msg) {
   model_->update_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
+  auto images = collect_images(msg);
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  request_missing_images(msg);
 }
 
 void MessageView::mark_deleted(kind::Snowflake /*channel_id*/, kind::Snowflake message_id) {
@@ -225,6 +232,121 @@ void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
   int pill_y = viewport()->height() - jump_pill_->height() - 8;
   jump_pill_->move(pill_x, pill_y);
+}
+
+void MessageView::set_image_cache(kind::ImageCache* cache) {
+  image_cache_ = cache;
+  if (!cache) {
+    return;
+  }
+  connect(cache, &kind::ImageCache::image_ready, this,
+          [this](const QString& url, const kind::CachedImage& image) {
+            auto std_url = url.toStdString();
+            auto it = pending_images_.find(std_url);
+            if (it == pending_images_.end()) {
+              return;
+            }
+            auto message_ids = std::move(it->second);
+            pending_images_.erase(it);
+
+            QPixmap pixmap;
+            pixmap.loadFromData(image.data);
+            if (pixmap.isNull()) {
+              return;
+            }
+
+            int width = viewport()->width() > 0 ? viewport()->width() : 400;
+            QFont view_font = font();
+            for (auto msg_id : message_ids) {
+              auto row = model_->row_for_id(msg_id);
+              if (!row) {
+                continue;
+              }
+              auto row_idx = static_cast<size_t>(*row);
+              if (row_idx >= model_->messages().size()) {
+                continue;
+              }
+              const auto& msg = model_->messages()[row_idx];
+              auto images = collect_images(msg);
+              images[std_url] = pixmap;
+              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images));
+            }
+          });
+}
+
+std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind::Message& msg) {
+  std::unordered_map<std::string, QPixmap> images;
+  if (!image_cache_) {
+    return images;
+  }
+
+  auto try_load = [&](const std::string& url) {
+    if (url.empty()) {
+      return;
+    }
+    auto cached = image_cache_->get(url);
+    if (cached) {
+      QPixmap pix;
+      pix.loadFromData(cached->data);
+      if (!pix.isNull()) {
+        images[url] = pix;
+      }
+    }
+  };
+
+  for (const auto& embed : msg.embeds) {
+    if (embed.image) {
+      try_load(embed.image->url);
+    }
+    if (embed.thumbnail) {
+      try_load(embed.thumbnail->url);
+    }
+  }
+  for (const auto& att : msg.attachments) {
+    if (att.width.has_value() && !att.url.empty()) {
+      try_load(att.url);
+    }
+  }
+  for (const auto& sticker : msg.sticker_items) {
+    auto url = "https://media.discordapp.net/stickers/" + std::to_string(sticker.id) + ".png";
+    try_load(url);
+  }
+
+  return images;
+}
+
+void MessageView::request_missing_images(const kind::Message& msg) {
+  if (!image_cache_) {
+    return;
+  }
+
+  auto request_if_missing = [&](const std::string& url) {
+    if (url.empty()) {
+      return;
+    }
+    if (!image_cache_->get(url)) {
+      pending_images_[url].push_back(msg.id);
+      image_cache_->request(url);
+    }
+  };
+
+  for (const auto& embed : msg.embeds) {
+    if (embed.image) {
+      request_if_missing(embed.image->url);
+    }
+    if (embed.thumbnail) {
+      request_if_missing(embed.thumbnail->url);
+    }
+  }
+  for (const auto& att : msg.attachments) {
+    if (att.width.has_value() && !att.url.empty()) {
+      request_if_missing(att.url);
+    }
+  }
+  for (const auto& sticker : msg.sticker_items) {
+    auto url = "https://media.discordapp.net/stickers/" + std::to_string(sticker.id) + ".png";
+    request_if_missing(url);
+  }
 }
 
 void MessageView::scroll_to_message(kind::Snowflake message_id) {

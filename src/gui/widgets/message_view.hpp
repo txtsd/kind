@@ -6,11 +6,18 @@
 
 #include <QHash>
 #include <QListView>
+#include <QPixmap>
 #include <QVector>
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 class QTimer;
+
+namespace kind {
+class ImageCache;
+}
 
 namespace kind::gui {
 
@@ -26,6 +33,7 @@ public:
 
   MessageModel* message_model() const { return model_; }
 
+  void set_image_cache(kind::ImageCache* cache);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
   void scroll_to_message(kind::Snowflake message_id);
@@ -69,8 +77,14 @@ private:
   void save_scroll_state();
   void scroll_to_bottom();
   void position_jump_pill();
+  std::unordered_map<std::string, QPixmap> collect_images(const kind::Message& msg);
+  void request_missing_images(const kind::Message& msg);
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
+
+  kind::ImageCache* image_cache_{nullptr};
+  // Maps image URL to set of message IDs waiting for that image
+  std::unordered_map<std::string, std::vector<kind::Snowflake>> pending_images_;
 };
 
 } // namespace kind::gui
