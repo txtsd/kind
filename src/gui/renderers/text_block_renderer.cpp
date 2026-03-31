@@ -43,18 +43,21 @@ void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   mono_font.setPointSize(base_font.pointSize() > 0 ? base_font.pointSize() : 10);
   mono_font.setStyleHint(QFont::Monospace);
 
+  constexpr qreal cb_pad = 6.0;
   for (const auto& cb : code_blocks_) {
     auto start_line = text_layout_->lineForTextPosition(cb.start);
     auto end_line = text_layout_->lineForTextPosition(cb.start + cb.length);
     if (!start_line.isValid()) continue;
 
     // Draw a background rect covering all lines of the code block
+    // with equal padding on every side
     qreal top = start_line.position().y() + rect.top() + padding_;
     qreal bottom = end_line.isValid()
         ? end_line.position().y() + end_line.height() + rect.top() + padding_
         : start_line.position().y() + start_line.height() + rect.top() + padding_;
 
-    QRectF bg(rect.left() + padding_, top, rect.width() - 2 * padding_, bottom - top);
+    QRectF bg(rect.left() + padding_ - cb_pad, top - cb_pad,
+              rect.width() - 2 * padding_ + 2 * cb_pad, bottom - top + 2 * cb_pad);
     painter->fillRect(bg, QColor(40, 40, 40));
   }
 
