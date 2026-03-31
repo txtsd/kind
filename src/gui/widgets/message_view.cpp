@@ -308,7 +308,7 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
     }
   }
   for (const auto& sticker : msg.sticker_items) {
-    auto url = "https://media.discordapp.net/stickers/" + std::to_string(sticker.id) + ".png";
+    auto url = "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
     try_load(url);
   }
 
@@ -344,7 +344,7 @@ void MessageView::request_missing_images(const kind::Message& msg) {
     }
   }
   for (const auto& sticker : msg.sticker_items) {
-    auto url = "https://media.discordapp.net/stickers/" + std::to_string(sticker.id) + ".png";
+    auto url = "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
     request_if_missing(url);
   }
 }

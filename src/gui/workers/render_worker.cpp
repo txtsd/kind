@@ -108,7 +108,7 @@ RenderedMessage compute_layout(
   for (const auto& sticker : message.sticker_items) {
     QPixmap sticker_img;
     std::string sticker_url =
-        "https://media.discordapp.net/stickers/" + std::to_string(sticker.id) + ".png";
+        "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
     auto it = images.find(sticker_url);
     if (it != images.end()) {
       sticker_img = it->second;
