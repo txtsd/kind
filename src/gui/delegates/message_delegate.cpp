@@ -27,35 +27,16 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
   auto ptr = index.data(MessageModel::RenderedLayoutRole).value<const void*>();
   auto* rendered = static_cast<const RenderedMessage*>(ptr);
 
-  if (rendered && rendered->valid) {
-    QColor text_color = rendered->deleted
-        ? QColor(128, 128, 128)
-        : option.palette.color(QPalette::Normal, QPalette::Text);
-    QColor dim_color = rendered->deleted
-        ? QColor(128, 128, 128)
-        : option.palette.color(QPalette::Disabled, QPalette::Text);
-
-    int x = option.rect.left() + padding_;
-    int y = option.rect.top() + padding_;
-
-    // Draw pre-computed timestamp
-    painter->setFont(option.font);
-    painter->setPen(dim_color);
-    painter->drawText(x, y + QFontMetrics(option.font).ascent(), rendered->time_str);
-    x += rendered->time_width;
-
-    // Draw pre-computed author in bold
-    QFont bold = option.font;
-    bold.setBold(true);
-    painter->setFont(bold);
-    painter->setPen(text_color);
-    painter->drawText(x, y + QFontMetrics(bold).ascent(), rendered->author_str);
-
-    // Draw pre-computed text layout
-    painter->setPen(text_color);
-    rendered->text_layout->draw(painter, QPointF(option.rect.left() + padding_, option.rect.top() + padding_));
+  if (rendered && rendered->valid && !rendered->blocks.empty()) {
+    int y = option.rect.top();
+    for (const auto& block : rendered->blocks) {
+      int block_h = block->height(option.rect.width());
+      QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+      block->paint(painter, block_rect);
+      y += block_h;
+    }
   } else {
-    // Fallback: lightweight placeholder while worker computes layout
+    // Fallback placeholder while layout is being computed
     painter->setFont(option.font);
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
     auto author = index.data(MessageModel::AuthorRole).toString();
