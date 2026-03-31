@@ -216,6 +216,12 @@ int EmbedBlockRenderer::compute_layout() {
     y += small_fm.height() + section_spacing_;
   }
 
+  // Remove the trailing section_spacing_ from the last section so that
+  // top and bottom padding are symmetric (both just padding_).
+  if (y > padding_ + section_spacing_) {
+    y -= section_spacing_;
+  }
+
   y += padding_;
   return y;
 }
