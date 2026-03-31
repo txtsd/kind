@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QMetaType>
 #include <QString>
 #include <QTextLayout>
 
@@ -22,5 +21,3 @@ struct RenderedMessage {
 };
 
 } // namespace kind::gui
-
-Q_DECLARE_METATYPE(kind::gui::RenderedMessage)

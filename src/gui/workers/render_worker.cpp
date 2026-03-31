@@ -4,12 +4,6 @@
 #include <QFontMetrics>
 #include <QTextOption>
 
-// Register types for cross-thread queued connections
-static const int rendered_msg_reg =
-    qRegisterMetaType<kind::gui::RenderedMessage>("kind::gui::RenderedMessage");
-static const int message_reg = qRegisterMetaType<kind::Message>("kind::Message");
-static const int snowflake_reg = qRegisterMetaType<kind::Snowflake>("kind::Snowflake");
-
 namespace kind::gui {
 
 RenderedMessage compute_layout(const kind::Message& message, int viewport_width, const QFont& font) {
@@ -49,7 +43,7 @@ RenderedMessage compute_layout(const kind::Message& message, int viewport_width,
   }
 
   // Compute QTextLayout with word wrapping
-  int usable_width = viewport_width - 2 * padding;
+  int usable_width = viewport_width - (2 * padding);
   int prefix_width = result.time_width + result.author_width;
 
   result.text_layout = std::make_shared<QTextLayout>();
@@ -87,40 +81,13 @@ RenderedMessage compute_layout(const kind::Message& message, int viewport_width,
   }
   result.text_layout->endLayout();
 
-  result.height = y_offset + 2 * padding;
-  if (result.height < base_fm.height() + 2 * padding) {
-    result.height = base_fm.height() + 2 * padding;
+  result.height = y_offset + (2 * padding);
+  if (result.height < base_fm.height() + (2 * padding)) {
+    result.height = base_fm.height() + (2 * padding);
   }
   result.valid = true;
 
   return result;
-}
-
-RenderWorker::RenderWorker(QObject* parent) : QObject(parent) {}
-
-void RenderWorker::render(kind::Snowflake message_id, kind::Message message,
-                          int viewport_width, QFont font) {
-  emit layout_ready(message_id, compute_layout(message, viewport_width, font));
-}
-
-RenderThread::RenderThread(QObject* parent) : QObject(parent), worker_(new RenderWorker) {
-  worker_->moveToThread(&thread_);
-
-  connect(this, &RenderThread::render_requested, worker_, &RenderWorker::render);
-  connect(worker_, &RenderWorker::layout_ready, this, &RenderThread::layout_ready);
-
-  thread_.start();
-}
-
-RenderThread::~RenderThread() {
-  thread_.quit();
-  thread_.wait();
-  delete worker_;
-}
-
-void RenderThread::request_render(kind::Snowflake message_id, const kind::Message& message,
-                                  int viewport_width, const QFont& font) {
-  emit render_requested(message_id, message, viewport_width, font);
 }
 
 } // namespace kind::gui
