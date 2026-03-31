@@ -577,6 +577,35 @@ void Client::send_message(Snowflake channel_id, std::string_view content) {
   });
 }
 
+void Client::fetch_single_message(Snowflake channel_id, Snowflake message_id) {
+  rest_->get(endpoints::channel_message(channel_id, message_id),
+             [this, channel_id, message_id](RestClient::Response response) {
+    if (!response) {
+      log::client()->debug("Failed to fetch message {} in channel {}: {}",
+                           message_id, channel_id, response.error().message);
+      return;
+    }
+    auto msg = json_parse::parse_message(response.value());
+    if (!msg) {
+      return;
+    }
+    // Update the reply in the store: find messages that reference this one
+    // and fill in their referenced_message_author/content
+    auto messages = store_->messages(channel_id);
+    for (auto& existing : messages) {
+      if (existing.referenced_message_id == message_id
+          && !existing.referenced_message_author.has_value()) {
+        existing.referenced_message_author = msg->author.username;
+        existing.referenced_message_content = msg->content;
+        store_->update_message(existing);
+        gateway_observers_.notify([&existing](GatewayObserver* obs) {
+          obs->on_message_update(existing);
+        });
+      }
+    }
+  });
+}
+
 void Client::select_guild(Snowflake guild_id) {
   active_guild_id_.store(guild_id);
 

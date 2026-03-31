@@ -76,6 +76,7 @@ public:
   void select_guild(Snowflake guild_id);
   void select_channel(Snowflake channel_id);
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});
+  void fetch_single_message(Snowflake channel_id, Snowflake message_id);
   void logout();
 
   // Account-scoped persistence

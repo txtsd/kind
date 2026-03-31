@@ -150,6 +150,12 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   for (const auto& msg : messages) {
     layouts.push_back(compute_layout(msg, width, view_font));
     request_images(msg);
+
+    // Request referenced message data for replies with missing context
+    if (msg.referenced_message_id.has_value()
+        && !msg.referenced_message_author.has_value()) {
+      emit fetch_referenced_message(msg.channel_id, *msg.referenced_message_id);
+    }
   }
   return layouts;
 }

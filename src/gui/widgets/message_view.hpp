@@ -40,6 +40,7 @@ public:
 
 signals:
   void load_more_requested(kind::Snowflake before_id);
+  void fetch_referenced_message(kind::Snowflake channel_id, kind::Snowflake message_id);
   void link_clicked(const QString& url);
   void reaction_toggled(kind::Snowflake channel_id, kind::Snowflake message_id,
                         const QString& emoji_name, kind::Snowflake emoji_id, bool add);

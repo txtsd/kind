@@ -29,6 +29,11 @@ inline std::string channel_typing(Snowflake channel_id) {
   return "/channels/" + std::to_string(channel_id) + "/typing";
 }
 
+// Single message
+inline std::string channel_message(Snowflake channel_id, Snowflake message_id) {
+  return "/channels/" + std::to_string(channel_id) + "/messages/" + std::to_string(message_id);
+}
+
 // Reactions
 inline std::string reaction_url(Snowflake channel_id, Snowflake message_id, const std::string& emoji) {
   return "/channels/" + std::to_string(channel_id) + "/messages/" + std::to_string(message_id) + "/reactions/" +

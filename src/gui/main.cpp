@@ -353,6 +353,12 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
+  // Fetch referenced messages for replies that Discord didn't include
+  QObject::connect(message_view, &kind::gui::MessageView::fetch_referenced_message,
+                   [&client](kind::Snowflake channel_id, kind::Snowflake message_id) {
+                     client.fetch_single_message(channel_id, message_id);
+                   });
+
   // Open links via system handler (only http/https for safety)
   QObject::connect(message_view, &kind::gui::MessageView::link_clicked,
                    [](const QString& url) {
