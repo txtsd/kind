@@ -17,6 +17,16 @@ StatusBar::StatusBar(kind::Client& client, QWidget* parent)
   addPermanentWidget(connectivity_);
 
   loading_->setVisible(false);
+  loading_->setMouseTracking(true);
+
+  hide_loading_timer_ = new QTimer(this);
+  hide_loading_timer_->setSingleShot(true);
+  hide_loading_timer_->setInterval(2000);
+  connect(hide_loading_timer_, &QTimer::timeout, this, [this]() {
+    if (total_pending_ <= 0) {
+      loading_->setVisible(false);
+    }
+  });
 
   set_disconnected();
 
@@ -71,10 +81,11 @@ void StatusBar::on_request_finished(const QString& label) {
 
 void StatusBar::update_loading() {
   if (total_pending_ <= 0) {
-    loading_->setVisible(false);
-    loading_->setToolTip({});
+    loading_->setText("\u2705 Done");
+    hide_loading_timer_->start();
     return;
   }
+  hide_loading_timer_->stop();
 
   // Build tooltip with per-type counts
   QStringList tooltip_lines;

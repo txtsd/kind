@@ -32,6 +32,7 @@ private:
   QLabel* latency_;
   QLabel* user_;
   QTimer* poll_timer_;
+  QTimer* hide_loading_timer_;
 
   QMap<QString, int> pending_requests_;
   int total_pending_{0};
