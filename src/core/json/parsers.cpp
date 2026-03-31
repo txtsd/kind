@@ -1,5 +1,6 @@
 #include "json/parsers.hpp"
 
+#include <functional>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include "logging.hpp"
@@ -138,6 +139,137 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     if (author) {
       msg.author = std::move(*author);
     }
+  }
+
+  // Message type
+  msg.type = obj["type"].toInt(0);
+
+  // Referenced message (reply target)
+  if (obj.contains("message_reference") && obj["message_reference"].isObject()) {
+    auto ref = obj["message_reference"].toObject();
+    if (ref.contains("message_id")) {
+      msg.referenced_message_id = static_cast<Snowflake>(ref["message_id"].toString().toULongLong());
+    }
+  }
+
+  // Mentions
+  msg.mention_everyone = obj["mention_everyone"].toBool(false);
+  for (const auto& val : obj["mentions"].toArray()) {
+    auto mobj = val.toObject();
+    Mention mention;
+    mention.id = static_cast<Snowflake>(mobj["id"].toString().toULongLong());
+    mention.username = mobj["username"].toString().toStdString();
+    msg.mentions.push_back(std::move(mention));
+  }
+  for (const auto& val : obj["mention_roles"].toArray()) {
+    msg.mention_roles.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
+  }
+
+  // Attachments
+  for (const auto& val : obj["attachments"].toArray()) {
+    auto aobj = val.toObject();
+    Attachment att;
+    att.id = static_cast<Snowflake>(aobj["id"].toString().toULongLong());
+    att.filename = aobj["filename"].toString().toStdString();
+    att.url = aobj["url"].toString().toStdString();
+    att.size = static_cast<std::size_t>(aobj["size"].toInteger(0));
+    if (aobj.contains("width") && !aobj["width"].isNull()) {
+      att.width = aobj["width"].toInt();
+    }
+    if (aobj.contains("height") && !aobj["height"].isNull()) {
+      att.height = aobj["height"].toInt();
+    }
+    msg.attachments.push_back(std::move(att));
+  }
+
+  // Embeds
+  for (const auto& val : obj["embeds"].toArray()) {
+    auto eobj = val.toObject();
+    Embed embed;
+    if (eobj.contains("title")) embed.title = eobj["title"].toString().toStdString();
+    if (eobj.contains("description")) embed.description = eobj["description"].toString().toStdString();
+    if (eobj.contains("url")) embed.url = eobj["url"].toString().toStdString();
+    if (eobj.contains("color")) embed.color = eobj["color"].toInt();
+
+    if (eobj.contains("author") && eobj["author"].isObject()) {
+      auto aobj = eobj["author"].toObject();
+      EmbedAuthor embed_author;
+      embed_author.name = aobj["name"].toString().toStdString();
+      if (aobj.contains("url")) embed_author.url = aobj["url"].toString().toStdString();
+      embed.author = std::move(embed_author);
+    }
+    if (eobj.contains("footer") && eobj["footer"].isObject()) {
+      EmbedFooter footer;
+      footer.text = eobj["footer"].toObject()["text"].toString().toStdString();
+      embed.footer = std::move(footer);
+    }
+    if (eobj.contains("image") && eobj["image"].isObject()) {
+      auto iobj = eobj["image"].toObject();
+      EmbedImage image;
+      image.url = iobj["url"].toString().toStdString();
+      if (iobj.contains("width")) image.width = iobj["width"].toInt();
+      if (iobj.contains("height")) image.height = iobj["height"].toInt();
+      embed.image = std::move(image);
+    }
+    if (eobj.contains("thumbnail") && eobj["thumbnail"].isObject()) {
+      auto tobj = eobj["thumbnail"].toObject();
+      EmbedImage thumb;
+      thumb.url = tobj["url"].toString().toStdString();
+      if (tobj.contains("width")) thumb.width = tobj["width"].toInt();
+      if (tobj.contains("height")) thumb.height = tobj["height"].toInt();
+      embed.thumbnail = std::move(thumb);
+    }
+    for (const auto& fval : eobj["fields"].toArray()) {
+      auto fobj = fval.toObject();
+      EmbedField field;
+      field.name = fobj["name"].toString().toStdString();
+      field.value = fobj["value"].toString().toStdString();
+      field.inline_field = fobj["inline"].toBool(false);
+      embed.fields.push_back(std::move(field));
+    }
+    msg.embeds.push_back(std::move(embed));
+  }
+
+  // Reactions
+  for (const auto& val : obj["reactions"].toArray()) {
+    auto robj = val.toObject();
+    Reaction reaction;
+    auto emoji_obj = robj["emoji"].toObject();
+    reaction.emoji_name = emoji_obj["name"].toString().toStdString();
+    if (emoji_obj.contains("id") && !emoji_obj["id"].isNull()) {
+      reaction.emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
+    }
+    reaction.count = robj["count"].toInt(0);
+    reaction.me = robj["me"].toBool(false);
+    msg.reactions.push_back(std::move(reaction));
+  }
+
+  // Sticker items
+  for (const auto& val : obj["sticker_items"].toArray()) {
+    auto sobj = val.toObject();
+    StickerItem sticker;
+    sticker.id = static_cast<Snowflake>(sobj["id"].toString().toULongLong());
+    sticker.name = sobj["name"].toString().toStdString();
+    sticker.format_type = sobj["format_type"].toInt(1);
+    msg.sticker_items.push_back(std::move(sticker));
+  }
+
+  // Components (recursive: ActionRows contain children)
+  std::function<Component(const QJsonObject&)> parse_component;
+  parse_component = [&](const QJsonObject& cobj) -> Component {
+    Component comp;
+    comp.type = cobj["type"].toInt();
+    if (cobj.contains("custom_id")) comp.custom_id = cobj["custom_id"].toString().toStdString();
+    if (cobj.contains("label")) comp.label = cobj["label"].toString().toStdString();
+    comp.style = cobj["style"].toInt(0);
+    comp.disabled = cobj["disabled"].toBool(false);
+    for (const auto& child : cobj["components"].toArray()) {
+      comp.children.push_back(parse_component(child.toObject()));
+    }
+    return comp;
+  };
+  for (const auto& val : obj["components"].toArray()) {
+    msg.components.push_back(parse_component(val.toObject()));
   }
 
   return msg;
