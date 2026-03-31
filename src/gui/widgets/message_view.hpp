@@ -77,7 +77,7 @@ private:
   void save_scroll_state();
   void scroll_to_bottom();
   void position_jump_pill();
-  std::unordered_map<std::string, QPixmap> collect_images(const kind::Message& msg);
+  std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
@@ -85,6 +85,8 @@ private:
   kind::ImageCache* image_cache_{nullptr};
   // Maps image URL to set of message IDs waiting for that image
   std::unordered_map<std::string, std::vector<kind::Snowflake>> pending_images_;
+  // Decoded pixmap cache: URL -> QPixmap (decoded once, reused on re-renders)
+  std::unordered_map<std::string, QPixmap> pixmap_cache_;
 };
 
 } // namespace kind::gui

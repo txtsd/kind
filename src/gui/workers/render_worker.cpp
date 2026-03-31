@@ -15,6 +15,19 @@
 
 namespace kind::gui {
 
+// Append ?size= to cdn.discordapp.com URLs, rounding up to the next power of 2
+static std::string add_cdn_size(const std::string& url, int size) {
+  if (url.find("cdn.discordapp.com") == std::string::npos) {
+    return url;
+  }
+  int s = 16;
+  while (s < size && s < 4096) {
+    s *= 2;
+  }
+  char sep = (url.find('?') != std::string::npos) ? '&' : '?';
+  return url + sep + "size=" + std::to_string(s);
+}
+
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
     const std::unordered_map<std::string, QPixmap>& images) {
@@ -98,8 +111,7 @@ RenderedMessage compute_layout(
     QPixmap embed_img;
     QPixmap embed_thumb;
     if (embed.image) {
-      // Prefer proxy_url as image map key (matches what we request)
-      std::string key = embed.image->proxy_url.value_or(embed.image->url);
+      std::string key = add_cdn_size(embed.image->proxy_url.value_or(embed.image->url), 520);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -108,7 +120,8 @@ RenderedMessage compute_layout(
       }
     }
     if (embed.thumbnail) {
-      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
+      int thumb_size = (embed.type == "video") ? 520 : 128;
+      std::string key = add_cdn_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -124,7 +137,7 @@ RenderedMessage compute_layout(
   for (const auto& att : message.attachments) {
     QPixmap att_img;
     if (att.width.has_value() && !att.url.empty()) {
-      auto it = images.find(att.url);
+      auto it = images.find(add_cdn_size(att.url, 520));
       if (it != images.end()) {
         att_img = it->second;
       }

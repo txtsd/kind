@@ -15,6 +15,19 @@
 
 namespace kind::gui {
 
+// Append ?size= to cdn.discordapp.com URLs, rounding up to the next power of 2
+static std::string add_cdn_size(const std::string& url, int size) {
+  if (url.find("cdn.discordapp.com") == std::string::npos) {
+    return url;
+  }
+  int s = 16;
+  while (s < size && s < 4096) {
+    s *= 2;
+  }
+  char sep = (url.find('?') != std::string::npos) ? '&' : '?';
+  return url + sep + "size=" + std::to_string(s);
+}
+
 MessageView::MessageView(QWidget* parent) : QListView(parent) {
   model_ = new MessageModel(this);
   delegate_ = new MessageDelegate(this);
@@ -23,9 +36,18 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   resize_timer_->setSingleShot(true);
   resize_timer_->setInterval(150);
   connect(resize_timer_, &QTimer::timeout, this, [this]() {
-    // Re-compute all layouts at new width
+    // Re-compute all layouts at new width using cached pixmaps
     auto msgs = model_->messages();
-    auto layouts = compute_layouts_sync(msgs);
+    std::sort(msgs.begin(), msgs.end(),
+              [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+    int width = viewport()->width() > 0 ? viewport()->width() : 400;
+    QFont view_font = font();
+    std::vector<RenderedMessage> layouts;
+    layouts.reserve(msgs.size());
+    for (const auto& msg : msgs) {
+      auto images = cached_pixmaps_for(msg);
+      layouts.push_back(compute_layout(msg, width, view_font, images));
+    }
     model_->set_messages(msgs, std::move(layouts));
   });
 
@@ -117,6 +139,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   jump_pill_->set_count(0);
   fetching_history_ = false;
   pending_images_.clear();
+  pixmap_cache_.clear();
 
   save_scroll_state();
   current_channel_id_ = channel_id;
@@ -250,11 +273,13 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
             auto message_ids = std::move(it->second);
             pending_images_.erase(it);
 
+            // Decode once, cache the pixmap
             QPixmap pixmap;
             pixmap.loadFromData(image.data);
             if (pixmap.isNull()) {
               return;
             }
+            pixmap_cache_[std_url] = pixmap;
 
             int width = viewport()->width() > 0 ? viewport()->width() : 400;
             QFont view_font = font();
@@ -268,60 +293,50 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
                 continue;
               }
               const auto& msg = model_->messages()[row_idx];
-              auto images = collect_images(msg);
-              images[std_url] = pixmap;
+              auto images = cached_pixmaps_for(msg);
               model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images));
             }
           });
 }
 
-std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind::Message& msg) {
+std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const kind::Message& msg) {
   std::unordered_map<std::string, QPixmap> images;
-  if (!image_cache_) {
-    return images;
-  }
 
-  auto try_load = [&](const std::string& url) {
+  auto try_get = [&](const std::string& url) {
     if (url.empty()) {
       return;
     }
-    auto cached = image_cache_->get(url);
-    if (cached) {
-      QPixmap pix;
-      pix.loadFromData(cached->data);
-      if (!pix.isNull()) {
-        log::client()->debug("Image cache hit: {}", url);
-        images[url] = pix;
-      }
+    auto it = pixmap_cache_.find(url);
+    if (it != pixmap_cache_.end()) {
+      images[url] = it->second;
     }
   };
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      try_load(key);
+      try_get(add_cdn_size(embed.image->proxy_url.value_or(embed.image->url), 520));
     }
     if (embed.thumbnail) {
-      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
-      try_load(key);
+      int thumb_size = (embed.type == "video") ? 520 : 128;
+      try_get(add_cdn_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      try_load(att.url);
+      try_get(add_cdn_size(att.url, 520));
     }
   }
   for (const auto& sticker : msg.sticker_items) {
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
-      try_load(*url);
+      try_get(*url);
     }
   }
   for (const auto& reaction : msg.reactions) {
     if (reaction.emoji_id.has_value()) {
       auto url = "https://cdn.discordapp.com/emojis/"
                  + std::to_string(*reaction.emoji_id) + ".webp?size=48";
-      try_load(url);
+      try_get(url);
     }
   }
 
@@ -344,16 +359,18 @@ void MessageView::request_images(const kind::Message& msg) {
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
       std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      request_image(key);
+      request_image(add_cdn_size(key, 520));
     }
     if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
-      request_image(key);
+      // Video embeds render thumbnail as a large image, not 80x80
+      int thumb_size = (embed.type == "video") ? 520 : 128;
+      request_image(add_cdn_size(key, thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      request_image(att.url);
+      request_image(add_cdn_size(att.url, 520));
     }
   }
   for (const auto& sticker : msg.sticker_items) {
