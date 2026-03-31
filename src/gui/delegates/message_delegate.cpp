@@ -43,7 +43,8 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
   auto msg_id = static_cast<kind::Snowflake>(
       index.data(MessageModel::MessageIdRole).value<qulonglong>());
   if (msg_id == highlight_id_ && highlight_opacity_ > 0.0) {
-    QColor flash(255, 200, 50, static_cast<int>(highlight_opacity_ * 80));
+    QColor flash = option.palette.highlight().color();
+    flash.setAlpha(static_cast<int>(highlight_opacity_ * 80));
     painter->fillRect(option.rect, flash);
   }
 
