@@ -28,7 +28,6 @@ private:
   QFont font_;
   QFont bold_font_;
   int left_indent_{0};
-  mutable QRect clickable_rect_;
 };
 
 } // namespace kind::gui

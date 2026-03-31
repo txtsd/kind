@@ -2,6 +2,8 @@
 
 #include <QFontMetrics>
 
+#include <algorithm>
+
 namespace kind::gui {
 
 ReplyBlockRenderer::ReplyBlockRenderer(const QString& author_name,
@@ -37,15 +39,17 @@ void ReplyBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   QFontMetrics fm(font_);
   QFontMetrics bold_fm(bold_font_);
 
-  int x = rect.left() + padding_ + left_indent_;
   int y = rect.top() + padding_ + fm.ascent();
 
-  // Draw reply arrow prefix in muted color
+  // Draw reply arrow before the indent so the author name aligns
+  // with the message author below (not the arrow)
   static const QString arrow = QStringLiteral("\u21a9 ");
+  int arrow_width = fm.horizontalAdvance(arrow);
+  int x = rect.left() + padding_ + std::max(0, left_indent_ - arrow_width);
   painter->setFont(font_);
   painter->setPen(QColor(100, 100, 100));
   painter->drawText(x, y, arrow);
-  x += fm.horizontalAdvance(arrow);
+  x += arrow_width;
 
   // Draw author name in bold, slightly dimmed
   painter->setFont(bold_font_);
@@ -60,26 +64,16 @@ void ReplyBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   painter->setPen(QColor(128, 128, 128));
   painter->drawText(x, y, snippet_);
 
-  // Record the clickable area as the entire reply line
-  clickable_rect_ = QRect(rect.left(), rect.top(), rect.width(), total_height_);
-
   painter->restore();
 }
 
 bool ReplyBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
-  // The entire reply line is clickable and scrolls to the referenced message
-  QRect effective = clickable_rect_;
-  if (!effective.isValid()) {
-    // Fallback if paint has not been called yet
-    effective = QRect(0, 0, 1, total_height_);
-  }
-
-  if (pos.y() >= effective.top() && pos.y() < effective.top() + total_height_) {
+  // The entire reply line is clickable (local coordinates: 0,0 is block top-left)
+  if (pos.y() >= 0 && pos.y() < total_height_) {
     result.type = HitResult::ScrollToMessage;
     result.id = ref_id_;
     return true;
   }
-
   return false;
 }
 
