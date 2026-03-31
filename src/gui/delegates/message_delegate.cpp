@@ -4,9 +4,12 @@
 #include "models/reaction.hpp"
 #include "models/rendered_message.hpp"
 
+#include <QAbstractItemView>
 #include <QFontMetrics>
+#include <QHelpEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QToolTip>
 
 namespace kind::gui {
 
@@ -146,6 +149,40 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     y += block_h;
   }
   return false;
+}
+
+bool MessageDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
+                                const QStyleOptionViewItem& option,
+                                const QModelIndex& index) {
+  if (event->type() != QEvent::ToolTip) {
+    return QStyledItemDelegate::helpEvent(event, view, option, index);
+  }
+
+  auto ptr = index.data(MessageModel::RenderedLayoutRole).value<const void*>();
+  auto* rendered = static_cast<const RenderedMessage*>(ptr);
+  if (!rendered || !rendered->valid) {
+    QToolTip::hideText();
+    return true;
+  }
+
+  QPoint click = event->pos();
+  int y = option.rect.top();
+  for (const auto& block : rendered->blocks) {
+    int block_h = block->height(option.rect.width());
+    QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+    if (block_rect.contains(click)) {
+      QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
+      QString tip = block->tooltip_at(local);
+      if (!tip.isEmpty()) {
+        QToolTip::showText(event->globalPos(), tip, view);
+        return true;
+      }
+    }
+    y += block_h;
+  }
+
+  QToolTip::hideText();
+  return true;
 }
 
 } // namespace kind::gui

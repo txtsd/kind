@@ -38,6 +38,9 @@ RenderedMessage compute_layout(
     QString time_str = dt.isValid()
         ? QString("[%1] ").arg(dt.toLocalTime().toString("HH:mm"))
         : QString("[%1] ").arg(raw_ts);
+    QString time_tooltip = dt.isValid()
+        ? dt.toLocalTime().toString("dddd, MMMM d, yyyy 'at' h:mm AP")
+        : QString();
     auto author = QString::fromStdString(message.author.username);
 
     // Reply block before text
@@ -59,7 +62,7 @@ RenderedMessage compute_layout(
     }
 
     result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-        parsed, viewport_width, font, author, time_str));
+        parsed, viewport_width, font, author, time_str, time_tooltip));
   }
 
   // Embeds

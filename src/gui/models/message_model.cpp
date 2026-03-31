@@ -1,7 +1,6 @@
 #include "models/message_model.hpp"
 
 #include <QDateTime>
-#include <QLocale>
 #include <algorithm>
 
 namespace kind::gui {
@@ -33,17 +32,8 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return QString("[%1] %2: %3")
         .arg(short_time, QString::fromStdString(msg.author.username), QString::fromStdString(msg.content));
   }
-  case Qt::ToolTipRole: {
-    auto raw = QString::fromStdString(msg.timestamp);
-    auto dt = QDateTime::fromString(raw, Qt::ISODateWithMs);
-    if (!dt.isValid()) {
-      dt = QDateTime::fromString(raw, Qt::ISODate);
-    }
-    if (dt.isValid()) {
-      return QLocale().toString(dt.toLocalTime(), "dddd, MMMM d, yyyy 'at' h:mm AP");
-    }
+  case Qt::ToolTipRole:
     return {};
-  }
   case AuthorRole:
     return QString::fromStdString(msg.author.username);
   case ContentRole:

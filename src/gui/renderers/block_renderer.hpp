@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QPoint>
 #include <QRect>
+#include <QString>
 #include <string>
 
 namespace kind::gui {
@@ -27,6 +28,10 @@ public:
     (void)pos;
     (void)result;
     return false;
+  }
+  virtual QString tooltip_at(const QPoint& pos) const {
+    (void)pos;
+    return {};
   }
 };
 

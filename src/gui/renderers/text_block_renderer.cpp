@@ -7,8 +7,8 @@ namespace kind::gui {
 
 TextBlockRenderer::TextBlockRenderer(const kind::ParsedContent& content, int viewport_width,
                                      const QFont& font, const QString& author,
-                                     const QString& timestamp)
-    : author_(author), timestamp_(timestamp) {
+                                     const QString& timestamp, const QString& timestamp_tooltip)
+    : author_(author), timestamp_(timestamp), timestamp_tooltip_(timestamp_tooltip) {
   build_layout(content, viewport_width, font);
 }
 
@@ -126,6 +126,13 @@ bool TextBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
   return false;
 }
 
+QString TextBlockRenderer::tooltip_at(const QPoint& pos) const {
+  if (!timestamp_tooltip_.isEmpty() && timestamp_rect_.contains(pos)) {
+    return timestamp_tooltip_;
+  }
+  return {};
+}
+
 void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int viewport_width,
                                      const QFont& font) {
   QFont bold_font = font;
@@ -134,6 +141,7 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
   QFontMetrics bold_fm(bold_font);
 
   timestamp_width_ = base_fm.horizontalAdvance(timestamp_);
+  timestamp_rect_ = QRect(padding_, padding_, timestamp_width_, base_fm.height());
   author_width_ = bold_fm.horizontalAdvance(author_);
 
   // Concatenate all block text and track per-span ranges
