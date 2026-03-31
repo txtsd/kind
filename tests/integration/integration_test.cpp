@@ -343,6 +343,264 @@ TEST_F(IntegrationTest, ReconnectionAfterDisconnect) {
   client_->remove_gateway_observer(&gw_obs);
 }
 
+TEST_F(IntegrationTest, MessageWithEmbedsAndReactions) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY";
+
+  std::string msg_json = R"({
+    "id": "810",
+    "channel_id": "42",
+    "content": "Check this out",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "100", "username": "testbot", "discriminator": "0001", "avatar": "abc123", "bot": false},
+    "embeds": [
+      {
+        "title": "Example Embed",
+        "description": "This is a test embed",
+        "url": "https://example.com",
+        "color": 16711680
+      }
+    ],
+    "reactions": [
+      {"emoji": {"name": "\ud83d\udc4d", "id": null}, "count": 3, "me": false},
+      {"emoji": {"name": "\u2764\ufe0f", "id": null}, "count": 1, "me": true}
+    ]
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE";
+
+  auto messages = client_->messages(42);
+  ASSERT_EQ(messages.size(), 1u);
+
+  const auto& msg = messages[0];
+  EXPECT_EQ(msg.id, 810ULL);
+  EXPECT_EQ(msg.content, "Check this out");
+
+  // Verify embeds
+  ASSERT_EQ(msg.embeds.size(), 1u);
+  ASSERT_TRUE(msg.embeds[0].title.has_value());
+  EXPECT_EQ(*msg.embeds[0].title, "Example Embed");
+  ASSERT_TRUE(msg.embeds[0].description.has_value());
+  EXPECT_EQ(*msg.embeds[0].description, "This is a test embed");
+  ASSERT_TRUE(msg.embeds[0].url.has_value());
+  EXPECT_EQ(*msg.embeds[0].url, "https://example.com");
+  ASSERT_TRUE(msg.embeds[0].color.has_value());
+  EXPECT_EQ(*msg.embeds[0].color, 16711680);
+
+  // Verify reactions
+  ASSERT_EQ(msg.reactions.size(), 2u);
+  EXPECT_EQ(msg.reactions[0].emoji_name, "\xf0\x9f\x91\x8d");
+  EXPECT_EQ(msg.reactions[0].count, 3);
+  EXPECT_FALSE(msg.reactions[0].me);
+  EXPECT_EQ(msg.reactions[1].emoji_name, "\xe2\x9d\xa4\xef\xb8\x8f");
+  EXPECT_EQ(msg.reactions[1].count, 1);
+  EXPECT_TRUE(msg.reactions[1].me);
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
+}
+
+TEST_F(IntegrationTest, SystemMessageType7) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY";
+
+  // Type 7 is GUILD_MEMBER_JOIN
+  std::string msg_json = R"({
+    "id": "820",
+    "channel_id": "42",
+    "type": 7,
+    "content": "",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "101", "username": "newmember", "discriminator": "0002", "avatar": null, "bot": false}
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE";
+
+  auto messages = client_->messages(42);
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].id, 820ULL);
+  EXPECT_EQ(messages[0].type, 7);
+  EXPECT_EQ(messages[0].author.username, "newmember");
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
+}
+
+TEST_F(IntegrationTest, ReplyMessageType19) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY";
+
+  // Type 19 is REPLY
+  std::string msg_json = R"({
+    "id": "830",
+    "channel_id": "42",
+    "type": 19,
+    "content": "This is a reply",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "100", "username": "testbot", "discriminator": "0001", "avatar": "abc123", "bot": false},
+    "message_reference": {"message_id": "12345", "channel_id": "42", "guild_id": "200"}
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE";
+
+  auto messages = client_->messages(42);
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].id, 830ULL);
+  EXPECT_EQ(messages[0].type, 19);
+  EXPECT_EQ(messages[0].content, "This is a reply");
+  ASSERT_TRUE(messages[0].referenced_message_id.has_value());
+  EXPECT_EQ(*messages[0].referenced_message_id, 12345ULL);
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
+}
+
+TEST_F(IntegrationTest, ReactionAddGatewayEvent) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY";
+
+  // First, get a message into the store
+  std::string msg_json = R"({
+    "id": "840",
+    "channel_id": "42",
+    "content": "React to me",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "100", "username": "testbot", "discriminator": "0001", "avatar": "abc123", "bot": false},
+    "reactions": [
+      {"emoji": {"name": "\ud83d\udc4d", "id": null}, "count": 1, "me": false}
+    ]
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE";
+
+  // Verify initial reaction count
+  auto messages = client_->messages(42);
+  ASSERT_EQ(messages.size(), 1u);
+  ASSERT_EQ(messages[0].reactions.size(), 1u);
+  EXPECT_EQ(messages[0].reactions[0].count, 1);
+
+  // Send REACTION_ADD event
+  std::string reaction_json = R"({
+    "user_id": "101",
+    "channel_id": "42",
+    "message_id": "840",
+    "emoji": {"name": "\ud83d\udc4d", "id": null}
+  })";
+  server_->send_gateway_event("MESSAGE_REACTION_ADD", reaction_json);
+
+  // Wait for the reaction to be processed
+  ASSERT_TRUE(wait_until([&]() {
+    auto msgs = client_->messages(42);
+    return !msgs.empty() && !msgs[0].reactions.empty() && msgs[0].reactions[0].count == 2;
+  })) << "Timed out waiting for reaction count to increment";
+
+  messages = client_->messages(42);
+  ASSERT_EQ(messages[0].reactions.size(), 1u);
+  EXPECT_EQ(messages[0].reactions[0].emoji_name, "\xf0\x9f\x91\x8d");
+  EXPECT_EQ(messages[0].reactions[0].count, 2);
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
+}
+
+TEST_F(IntegrationTest, ReactionRemoveGatewayEvent) {
+  create_client();
+
+  TestAuthObserver auth_obs;
+  TestGatewayObserver gw_obs;
+  client_->add_auth_observer(&auth_obs);
+  client_->add_gateway_observer(&gw_obs);
+
+  client_->login_with_token("test-valid-token", "user");
+  ASSERT_TRUE(wait_until([&]() { return gw_obs.ready; })) << "Timed out waiting for READY";
+
+  // First, get a message with 2 reactions into the store
+  std::string msg_json = R"({
+    "id": "850",
+    "channel_id": "42",
+    "content": "Unreact from me",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "pinned": false,
+    "author": {"id": "100", "username": "testbot", "discriminator": "0001", "avatar": "abc123", "bot": false},
+    "reactions": [
+      {"emoji": {"name": "\ud83d\udc4d", "id": null}, "count": 2, "me": false}
+    ]
+  })";
+  server_->send_gateway_event("MESSAGE_CREATE", msg_json);
+
+  ASSERT_TRUE(wait_until([&]() { return !gw_obs.created_messages.empty(); }))
+      << "Timed out waiting for MESSAGE_CREATE";
+
+  // Verify initial reaction count
+  auto messages = client_->messages(42);
+  ASSERT_EQ(messages.size(), 1u);
+  ASSERT_EQ(messages[0].reactions.size(), 1u);
+  EXPECT_EQ(messages[0].reactions[0].count, 2);
+
+  // Send REACTION_REMOVE event
+  std::string reaction_json = R"({
+    "user_id": "101",
+    "channel_id": "42",
+    "message_id": "850",
+    "emoji": {"name": "\ud83d\udc4d", "id": null}
+  })";
+  server_->send_gateway_event("MESSAGE_REACTION_REMOVE", reaction_json);
+
+  // Wait for the reaction to be processed
+  ASSERT_TRUE(wait_until([&]() {
+    auto msgs = client_->messages(42);
+    return !msgs.empty() && !msgs[0].reactions.empty() && msgs[0].reactions[0].count == 1;
+  })) << "Timed out waiting for reaction count to decrement";
+
+  messages = client_->messages(42);
+  ASSERT_EQ(messages[0].reactions.size(), 1u);
+  EXPECT_EQ(messages[0].reactions[0].emoji_name, "\xf0\x9f\x91\x8d");
+  EXPECT_EQ(messages[0].reactions[0].count, 1);
+
+  client_->remove_auth_observer(&auth_obs);
+  client_->remove_gateway_observer(&gw_obs);
+}
+
 int main(int argc, char* argv[]) {
   kind::log::init_console_only();
   QCoreApplication app(argc, argv);
