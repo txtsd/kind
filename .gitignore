@@ -2,6 +2,7 @@
 /build*/
 /out/
 /CMakeFiles/
+/Testing/
 CMakeCache.txt
 compile_commands.json
 
