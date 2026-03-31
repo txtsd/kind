@@ -434,6 +434,73 @@ TEST(DataStoreTier3, DuplicateMessageIdAppendsWithoutDedup) {
   EXPECT_EQ(result[0].content, "updated");
 }
 
+TEST(DataStoreTier2, UpdateReactionIncrement) {
+  kind::DataStore store;
+  kind::Message msg;
+  msg.id = 1;
+  msg.channel_id = 10;
+  msg.timestamp = "2026-01-01T00:00:00.000Z";
+  store.add_message(std::move(msg));
+
+  store.update_reaction(10, 1, "\xf0\x9f\x91\x8d", std::nullopt, 1, true);
+  auto msgs = store.messages(10);
+  ASSERT_EQ(msgs.size(), 1u);
+  ASSERT_EQ(msgs[0].reactions.size(), 1u);
+  EXPECT_EQ(msgs[0].reactions[0].emoji_name, "\xf0\x9f\x91\x8d");
+  EXPECT_EQ(msgs[0].reactions[0].count, 1);
+  EXPECT_TRUE(msgs[0].reactions[0].me);
+}
+
+TEST(DataStoreTier2, UpdateReactionDecrement) {
+  kind::DataStore store;
+  kind::Message msg;
+  msg.id = 1;
+  msg.channel_id = 10;
+  msg.timestamp = "2026-01-01T00:00:00.000Z";
+  msg.reactions.push_back({"\xf0\x9f\x91\x8d", std::nullopt, 3, true});
+  store.add_message(std::move(msg));
+
+  store.update_reaction(10, 1, "\xf0\x9f\x91\x8d", std::nullopt, -1, true);
+  auto msgs = store.messages(10);
+  ASSERT_EQ(msgs[0].reactions.size(), 1u);
+  EXPECT_EQ(msgs[0].reactions[0].count, 2);
+}
+
+TEST(DataStoreTier2, UpdateReactionRemovesAtZero) {
+  kind::DataStore store;
+  kind::Message msg;
+  msg.id = 1;
+  msg.channel_id = 10;
+  msg.timestamp = "2026-01-01T00:00:00.000Z";
+  msg.reactions.push_back({"\xf0\x9f\x91\x8d", std::nullopt, 1, true});
+  store.add_message(std::move(msg));
+
+  store.update_reaction(10, 1, "\xf0\x9f\x91\x8d", std::nullopt, -1, true);
+  auto msgs = store.messages(10);
+  EXPECT_TRUE(msgs[0].reactions.empty());
+}
+
+TEST(DataStoreTier2, UpdateReactionNoOpForUnknownChannel) {
+  kind::DataStore store;
+  // Should not crash when channel doesn't exist
+  EXPECT_NO_THROW(store.update_reaction(999, 1, "fire", std::nullopt, 1, false));
+}
+
+TEST(DataStoreTier2, UpdateReactionNoOpForUnknownMessage) {
+  kind::DataStore store;
+  kind::Message msg;
+  msg.id = 1;
+  msg.channel_id = 10;
+  msg.timestamp = "2026-01-01T00:00:00.000Z";
+  store.add_message(std::move(msg));
+
+  // Targeting a different message ID should be a no-op
+  store.update_reaction(10, 999, "fire", std::nullopt, 1, false);
+  auto msgs = store.messages(10);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_TRUE(msgs[0].reactions.empty());
+}
+
 TEST(DataStoreTier3, GuildWith50kChannels) {
   std::vector<kind::Channel> channels;
   channels.reserve(50000);
