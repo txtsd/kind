@@ -50,7 +50,9 @@ target_link_libraries(kind-tests
     Qt6::Sql
 )
 
-gtest_discover_tests(kind-tests)
+gtest_discover_tests(kind-tests
+  PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
 
 # Integration tests (uses real Qt networking against a local mock server)
 add_executable(kind-integration-tests
@@ -75,4 +77,6 @@ target_link_libraries(kind-integration-tests
     Qt6::Test
 )
 
-gtest_discover_tests(kind-integration-tests)
+gtest_discover_tests(kind-integration-tests
+  PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
