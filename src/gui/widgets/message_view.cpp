@@ -7,6 +7,8 @@
 #include "widgets/jump_pill.hpp"
 #include "workers/render_worker.hpp"
 
+#include "logging.hpp"
+
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QTimer>
@@ -242,6 +244,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
   }
   connect(cache, &kind::ImageCache::image_ready, this,
           [this](const QString& url, const kind::CachedImage& image) {
+            log::client()->debug("Image arrived: {}", url.toStdString());
             auto std_url = url.toStdString();
             auto it = pending_images_.find(std_url);
             if (it == pending_images_.end()) {
@@ -290,6 +293,7 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
       QPixmap pix;
       pix.loadFromData(cached->data);
       if (!pix.isNull()) {
+        log::client()->debug("Image cache hit: {}", url);
         images[url] = pix;
       }
     }
@@ -337,6 +341,7 @@ void MessageView::request_missing_images(const kind::Message& msg) {
       return;
     }
     if (!image_cache_->get(url)) {
+      log::client()->debug("Image cache miss, requesting: {}", url);
       pending_images_[url].push_back(msg.id);
       image_cache_->request(url);
     }

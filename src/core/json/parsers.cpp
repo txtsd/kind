@@ -237,6 +237,17 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       field.inline_field = fobj["inline"].toBool(false);
       embed.fields.push_back(std::move(field));
     }
+    log::client()->debug("Embed: type={}, title={}, desc={}, url={}, provider={}, author={}, "
+                         "image={}, thumbnail={}, fields={}",
+                         embed.type,
+                         embed.title.value_or("(none)"),
+                         embed.description.value_or("(none)").substr(0, 50),
+                         embed.url.value_or("(none)"),
+                         embed.provider ? embed.provider->name : "(none)",
+                         embed.author ? embed.author->name : "(none)",
+                         embed.image ? embed.image->url : "(none)",
+                         embed.thumbnail ? embed.thumbnail->url : "(none)",
+                         embed.fields.size());
     msg.embeds.push_back(std::move(embed));
   }
 
