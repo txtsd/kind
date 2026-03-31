@@ -357,7 +357,10 @@ private:
     }
     auto current = client_.store_->current_user();
     bool is_me = current && current->id == user_id;
-    client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, 1, is_me);
+    auto updated = client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, 1, is_me);
+    if (updated) {
+      client_.gateway_observers_.notify([&updated](GatewayObserver* obs) { obs->on_message_update(*updated); });
+    }
   }
 
   void handle_reaction_remove(const std::string& data_json) {
@@ -377,7 +380,10 @@ private:
     }
     auto current = client_.store_->current_user();
     bool is_me = current && current->id == user_id;
-    client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, -1, is_me);
+    auto updated = client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, -1, is_me);
+    if (updated) {
+      client_.gateway_observers_.notify([&updated](GatewayObserver* obs) { obs->on_message_update(*updated); });
+    }
   }
 
   void handle_typing_start(const std::string& data_json) {

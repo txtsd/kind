@@ -45,10 +45,10 @@ public:
   void remove_channel(Snowflake id);
   void add_message(Message msg);
   void update_message(Message msg);
-  void update_reaction(Snowflake channel_id, Snowflake message_id,
-                       const std::string& emoji_name,
-                       std::optional<Snowflake> emoji_id,
-                       int delta, bool me_changed);
+  std::optional<Message> update_reaction(Snowflake channel_id, Snowflake message_id,
+                                         const std::string& emoji_name,
+                                         std::optional<Snowflake> emoji_id,
+                                         int delta, bool me_changed);
   void remove_message(Snowflake channel_id, Snowflake message_id);
   void set_messages(Snowflake channel_id, std::vector<Message> msgs);
   void add_messages_before(Snowflake channel_id, std::vector<Message> msgs);
