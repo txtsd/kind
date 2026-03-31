@@ -144,17 +144,10 @@ RenderedMessage compute_layout(
         embed, viewport_width, font, embed_img, embed_thumb));
   }
 
-  // Attachments
+  // Attachments (not auto-downloaded, always show placeholder)
   for (const auto& att : message.attachments) {
-    QPixmap att_img;
-    if (att.width.has_value() && !att.url.empty()) {
-      auto it = images.find(add_image_size(att.url, 520));
-      if (it != images.end()) {
-        att_img = it->second;
-      }
-    }
     result.blocks.push_back(std::make_shared<AttachmentBlockRenderer>(
-        att, font, att_img));
+        att, font));
   }
 
   // Reactions
