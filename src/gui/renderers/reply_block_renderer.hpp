@@ -11,7 +11,7 @@ class ReplyBlockRenderer : public BlockRenderer {
 public:
   ReplyBlockRenderer(const QString& author_name, const QString& content_snippet,
                      kind::Snowflake referenced_message_id, int viewport_width,
-                     const QFont& font);
+                     const QFont& font, int left_indent = 0);
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -27,6 +27,7 @@ private:
   int total_height_{0};
   QFont font_;
   QFont bold_font_;
+  int left_indent_{0};
   mutable QRect clickable_rect_;
 };
 

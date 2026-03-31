@@ -7,8 +7,10 @@ namespace kind::gui {
 ReplyBlockRenderer::ReplyBlockRenderer(const QString& author_name,
                                        const QString& content_snippet,
                                        kind::Snowflake referenced_message_id,
-                                       int /*viewport_width*/, const QFont& font)
-    : author_(author_name), ref_id_(referenced_message_id), font_(font) {
+                                       int /*viewport_width*/, const QFont& font,
+                                       int left_indent)
+    : author_(author_name), ref_id_(referenced_message_id), font_(font),
+      left_indent_(left_indent) {
   bold_font_ = font_;
   bold_font_.setBold(true);
 
@@ -35,7 +37,7 @@ void ReplyBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   QFontMetrics fm(font_);
   QFontMetrics bold_fm(bold_font_);
 
-  int x = rect.left() + padding_;
+  int x = rect.left() + padding_ + left_indent_;
   int y = rect.top() + padding_ + fm.ascent();
 
   // Draw reply arrow prefix in muted color

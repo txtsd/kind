@@ -64,8 +64,11 @@ RenderedMessage compute_layout(
         : QString();
     auto author = QString::fromStdString(message.author.username) + ": ";
 
-    // Reply block before text
+    // Reply block before text (indented to align with author name below)
     if (message.referenced_message_id.has_value()) {
+      QFontMetrics ts_fm(font);
+      int timestamp_indent = ts_fm.horizontalAdvance(time_str);
+
       QString ref_author = message.referenced_message_author
           ? QString::fromStdString(*message.referenced_message_author)
           : QString("Unknown");
@@ -74,7 +77,7 @@ RenderedMessage compute_layout(
           : QString("...");
       result.blocks.push_back(std::make_shared<ReplyBlockRenderer>(
           ref_author, ref_content,
-          *message.referenced_message_id, viewport_width, font));
+          *message.referenced_message_id, viewport_width, font, timestamp_indent));
     }
 
     // Parse content with markdown
