@@ -152,8 +152,8 @@ int main(int argc, char* argv[]) {
   QObject::connect(&app, &kind::gui::App::guilds_updated, update_guild_list);
 
   QObject::connect(&app, &kind::gui::App::channels_updated,
-                   [channel_list, &current_guild_id, &current_channel_id,
-                    &compute_channel_permissions, &config](
+                   [&client, channel_list, message_input, &current_guild_id,
+                    &current_channel_id, &compute_channel_permissions, &config](
                        kind::Snowflake guild_id, const QVector<kind::Channel>& channels) {
                      if (guild_id == current_guild_id) {
                        channel_list->blockSignals(true);
@@ -169,6 +169,12 @@ int main(int argc, char* argv[]) {
                              channel_list->setCurrentIndex(model->index(row));
                              break;
                            }
+                         }
+
+                         // Recompute send permission with fresh data
+                         auto it = perms.find(current_channel_id);
+                         if (it != perms.end()) {
+                           message_input->set_read_only(!kind::can_send_messages(it->second));
                          }
                        }
                        channel_list->blockSignals(false);
@@ -266,7 +272,33 @@ int main(int argc, char* argv[]) {
     }
 
     if (channel_found) {
-      // Load messages for the restored channel
+      // Compute send permission for the restored channel
+      auto user = client.current_user();
+      kind::Snowflake user_id = user ? user->id : 0;
+      auto member_role_ids = client.member_roles(guild_id);
+      std::vector<kind::Role> guild_roles;
+      kind::Snowflake owner_id = 0;
+      auto all_guilds = client.guilds();
+      for (const auto& guild : all_guilds) {
+        if (guild.id == guild_id) {
+          guild_roles = guild.roles;
+          owner_id = guild.owner_id;
+          break;
+        }
+      }
+      auto chs = client.channels(guild_id);
+      std::vector<kind::PermissionOverwrite> overwrites;
+      for (const auto& chan : chs) {
+        if (chan.id == last_channel) {
+          overwrites = chan.permission_overwrites;
+          break;
+        }
+      }
+      auto perms = kind::compute_permissions(
+          user_id, guild_id, owner_id, guild_roles, member_role_ids, overwrites);
+      message_input->set_read_only(!kind::can_send_messages(perms));
+
+      // Load messages
       auto cached_msgs = client.messages(last_channel, {}, 50);
       QVector<kind::Message> qvec(cached_msgs.begin(), cached_msgs.end());
       message_view->switch_channel(last_channel, qvec);
