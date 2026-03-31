@@ -15,6 +15,7 @@ public:
   enum Roles {
     GuildIdRole = Qt::UserRole + 1,
     IconHashRole,
+    GuildIconUrlRole,
   };
 
   explicit GuildModel(QObject* parent = nullptr);

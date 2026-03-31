@@ -27,6 +27,15 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
     return QVariant::fromValue(static_cast<qulonglong>(guild.id));
   case IconHashRole:
     return QString::fromStdString(guild.icon_hash);
+  case GuildIconUrlRole: {
+    if (guild.icon_hash.empty()) {
+      return QString();
+    }
+    // https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.webp?size=64
+    return QString("https://cdn.discordapp.com/icons/%1/%2.webp?size=64")
+        .arg(guild.id)
+        .arg(QString::fromStdString(guild.icon_hash));
+  }
   default:
     return {};
   }

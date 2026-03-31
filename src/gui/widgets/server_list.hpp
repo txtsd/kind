@@ -6,7 +6,15 @@
 #include "models/snowflake.hpp"
 
 #include <QListView>
+#include <QPixmap>
 #include <QVector>
+
+#include <string>
+#include <unordered_map>
+
+namespace kind {
+class ImageCache;
+}
 
 namespace kind::gui {
 
@@ -18,6 +26,9 @@ public:
 
   GuildModel* guild_model() const { return model_; }
 
+  void set_image_cache(kind::ImageCache* cache);
+  void set_guild_display(const std::string& mode);
+
 public slots:
   void set_guilds(const QVector<kind::Guild>& guilds);
 
@@ -25,9 +36,15 @@ signals:
   void guild_selected(kind::Snowflake guild_id);
 
 private:
+  void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
+  void fetch_guild_icons();
+  void on_image_ready(const QString& url, const QPixmap& pixmap);
+
   GuildModel* model_;
   GuildDelegate* delegate_;
-  void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
+  kind::ImageCache* image_cache_{nullptr};
+  std::string guild_display_{"text"};
+  std::unordered_map<std::string, QPixmap> pixmap_cache_;
 };
 
 } // namespace kind::gui
