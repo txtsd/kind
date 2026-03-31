@@ -381,8 +381,9 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
     if (embed.image) {
       try_get(add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
     }
-    if (embed.thumbnail && embed.type != "video") {
-      try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), 128));
+    if (embed.thumbnail) {
+      int thumb_size = (embed.type == "video") ? 520 : 128;
+      try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
@@ -429,9 +430,9 @@ void MessageView::request_images(const kind::Message& msg) {
       std::string key = embed.image->proxy_url.value_or(embed.image->url);
       request_image(add_image_size(key, 520));
     }
-    if (embed.thumbnail && embed.type != "video") {
+    if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
-      int thumb_size = 128;
+      int thumb_size = (embed.type == "video") ? 520 : 128;
       request_image(add_image_size(key, thumb_size));
     }
   }
