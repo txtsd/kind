@@ -11,6 +11,7 @@
 #include "widgets/server_list.hpp"
 #include "widgets/status_bar.hpp"
 
+#include <QAction>
 #include <QApplication>
 #include <QMainWindow>
 #include <QMenuBar>
@@ -96,8 +97,23 @@ int main(int argc, char* argv[]) {
   main_window.setStatusBar(status_bar);
   main_window.resize(1024, 768);
 
-  // Menu bar
+  // Menu bar (hidden by default, toggle with Alt or F10)
   auto* menu_bar = main_window.menuBar();
+  menu_bar->setVisible(false);
+
+  // Show menu bar on Alt press, hide when focus leaves
+  auto* toggle_menu = new QAction(&main_window);
+  toggle_menu->setShortcut(Qt::Key_F10);
+  main_window.addAction(toggle_menu);
+  QObject::connect(toggle_menu, &QAction::triggered, [menu_bar]() {
+    menu_bar->setVisible(!menu_bar->isVisible());
+    if (menu_bar->isVisible()) {
+      menu_bar->setFocus();
+    }
+  });
+  QObject::connect(menu_bar, &QMenuBar::triggered, [menu_bar](QAction*) {
+    menu_bar->setVisible(false);
+  });
 
   // File menu
   auto* file_menu = menu_bar->addMenu("&File");
