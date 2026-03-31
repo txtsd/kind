@@ -121,6 +121,15 @@ size_t try_parse_angle_bracket(const std::string& content, size_t pos,
     }
   }
 
+  // Suppressed-embed URL: <https://example.com>
+  if (inner.starts_with("https://") || inner.starts_with("http://")) {
+    TextSpan span;
+    span.text = std::string(inner);
+    span.link_url = std::string(inner);
+    blocks.push_back(std::move(span));
+    return close - pos + 1;
+  }
+
   return 0;
 }
 
@@ -203,7 +212,8 @@ void parse_inline(const std::string& content, size_t start, size_t end, uint8_t 
         // Find end of URL within our boundary
         size_t url_end = i;
         while (url_end < end && content[url_end] != ' ' && content[url_end] != '\t' &&
-               content[url_end] != '\n' && content[url_end] != '\r') {
+               content[url_end] != '\n' && content[url_end] != '\r' &&
+               content[url_end] != '>') {
           ++url_end;
         }
         std::string url(content.data() + i, url_end - i);

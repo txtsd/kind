@@ -110,6 +110,40 @@ TEST(MarkdownParser, MaskedLink) {
   EXPECT_EQ(*span.link_url, "https://example.com");
 }
 
+TEST(MarkdownParser, MaskedLinkWithSurroundingText) {
+  auto result = markdown::parse("Check out [this link](https://example.com) for details");
+  ASSERT_EQ(result.blocks.size(), 3u);
+  auto span1 = std::get<TextSpan>(result.blocks[0]);
+  EXPECT_EQ(span1.text, "Check out ");
+  EXPECT_FALSE(span1.link_url.has_value());
+  auto span2 = std::get<TextSpan>(result.blocks[1]);
+  EXPECT_EQ(span2.text, "this link");
+  ASSERT_TRUE(span2.link_url.has_value());
+  EXPECT_EQ(*span2.link_url, "https://example.com");
+  auto span3 = std::get<TextSpan>(result.blocks[2]);
+  EXPECT_EQ(span3.text, " for details");
+}
+
+TEST(MarkdownParser, AngleBracketSuppressedUrl) {
+  auto result = markdown::parse("<https://example.com>");
+  ASSERT_GE(result.blocks.size(), 1u);
+  auto span = std::get<TextSpan>(result.blocks[0]);
+  ASSERT_TRUE(span.link_url.has_value());
+  EXPECT_EQ(*span.link_url, "https://example.com");
+  EXPECT_EQ(span.text.find('<'), std::string::npos);
+  EXPECT_EQ(span.text.find('>'), std::string::npos);
+}
+
+TEST(MarkdownParser, AngleBracketUrlWithTrailingText) {
+  auto result = markdown::parse("<https://example.com>\n\nSome text after");
+  ASSERT_GE(result.blocks.size(), 2u);
+  auto span1 = std::get<TextSpan>(result.blocks[0]);
+  ASSERT_TRUE(span1.link_url.has_value());
+  EXPECT_EQ(*span1.link_url, "https://example.com");
+  auto span2 = std::get<TextSpan>(result.blocks[1]);
+  EXPECT_TRUE(span2.text.find("Some text after") != std::string::npos);
+}
+
 TEST(MarkdownParser, UserMention) {
   auto result = markdown::parse("<@123456>");
   ASSERT_EQ(result.blocks.size(), 1u);
