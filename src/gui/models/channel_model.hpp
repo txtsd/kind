@@ -35,6 +35,8 @@ public:
   kind::Snowflake channel_id_at(int row) const;
   void toggle_collapsed(kind::Snowflake category_id);
   bool is_collapsed(kind::Snowflake category_id) const;
+  void collapse_all();
+  void expand_all();
 
 private:
   void rebuild_visible();

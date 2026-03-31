@@ -13,6 +13,8 @@
 
 #include <QApplication>
 #include <QMainWindow>
+#include <QMenuBar>
+#include <QMessageBox>
 #include <QSplitter>
 #include <QVBoxLayout>
 
@@ -76,6 +78,54 @@ int main(int argc, char* argv[]) {
   main_window.setStatusBar(status_bar);
   main_window.resize(1024, 768);
 
+  // Menu bar
+  auto* menu_bar = main_window.menuBar();
+
+  // File menu
+  auto* file_menu = menu_bar->addMenu("&File");
+
+  auto* logout_action = file_menu->addAction("&Logout");
+  QObject::connect(logout_action, &QAction::triggered, [&client, &qapp]() {
+    client.logout();
+    qapp.quit();
+  });
+
+  file_menu->addSeparator();
+
+  auto* quit_action = file_menu->addAction("&Quit");
+  quit_action->setShortcut(QKeySequence::Quit);
+  QObject::connect(quit_action, &QAction::triggered, &qapp, &QApplication::quit);
+
+  // View menu
+  auto* view_menu = menu_bar->addMenu("&View");
+
+  auto* hide_locked_action = view_menu->addAction("&Hide locked channels");
+  hide_locked_action->setCheckable(true);
+  hide_locked_action->setChecked(config.get_or<bool>("appearance.hide_locked_channels", false));
+
+  // hide_locked_action connection deferred until current_guild_id and compute_channel_permissions exist
+
+  auto* collapse_all_action = view_menu->addAction("&Collapse all categories");
+  QObject::connect(collapse_all_action, &QAction::triggered,
+                   [channel_list]() { channel_list->channel_model()->collapse_all(); });
+
+  auto* expand_all_action = view_menu->addAction("&Expand all categories");
+  QObject::connect(expand_all_action, &QAction::triggered,
+                   [channel_list]() { channel_list->channel_model()->expand_all(); });
+
+  // Help menu
+  auto* help_menu = menu_bar->addMenu("&Help");
+
+  auto* about_action = help_menu->addAction("&About kind");
+  QObject::connect(about_action, &QAction::triggered, [&main_window]() {
+    QMessageBox::about(&main_window, "About kind",
+                       QString("kind %1\nA third-party Discord client\n\nBuilt with Qt %2")
+                           .arg(kind::version, qVersion()));
+  });
+
+  auto* about_qt_action = help_menu->addAction("About &Qt");
+  QObject::connect(about_qt_action, &QAction::triggered, &qapp, &QApplication::aboutQt);
+
   // Login dialog
   kind::gui::LoginDialog login_dialog;
 
@@ -109,6 +159,18 @@ int main(int argc, char* argv[]) {
     }
     return perms;
   };
+
+  // Deferred: wire hide_locked_action now that current_guild_id and compute_channel_permissions exist
+  QObject::connect(hide_locked_action, &QAction::toggled,
+                   [&config, &client, channel_list, &current_guild_id, &compute_channel_permissions](bool checked) {
+                     config.set<bool>("appearance.hide_locked_channels", checked);
+                     auto channels = client.channels(current_guild_id);
+                     if (!channels.empty()) {
+                       QVector<kind::Channel> qvec(channels.begin(), channels.end());
+                       auto perms = compute_channel_permissions(current_guild_id, qvec);
+                       channel_list->set_channels(qvec, perms, checked);
+                     }
+                   });
 
   // Wire login dialog signals to client actions
   QObject::connect(&login_dialog, &kind::gui::LoginDialog::token_login_requested,

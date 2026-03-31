@@ -143,6 +143,20 @@ void ChannelModel::toggle_collapsed(kind::Snowflake category_id) {
   rebuild_visible();
 }
 
+void ChannelModel::collapse_all() {
+  for (const auto& ch : all_channels_) {
+    if (ch.type == 4) {
+      collapsed_.insert(ch.id);
+    }
+  }
+  rebuild_visible();
+}
+
+void ChannelModel::expand_all() {
+  collapsed_.clear();
+  rebuild_visible();
+}
+
 bool ChannelModel::is_collapsed(kind::Snowflake category_id) const {
   return collapsed_.count(category_id) > 0;
 }
