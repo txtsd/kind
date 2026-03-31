@@ -10,9 +10,9 @@ StatusBar::StatusBar(kind::Client& client, QWidget* parent)
   latency_ = new QLabel(this);
   user_ = new QLabel(this);
 
-  addWidget(connectivity_);
-  addWidget(latency_);
-  addPermanentWidget(user_);
+  addWidget(user_);
+  addPermanentWidget(latency_);
+  addPermanentWidget(connectivity_);
 
   set_disconnected();
 
