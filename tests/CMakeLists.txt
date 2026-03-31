@@ -1,6 +1,7 @@
 include(GoogleTest)
 
 add_executable(kind-tests
+  test_main.cpp
   core/models_test.cpp
   core/config_test.cpp
   core/observer_test.cpp
@@ -41,7 +42,7 @@ target_include_directories(kind-tests PRIVATE ${CMAKE_SOURCE_DIR}/src/gui)
 target_link_libraries(kind-tests
   PRIVATE
     kind-core
-    GTest::gtest_main
+    GTest::gtest
     GTest::gmock
     Qt6::Core
     Qt6::Gui

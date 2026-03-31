@@ -1,24 +1,11 @@
 #include "renderers/attachment_block_renderer.hpp"
 
 #include <QFont>
-#include <QGuiApplication>
 #include <QImage>
 #include <QPainter>
 #include <gtest/gtest.h>
 
-class AttachmentBlockRendererTest : public ::testing::Test {
-protected:
-  static void SetUpTestSuite() {
-    if (QGuiApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QGuiApplication(argc, argv);
-    }
-  }
-
-  static inline QGuiApplication* app_ = nullptr;
-};
+class AttachmentBlockRendererTest : public ::testing::Test {};
 
 TEST_F(AttachmentBlockRendererTest, ImageAttachmentHeightPositive) {
   kind::Attachment attachment;

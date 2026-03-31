@@ -1,9 +1,6 @@
 #include "cache/image_cache.hpp"
 
-#include "logging.hpp"
-
 #include <QBuffer>
-#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QFile>
 #include <QImage>
@@ -13,18 +10,7 @@
 
 class ImageCacheTest : public ::testing::Test {
 protected:
-  static inline QCoreApplication* app_ = nullptr;
   std::filesystem::path cache_dir_;
-
-  static void SetUpTestSuite() {
-    if (QCoreApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QCoreApplication(argc, argv);
-    }
-    kind::log::init_console_only();
-  }
 
   void SetUp() override {
     cache_dir_ = std::filesystem::temp_directory_path() / "kind_img_cache_test";

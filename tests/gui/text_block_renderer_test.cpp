@@ -2,24 +2,11 @@
 #include "text/markdown_parser.hpp"
 
 #include <QFont>
-#include <QGuiApplication>
 #include <QImage>
 #include <QPainter>
 #include <gtest/gtest.h>
 
-class TextBlockRendererTest : public ::testing::Test {
-protected:
-  static void SetUpTestSuite() {
-    if (QGuiApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QGuiApplication(argc, argv);
-    }
-  }
-
-  static inline QGuiApplication* app_ = nullptr;
-};
+class TextBlockRendererTest : public ::testing::Test {};
 
 TEST_F(TextBlockRendererTest, HeightPositive) {
   auto content = kind::markdown::parse("hello world");

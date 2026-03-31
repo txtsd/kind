@@ -2,9 +2,6 @@
 #include "cache/database_reader.hpp"
 #include "cache/database_writer.hpp"
 
-#include "logging.hpp"
-
-#include <QCoreApplication>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 
@@ -14,19 +11,8 @@
 
 class DatabaseManagerTest : public ::testing::Test {
 protected:
-  static inline QCoreApplication* app_ = nullptr;
   std::filesystem::path db_dir_;
   std::filesystem::path db_path_;
-
-  static void SetUpTestSuite() {
-    if (QCoreApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QCoreApplication(argc, argv);
-    }
-    kind::log::init();
-  }
 
   void SetUp() override {
     db_dir_ = std::filesystem::temp_directory_path() / "kind_db_test";
@@ -99,19 +85,8 @@ TEST_F(DatabaseManagerTest, WALModeEnabled) {
 
 class DatabaseWriterTest : public ::testing::Test {
 protected:
-  static inline QCoreApplication* app_ = nullptr;
   std::filesystem::path db_dir_;
   std::filesystem::path db_path_;
-
-  static void SetUpTestSuite() {
-    if (QCoreApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QCoreApplication(argc, argv);
-    }
-    kind::log::init();
-  }
 
   void SetUp() override {
     db_dir_ = std::filesystem::temp_directory_path() / "kind_dbw_test";
@@ -366,19 +341,8 @@ TEST_F(DatabaseWriterTest, WriteRoles) {
 
 class DatabaseReaderTest : public ::testing::Test {
 protected:
-  static inline QCoreApplication* app_ = nullptr;
   std::filesystem::path db_dir_;
   std::filesystem::path db_path_;
-
-  static void SetUpTestSuite() {
-    if (QCoreApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char arg0[] = "kind-tests";
-      static char* argv[] = {arg0, nullptr};
-      app_ = new QCoreApplication(argc, argv);
-    }
-    kind::log::init();
-  }
 
   void SetUp() override {
     db_dir_ = std::filesystem::temp_directory_path() / "kind_dbr_test";

@@ -8,22 +8,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <optional>
-#include <QCoreApplication>
 #include <QTimer>
 
-// Helper to ensure QCoreApplication exists for the test suite
 class QtEventLoopFixture : public ::testing::Test {
 protected:
-  static void SetUpTestSuite() {
-    if (QCoreApplication::instance() == nullptr) {
-      static int argc = 1;
-      static char app_name[] = "kind-tests";
-      static char* argv[] = {app_name, nullptr};
-      app_ = new QCoreApplication(argc, argv);
-    }
-  }
-
-  // Process events for a given duration
   static void process_events(int ms) {
     QTimer timer;
     timer.setSingleShot(true);
@@ -32,8 +20,6 @@ protected:
     timer.start(ms);
     loop.exec();
   }
-
-  static inline QCoreApplication* app_ = nullptr;
 };
 
 // ============================================================
