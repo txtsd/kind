@@ -365,8 +365,16 @@ int main(int argc, char* argv[]) {
   // Toggle reactions via client
   QObject::connect(message_view, &kind::gui::MessageView::reaction_toggled,
                    [&client](kind::Snowflake channel_id, kind::Snowflake message_id,
-                             const QString& emoji, bool add) {
-                     client.toggle_reaction(channel_id, message_id, emoji.toStdString(), add);
+                             const QString& emoji_name, kind::Snowflake emoji_id, bool add) {
+                     std::string emoji_str;
+                     if (emoji_id != 0) {
+                       // Custom emoji: use name:id format (no URL encoding needed)
+                       emoji_str = emoji_name.toStdString() + ":" + std::to_string(emoji_id);
+                     } else {
+                       // Unicode emoji: URL-encode the UTF-8 bytes
+                       emoji_str = QUrl::toPercentEncoding(emoji_name).toStdString();
+                     }
+                     client.toggle_reaction(channel_id, message_id, emoji_str, add);
                    });
 
   // TODO: wire button_clicked to client.send_interaction when implemented

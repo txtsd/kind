@@ -42,7 +42,7 @@ signals:
   void load_more_requested(kind::Snowflake before_id);
   void link_clicked(const QString& url);
   void reaction_toggled(kind::Snowflake channel_id, kind::Snowflake message_id,
-                        const QString& emoji, bool add);
+                        const QString& emoji_name, kind::Snowflake emoji_id, bool add);
   void spoiler_toggled(kind::Snowflake message_id);
   void scroll_to_message_requested(kind::Snowflake message_id);
   void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,

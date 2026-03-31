@@ -113,8 +113,9 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
               const auto* reactions = static_cast<const std::vector<kind::Reaction>*>(reactions_ptr);
               if (result.reaction_index < static_cast<int>(reactions->size())) {
                 const auto& reaction = (*reactions)[result.reaction_index];
-                QString emoji = QString::fromStdString(reaction.emoji_name);
-                emit reaction_toggled(channel_id, message_id, emoji, !reaction.me);
+                QString emoji_name = QString::fromStdString(reaction.emoji_name);
+                kind::Snowflake emoji_id = reaction.emoji_id.value_or(0);
+                emit reaction_toggled(channel_id, message_id, emoji_name, emoji_id, !reaction.me);
                 return true;
               }
             }
