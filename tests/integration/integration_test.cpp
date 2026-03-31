@@ -538,6 +538,8 @@ TEST_F(IntegrationTest, ReactionAddGatewayEvent) {
   ASSERT_EQ(messages[0].reactions.size(), 1u);
   EXPECT_EQ(messages[0].reactions[0].emoji_name, "\xf0\x9f\x91\x8d");
   EXPECT_EQ(messages[0].reactions[0].count, 2);
+  // user_id 101 is not the current user (100), so me stays false
+  EXPECT_FALSE(messages[0].reactions[0].me);
 
   client_->remove_auth_observer(&auth_obs);
   client_->remove_gateway_observer(&gw_obs);
