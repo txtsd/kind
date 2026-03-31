@@ -297,10 +297,12 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      try_load(embed.image->url);
+      std::string key = embed.image->proxy_url.value_or(embed.image->url);
+      try_load(key);
     }
     if (embed.thumbnail) {
-      try_load(embed.thumbnail->url);
+      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
+      try_load(key);
     }
   }
   for (const auto& att : msg.attachments) {
@@ -312,6 +314,13 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
       try_load(*url);
+    }
+  }
+  for (const auto& reaction : msg.reactions) {
+    if (reaction.emoji_id.has_value()) {
+      auto url = "https://cdn.discordapp.com/emojis/"
+                 + std::to_string(*reaction.emoji_id) + ".webp?size=48";
+      try_load(url);
     }
   }
 
@@ -335,10 +344,12 @@ void MessageView::request_missing_images(const kind::Message& msg) {
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      request_if_missing(embed.image->url);
+      std::string key = embed.image->proxy_url.value_or(embed.image->url);
+      request_if_missing(key);
     }
     if (embed.thumbnail) {
-      request_if_missing(embed.thumbnail->url);
+      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
+      request_if_missing(key);
     }
   }
   for (const auto& att : msg.attachments) {
@@ -350,6 +361,13 @@ void MessageView::request_missing_images(const kind::Message& msg) {
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
       request_if_missing(*url);
+    }
+  }
+  for (const auto& reaction : msg.reactions) {
+    if (reaction.emoji_id.has_value()) {
+      auto url = "https://cdn.discordapp.com/emojis/"
+                 + std::to_string(*reaction.emoji_id) + ".webp?size=48";
+      request_if_missing(url);
     }
   }
 }
