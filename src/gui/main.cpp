@@ -352,9 +352,14 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
-  // Open links via system handler
+  // Open links via system handler (only http/https for safety)
   QObject::connect(message_view, &kind::gui::MessageView::link_clicked,
-                   [](const QString& url) { QDesktopServices::openUrl(QUrl(url)); });
+                   [](const QString& url) {
+                     QUrl parsed(url);
+                     if (parsed.scheme() == "http" || parsed.scheme() == "https") {
+                       QDesktopServices::openUrl(parsed);
+                     }
+                   });
 
   // Toggle reactions via client
   QObject::connect(message_view, &kind::gui::MessageView::reaction_toggled,
@@ -362,6 +367,9 @@ int main(int argc, char* argv[]) {
                              const QString& emoji, bool add) {
                      client.toggle_reaction(channel_id, message_id, emoji.toStdString(), add);
                    });
+
+  // TODO: wire button_clicked to client.send_interaction when implemented
+  // TODO: wire spoiler_toggled to spoiler reveal state management
 
   // Shared actions for guild/channel selection (used by signals and restore)
   auto select_guild_action = [&client, &current_guild_id, &current_channel_id,

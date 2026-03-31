@@ -21,6 +21,7 @@ public:
     ChannelIdRole,
     DeletedRole,
     EditedRole,
+    ReactionsRole,
     RenderedLayoutRole,
   };
 

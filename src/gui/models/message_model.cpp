@@ -58,6 +58,8 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return msg.deleted;
   case EditedRole:
     return msg.edited_timestamp.has_value();
+  case ReactionsRole:
+    return QVariant::fromValue(static_cast<const void*>(&msg.reactions));
   case RenderedLayoutRole: {
     auto row_idx = static_cast<size_t>(index.row());
     if (row_idx < rendered_.size() && rendered_[row_idx].valid) {

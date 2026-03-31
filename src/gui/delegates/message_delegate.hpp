@@ -25,6 +25,8 @@ signals:
                         const QString& emoji, bool add);
   void spoiler_toggled(kind::Snowflake message_id);
   void scroll_to_message_requested(kind::Snowflake message_id);
+  void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
+                      int button_index);
 
 private:
   static constexpr int padding_ = 4;

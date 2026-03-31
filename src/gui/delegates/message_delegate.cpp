@@ -1,6 +1,7 @@
 #include "delegates/message_delegate.hpp"
 
 #include "models/message_model.hpp"
+#include "models/reaction.hpp"
 #include "models/rendered_message.hpp"
 
 #include <QFontMetrics>
@@ -102,27 +103,21 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
           }
           break;
 
-        case HitResult::Reaction:
+        case HitResult::Reaction: {
           if (result.reaction_index >= 0) {
-            // Look up the reaction from the original message data to get
-            // the emoji name and whether the user already reacted
-            auto* msg_model = qobject_cast<const MessageModel*>(index.model());
-            if (msg_model) {
-              const auto& messages = msg_model->messages();
-              int row = index.row();
-              if (row >= 0 && row < static_cast<int>(messages.size())) {
-                const auto& msg = messages[row];
-                if (result.reaction_index < static_cast<int>(msg.reactions.size())) {
-                  const auto& reaction = msg.reactions[result.reaction_index];
-                  QString emoji = QString::fromStdString(reaction.emoji_name);
-                  // If user already reacted, clicking should remove; otherwise add
-                  emit reaction_toggled(channel_id, message_id, emoji, !reaction.me);
-                  return true;
-                }
+            auto reactions_ptr = index.data(MessageModel::ReactionsRole).value<const void*>();
+            if (reactions_ptr) {
+              const auto* reactions = static_cast<const std::vector<kind::Reaction>*>(reactions_ptr);
+              if (result.reaction_index < static_cast<int>(reactions->size())) {
+                const auto& reaction = (*reactions)[result.reaction_index];
+                QString emoji = QString::fromStdString(reaction.emoji_name);
+                emit reaction_toggled(channel_id, message_id, emoji, !reaction.me);
+                return true;
               }
             }
           }
           break;
+        }
 
         case HitResult::Spoiler:
           emit spoiler_toggled(message_id);
@@ -135,9 +130,15 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
           }
           break;
 
+        case HitResult::Button:
+          if (result.button_index >= 0) {
+            emit button_clicked(channel_id, message_id, result.button_index);
+            return true;
+          }
+          break;
+
         case HitResult::None:
         case HitResult::Mention:
-        case HitResult::Button:
           break;
         }
       }
