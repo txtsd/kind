@@ -72,7 +72,9 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem& option, const QModel
 bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
                                   const QStyleOptionViewItem& option,
                                   const QModelIndex& index) {
-  if (event->type() != QEvent::MouseButtonRelease) {
+  bool is_click = (event->type() == QEvent::MouseButtonRelease);
+  bool is_move = (event->type() == QEvent::MouseMove);
+  if (!is_click && !is_move) {
     return false;
   }
 
@@ -85,69 +87,92 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     return false;
   }
 
-  auto message_id = static_cast<kind::Snowflake>(
-      index.data(MessageModel::MessageIdRole).value<qulonglong>());
-  auto channel_id = static_cast<kind::Snowflake>(
-      index.data(MessageModel::ChannelIdRole).value<qulonglong>());
-
+  // Hit test to find what's under the cursor
+  HitResult hit_result;
+  bool hit_found = false;
   int y = option.rect.top();
   for (const auto& block : rendered->blocks) {
     int block_h = block->height(option.rect.width());
     QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
     if (block_rect.contains(click)) {
-      HitResult result;
       QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
-      if (block->hit_test(local, result)) {
-        switch (result.type) {
-        case HitResult::Link:
-          if (!result.url.empty()) {
-            emit link_clicked(QString::fromStdString(result.url));
-            return true;
-          }
-          break;
-
-        case HitResult::Reaction: {
-          if (result.reaction_index >= 0) {
-            auto reactions_ptr = index.data(MessageModel::ReactionsRole).value<const void*>();
-            if (reactions_ptr) {
-              const auto* reactions = static_cast<const std::vector<kind::Reaction>*>(reactions_ptr);
-              if (result.reaction_index < static_cast<int>(reactions->size())) {
-                const auto& reaction = (*reactions)[result.reaction_index];
-                QString emoji_name = QString::fromStdString(reaction.emoji_name);
-                kind::Snowflake emoji_id = reaction.emoji_id.value_or(0);
-                emit reaction_toggled(channel_id, message_id, emoji_name, emoji_id, !reaction.me);
-                return true;
-              }
-            }
-          }
-          break;
-        }
-
-        case HitResult::Spoiler:
-          emit spoiler_toggled(message_id);
-          return true;
-
-        case HitResult::ScrollToMessage:
-          if (result.id != 0) {
-            emit scroll_to_message_requested(result.id);
-            return true;
-          }
-          break;
-
-        case HitResult::Button:
-          if (result.button_index >= 0) {
-            emit button_clicked(channel_id, message_id, result.button_index);
-            return true;
-          }
-          break;
-
-        case HitResult::None:
-        case HitResult::Mention:
-          break;
-        }
+      if (block->hit_test(local, hit_result)) {
+        hit_found = true;
+        break;
       }
     }
     y += block_h;
+  }
+
+  // Update cursor for hover
+  if (is_move) {
+    auto* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget));
+    if (view) {
+      if (hit_found && hit_result.type != HitResult::None) {
+        view->viewport()->setCursor(Qt::PointingHandCursor);
+      } else {
+        view->viewport()->setCursor(Qt::ArrowCursor);
+      }
+    }
+    return false;
+  }
+
+  // Handle click
+  if (!hit_found) {
+    return false;
+  }
+
+  auto message_id = static_cast<kind::Snowflake>(
+      index.data(MessageModel::MessageIdRole).value<qulonglong>());
+  auto channel_id = static_cast<kind::Snowflake>(
+      index.data(MessageModel::ChannelIdRole).value<qulonglong>());
+
+  switch (hit_result.type) {
+  case HitResult::Link:
+    if (!hit_result.url.empty()) {
+      emit link_clicked(QString::fromStdString(hit_result.url));
+      return true;
+    }
+    break;
+
+  case HitResult::Reaction: {
+    if (hit_result.reaction_index >= 0) {
+      auto reactions_ptr = index.data(MessageModel::ReactionsRole).value<const void*>();
+      if (reactions_ptr) {
+        const auto* reactions = static_cast<const std::vector<kind::Reaction>*>(reactions_ptr);
+        if (hit_result.reaction_index < static_cast<int>(reactions->size())) {
+          const auto& reaction = (*reactions)[hit_result.reaction_index];
+          QString emoji_name = QString::fromStdString(reaction.emoji_name);
+          kind::Snowflake emoji_id = reaction.emoji_id.value_or(0);
+          emit reaction_toggled(channel_id, message_id, emoji_name, emoji_id, !reaction.me);
+          return true;
+        }
+      }
+    }
+    break;
+  }
+
+  case HitResult::Spoiler:
+    emit spoiler_toggled(message_id);
+    return true;
+
+  case HitResult::ScrollToMessage:
+    if (hit_result.id != 0) {
+      emit scroll_to_message_requested(hit_result.id);
+      return true;
+    }
+    break;
+
+  case HitResult::Button:
+    if (hit_result.button_index >= 0) {
+      emit button_clicked(channel_id, message_id, hit_result.button_index);
+      return true;
+    }
+    break;
+
+  case HitResult::None:
+  case HitResult::Mention:
+    break;
   }
   return false;
 }

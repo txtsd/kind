@@ -77,6 +77,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
   setUniformItemSizes(false);
   setWordWrap(true);
+  setMouseTracking(true);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   // Track whether the user is scrolled to the bottom for auto-scroll,
