@@ -402,6 +402,7 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
   gateway_->set_intents(default_intents);
 
   store_ = std::make_unique<DataStore>(max_messages);
+  image_cache_ = std::make_unique<ImageCache>(platform_paths().cache_dir / "images");
 
   // DB is NOT created here — it's deferred to init_account_db() after login
   // so the path can be scoped by user ID.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "auth/token_store.hpp"
+#include "cache/image_cache.hpp"
 #include "interfaces/auth_observer.hpp"
 #include "interfaces/gateway_observer.hpp"
 #include "interfaces/observer_list.hpp"
@@ -105,6 +106,9 @@ public:
   // Returns the REST client for signal connections (loading indicator).
   RestClient* rest_client() const { return rest_.get(); }
 
+  // Returns the image cache for async image loading.
+  ImageCache* image_cache() const { return image_cache_.get(); }
+
 private:
   void wire_bridges();
 
@@ -114,6 +118,7 @@ private:
   std::unique_ptr<GatewayClient> gateway_;
   std::unique_ptr<AuthManager> auth_;
   std::unique_ptr<DataStore> store_;
+  std::unique_ptr<ImageCache> image_cache_;
 
   // Internal observer bridges
   class AuthBridge;
