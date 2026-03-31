@@ -39,8 +39,6 @@ private:
   };
   std::vector<PillLayout> pill_layouts_;
 
-  mutable QRect row_rect_;
-
   void compute_layout();
 };
 

@@ -56,8 +56,6 @@ void ReactionBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   int base_x = rect.left() + padding_;
   int base_y = rect.top() + padding_;
 
-  row_rect_ = QRect(base_x, base_y, rect.width() - 2 * padding_, pill_height_);
-
   for (size_t i = 0; i < reactions_.size(); ++i) {
     const auto& reaction = reactions_[i];
     const auto& layout = pill_layouts_[i];
@@ -98,11 +96,13 @@ void ReactionBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
 }
 
 bool ReactionBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
-  if (!row_rect_.isValid() || !row_rect_.contains(pos)) {
+  // pos is in local coordinates (0,0 = block top-left)
+  // pill_layouts_ x values are relative to padding_
+  if (pos.y() < padding_ || pos.y() >= padding_ + pill_height_) {
     return false;
   }
 
-  int local_x = pos.x() - row_rect_.left();
+  int local_x = pos.x() - padding_;
 
   for (size_t i = 0; i < pill_layouts_.size(); ++i) {
     const auto& layout = pill_layouts_[i];
