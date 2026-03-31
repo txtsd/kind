@@ -21,14 +21,25 @@ void ChannelList::set_channels(const QVector<kind::Channel>& channels,
 }
 
 void ChannelList::on_selection_changed(const QModelIndex& current, const QModelIndex& /*previous*/) {
-  if (current.isValid()) {
-    bool locked = current.data(ChannelModel::LockedRole).toBool();
-    if (locked) {
-      return;
-    }
-    auto channel_id = model_->channel_id_at(current.row());
-    emit channel_selected(channel_id);
+  if (!current.isValid()) {
+    return;
   }
+
+  // Categories toggle collapse on click
+  bool is_category = current.data(ChannelModel::IsCategoryRole).toBool();
+  if (is_category) {
+    auto cat_id = static_cast<kind::Snowflake>(current.data(ChannelModel::ChannelIdRole).value<qulonglong>());
+    model_->toggle_collapsed(cat_id);
+    return;
+  }
+
+  bool locked = current.data(ChannelModel::LockedRole).toBool();
+  if (locked) {
+    return;
+  }
+
+  auto channel_id = model_->channel_id_at(current.row());
+  emit channel_selected(channel_id);
 }
 
 } // namespace kind::gui

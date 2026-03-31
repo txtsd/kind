@@ -35,9 +35,17 @@ void ChannelDelegate::paint_category(QPainter* painter, const QStyleOptionViewIt
   painter->save();
 
   // Categories get a subtle background, no selection highlight
-  painter->fillRect(option.rect, option.palette.base());
+  if (option.state & QStyle::State_MouseOver) {
+    auto hover_color = option.palette.highlight().color();
+    hover_color.setAlpha(20);
+    painter->fillRect(option.rect, hover_color);
+  } else {
+    painter->fillRect(option.rect, option.palette.base());
+  }
 
-  QString name = index.data(Qt::DisplayRole).toString().toUpper();
+  bool collapsed = index.data(ChannelModel::CollapsedRole).toBool();
+  QString indicator = collapsed ? QStringLiteral("\u25B8 ") : QStringLiteral("\u25BE ");
+  QString name = indicator + index.data(Qt::DisplayRole).toString().toUpper();
 
   QFont cat_font = option.font;
   cat_font.setPointSizeF(cat_font.pointSizeF() * 0.8);

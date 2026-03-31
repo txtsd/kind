@@ -44,6 +44,10 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
     }
     return false;
   }
+  case CollapsedRole:
+    return (channel.type == 4) && collapsed_.count(channel.id);
+  case IsCategoryRole:
+    return channel.type == 4;
   default:
     return {};
   }
@@ -52,8 +56,8 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
 void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
                                 const std::unordered_map<kind::Snowflake, uint64_t>& permissions,
                                 bool hide_locked) {
-  beginResetModel();
   permissions_ = permissions;
+  hide_locked_ = hide_locked;
 
   // Separate categories from regular channels
   std::vector<kind::Channel> categories;
@@ -61,7 +65,6 @@ void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
   std::map<kind::Snowflake, std::vector<kind::Channel>> by_parent;
 
   for (const auto& ch : channels) {
-    // Filter out locked non-category channels when hide_locked is enabled
     if (hide_locked && ch.type != 4) {
       auto it = permissions_.find(ch.id);
       if (it != permissions_.end() && !kind::can_view_channel(it->second)) {
@@ -78,9 +81,8 @@ void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
     }
   }
 
-  // Sort each group by position
-  auto by_pos = [](const kind::Channel& a, const kind::Channel& b) {
-    return a.position < b.position;
+  auto by_pos = [](const kind::Channel& lhs, const kind::Channel& rhs) {
+    return lhs.position < rhs.position;
   };
   std::sort(categories.begin(), categories.end(), by_pos);
   std::sort(uncategorized.begin(), uncategorized.end(), by_pos);
@@ -88,24 +90,61 @@ void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
     std::sort(children.begin(), children.end(), by_pos);
   }
 
-  // Build final list: uncategorized first, then each category with its children
-  channels_.clear();
-  channels_.reserve(channels.size());
+  // Build the full ordered list (categories + all children)
+  all_channels_.clear();
+  all_channels_.reserve(channels.size());
 
   for (auto& ch : uncategorized) {
-    channels_.push_back(std::move(ch));
+    all_channels_.push_back(std::move(ch));
   }
   for (auto& cat : categories) {
     auto cat_id = cat.id;
-    channels_.push_back(std::move(cat));
+    all_channels_.push_back(std::move(cat));
     if (auto it = by_parent.find(cat_id); it != by_parent.end()) {
       for (auto& ch : it->second) {
-        channels_.push_back(std::move(ch));
+        all_channels_.push_back(std::move(ch));
       }
     }
   }
 
+  rebuild_visible();
+}
+
+void ChannelModel::rebuild_visible() {
+  beginResetModel();
+
+  channels_.clear();
+  channels_.reserve(all_channels_.size());
+
+  kind::Snowflake skipping_category = 0;
+
+  for (const auto& ch : all_channels_) {
+    if (ch.type == 4) {
+      // Category: always show, check if collapsed
+      skipping_category = collapsed_.count(ch.id) ? ch.id : 0;
+      channels_.push_back(ch);
+    } else if (skipping_category != 0 && ch.parent_id.has_value() && *ch.parent_id == skipping_category) {
+      // Child of collapsed category: skip
+      continue;
+    } else {
+      channels_.push_back(ch);
+    }
+  }
+
   endResetModel();
+}
+
+void ChannelModel::toggle_collapsed(kind::Snowflake category_id) {
+  if (collapsed_.count(category_id)) {
+    collapsed_.erase(category_id);
+  } else {
+    collapsed_.insert(category_id);
+  }
+  rebuild_visible();
+}
+
+bool ChannelModel::is_collapsed(kind::Snowflake category_id) const {
+  return collapsed_.count(category_id) > 0;
 }
 
 kind::Snowflake ChannelModel::channel_id_at(int row) const {

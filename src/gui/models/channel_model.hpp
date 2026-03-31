@@ -5,6 +5,7 @@
 
 #include <QAbstractListModel>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace kind::gui {
@@ -19,6 +20,8 @@ public:
     PositionRole,
     ParentIdRole,
     LockedRole,
+    CollapsedRole,
+    IsCategoryRole,
   };
 
   explicit ChannelModel(QObject* parent = nullptr);
@@ -30,10 +33,19 @@ public:
                     const std::unordered_map<kind::Snowflake, uint64_t>& permissions = {},
                     bool hide_locked = false);
   kind::Snowflake channel_id_at(int row) const;
+  void toggle_collapsed(kind::Snowflake category_id);
+  bool is_collapsed(kind::Snowflake category_id) const;
 
 private:
+  void rebuild_visible();
+
+  // Full channel list (all channels including hidden children of collapsed categories)
+  std::vector<kind::Channel> all_channels_;
+  // Visible subset (what the view sees)
   std::vector<kind::Channel> channels_;
   std::unordered_map<kind::Snowflake, uint64_t> permissions_;
+  std::unordered_set<kind::Snowflake> collapsed_;
+  bool hide_locked_{false};
 };
 
 } // namespace kind::gui
