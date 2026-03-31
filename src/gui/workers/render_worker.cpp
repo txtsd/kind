@@ -41,7 +41,7 @@ RenderedMessage compute_layout(
     QString time_tooltip = dt.isValid()
         ? dt.toLocalTime().toString("dddd, MMMM d, yyyy 'at' h:mm AP")
         : QString();
-    auto author = QString::fromStdString(message.author.username);
+    auto author = QString::fromStdString(message.author.username) + ": ";
 
     // Reply block before text
     if (message.referenced_message_id.has_value()) {
