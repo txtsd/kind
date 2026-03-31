@@ -11,6 +11,7 @@ add_executable(kind-tests
   core/permissions_test.cpp
   core/client_test.cpp
   core/database_test.cpp
+  core/markdown_test.cpp
   core/message_parse_test.cpp
   gui/message_model_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
