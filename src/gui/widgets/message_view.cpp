@@ -384,7 +384,11 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
       try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
-  // Attachments are not auto-fetched — user clicks to download.
+  for (const auto& att : msg.attachments) {
+    if (att.width.has_value() && !att.url.empty()) {
+      try_get(add_image_size(att.url, 520));
+    }
+  }
   for (const auto& sticker : msg.sticker_items) {
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
@@ -431,7 +435,11 @@ void MessageView::request_images(const kind::Message& msg) {
       request_image(add_image_size(key, thumb_size));
     }
   }
-  // Attachments are not auto-downloaded. The user clicks to open/download.
+  for (const auto& att : msg.attachments) {
+    if (att.width.has_value() && !att.url.empty()) {
+      request_image(add_image_size(att.url, 520));
+    }
+  }
   for (const auto& sticker : msg.sticker_items) {
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
