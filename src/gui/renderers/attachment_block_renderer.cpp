@@ -20,13 +20,18 @@ AttachmentBlockRenderer::AttachmentBlockRenderer(const kind::Attachment& attachm
     int orig_w = *attachment_.width;
     int orig_h = *attachment_.height;
 
-    // Cap height at max_image_height_, scale width proportionally
-    if (orig_h > max_image_height_) {
+    display_width_ = orig_w;
+    display_height_ = orig_h;
+
+    // Cap width, scale height proportionally
+    if (display_width_ > max_image_width_) {
+      display_height_ = display_height_ * max_image_width_ / std::max(display_width_, 1);
+      display_width_ = max_image_width_;
+    }
+    // Cap height, scale width proportionally
+    if (display_height_ > max_image_height_) {
+      display_width_ = display_width_ * max_image_height_ / std::max(display_height_, 1);
       display_height_ = max_image_height_;
-      display_width_ = orig_w * max_image_height_ / std::max(orig_h, 1);
-    } else {
-      display_width_ = orig_w;
-      display_height_ = orig_h;
     }
     total_height_ = display_height_ + 2 * padding_;
   } else {

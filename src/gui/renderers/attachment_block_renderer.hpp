@@ -20,6 +20,7 @@ public:
 
 private:
   static constexpr int padding_ = 8;
+  static constexpr int max_image_width_ = 520;
   static constexpr int max_image_height_ = 300;
   static constexpr int file_row_height_ = 32;
   static constexpr int icon_size_ = 20;
