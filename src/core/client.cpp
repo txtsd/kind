@@ -714,6 +714,14 @@ Client::LastSelection Client::last_selection() const {
   return sel;
 }
 
+bool Client::is_connected() const {
+  return gateway_ && gateway_->is_connected();
+}
+
+int Client::latency_ms() const {
+  return gateway_ ? gateway_->latency_ms() : -1;
+}
+
 // ============================================================
 // State accessors
 // ============================================================

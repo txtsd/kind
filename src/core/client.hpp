@@ -97,6 +97,8 @@ public:
                                 int limit = 50) const;
   std::optional<User> current_user() const;
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
+  bool is_connected() const;
+  int latency_ms() const;
 
 private:
   void wire_bridges();

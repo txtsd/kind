@@ -1,5 +1,6 @@
 #include "gateway/heartbeat.hpp"
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
 #include <random>
@@ -14,6 +15,8 @@ struct Heartbeat::Impl {
   std::optional<int64_t> sequence;
   bool waiting_for_ack = false;
   bool started = false;
+  QElapsedTimer send_timer;
+  int last_latency_ms = -1;
 
   explicit Impl(QObject* parent) : timer(new QTimer(parent)), jitter_timer(new QTimer(parent)) {
     timer->setSingleShot(false);
@@ -48,6 +51,7 @@ void Heartbeat::start(int interval_ms, SendCallback on_send, TimeoutCallback on_
       return;
     }
     impl_->waiting_for_ack = true;
+    impl_->send_timer.start();
     if (impl_->on_send) {
       impl_->on_send(impl_->sequence);
     }
@@ -65,6 +69,7 @@ void Heartbeat::start(int interval_ms, SendCallback on_send, TimeoutCallback on_
     }
     // Send the first heartbeat
     impl_->waiting_for_ack = true;
+    impl_->send_timer.start();
     if (impl_->on_send) {
       impl_->on_send(impl_->sequence);
     }
@@ -86,7 +91,14 @@ void Heartbeat::stop() {
 }
 
 void Heartbeat::ack_received() {
+  if (impl_->waiting_for_ack && impl_->send_timer.isValid()) {
+    impl_->last_latency_ms = static_cast<int>(impl_->send_timer.elapsed());
+  }
   impl_->waiting_for_ack = false;
+}
+
+int Heartbeat::latency_ms() const {
+  return impl_->last_latency_ms;
 }
 
 void Heartbeat::set_sequence(int64_t seq) {

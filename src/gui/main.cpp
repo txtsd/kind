@@ -9,6 +9,7 @@
 #include "widgets/message_input.hpp"
 #include "widgets/message_view.hpp"
 #include "widgets/server_list.hpp"
+#include "widgets/status_bar.hpp"
 
 #include <QApplication>
 #include <QMainWindow>
@@ -65,10 +66,14 @@ int main(int argc, char* argv[]) {
   splitter->addWidget(message_area);
   splitter->setSizes({60, 150, 600});
 
+  // Status bar
+  auto* status_bar = new kind::gui::StatusBar(client);
+
   // Main window
   QMainWindow main_window;
   main_window.setWindowTitle("kind");
   main_window.setCentralWidget(splitter);
+  main_window.setStatusBar(status_bar);
   main_window.resize(1024, 768);
 
   // Login dialog
@@ -124,8 +129,20 @@ int main(int argc, char* argv[]) {
 
   QObject::connect(&app, &kind::gui::App::mfa_required, &login_dialog, &kind::gui::LoginDialog::show_mfa_input);
 
-  // On login success, close dialog
+  // On login success, close dialog and update status bar
   QObject::connect(&app, &kind::gui::App::login_success, &login_dialog, &QDialog::accept);
+  QObject::connect(&app, &kind::gui::App::login_success, status_bar,
+                   [status_bar](const kind::User& user) {
+                     status_bar->set_user(QString::fromStdString(user.username));
+                   });
+
+  // Wire connectivity signals to status bar
+  QObject::connect(&app, &kind::gui::App::ready, status_bar,
+                   [status_bar](const QVector<kind::Guild>&) { status_bar->set_connected(); });
+  QObject::connect(&app, &kind::gui::App::gateway_disconnected, status_bar,
+                   &kind::gui::StatusBar::set_disconnected);
+  QObject::connect(&app, &kind::gui::App::gateway_reconnecting_signal, status_bar,
+                   &kind::gui::StatusBar::set_reconnecting);
 
   // Wire app signals to widgets — preserve current guild selection on updates
   auto update_guild_list = [server_list, &current_guild_id](const QVector<kind::Guild>& guilds) {
@@ -412,6 +429,12 @@ int main(int argc, char* argv[]) {
     if (login_dialog.exec() != QDialog::Accepted) {
       return 0;
     }
+  }
+
+  // Set cached username on status bar
+  auto cached_user = client.current_user();
+  if (cached_user) {
+    status_bar->set_user(QString::fromStdString(cached_user->username));
   }
 
   // Restore last selected guild and channel

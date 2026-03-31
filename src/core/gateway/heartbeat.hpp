@@ -23,6 +23,7 @@ public:
   void stop();
   void ack_received();
   void set_sequence(int64_t seq);
+  int latency_ms() const;
 
 private:
   struct Impl;

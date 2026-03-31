@@ -18,6 +18,7 @@ public:
   virtual void send(const std::string& payload_json) = 0;
   virtual void set_event_callback(EventCallback cb) = 0;
   virtual bool is_connected() const = 0;
+  virtual int latency_ms() const { return -1; }
 
   // Intent flags for IDENTIFY (bot tokens only)
   virtual void set_intents(uint32_t intents) = 0;

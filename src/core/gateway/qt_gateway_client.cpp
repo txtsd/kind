@@ -65,6 +65,10 @@ bool QtGatewayClient::is_connected() const {
   return connected_;
 }
 
+int QtGatewayClient::latency_ms() const {
+  return heartbeat_->latency_ms();
+}
+
 void QtGatewayClient::set_intents(uint32_t intents) {
   intents_ = intents;
 }

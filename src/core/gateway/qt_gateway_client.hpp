@@ -21,6 +21,7 @@ public:
   void send(const std::string& payload_json) override;
   void set_event_callback(EventCallback cb) override;
   bool is_connected() const override;
+  int latency_ms() const override;
   void set_intents(uint32_t intents) override;
   void set_bot_mode(bool is_bot) override;
 
