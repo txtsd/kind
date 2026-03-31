@@ -1,6 +1,7 @@
 #include "renderers/attachment_block_renderer.hpp"
 
 #include <QFontMetrics>
+#include <QPainterPath>
 
 #include <algorithm>
 
@@ -76,26 +77,40 @@ void AttachmentBlockRenderer::paint(QPainter* painter, const QRect& rect) const 
   } else {
     QFontMetrics fm(font_);
 
+    // Draw card background
+    int card_x = rect.left() + padding_;
+    int card_y = rect.top() + padding_;
+    int card_w = std::min(400, rect.width() - 2 * padding_);
+    int card_h = file_row_height_;
+    QPainterPath card_path;
+    card_path.addRoundedRect(QRectF(card_x, card_y, card_w, card_h), 4, 4);
+    painter->fillPath(card_path, QColor(0x2f, 0x31, 0x36));
+    painter->setPen(QPen(QColor(0x40, 0x42, 0x47), 1.0));
+    painter->drawPath(card_path);
+
+    int inner_x = card_x + 8;
+    int text_y = card_y + (card_h - fm.height()) / 2 + fm.ascent();
+
     // File icon
     painter->setFont(font_);
     painter->setPen(text_color);
     QString icon = QString::fromUtf8("\xF0\x9F\x93\x8E"); // 📎
-    painter->drawText(x, y + fm.ascent(), icon);
+    painter->drawText(inner_x, text_y, icon);
     int icon_advance = fm.horizontalAdvance(icon) + 6;
 
     // Filename as link
     painter->setPen(link_color);
     QString filename = QString::fromStdString(attachment_.filename);
-    painter->drawText(x + icon_advance, y + fm.ascent(), filename);
+    painter->drawText(inner_x + icon_advance, text_y, filename);
     int name_advance = fm.horizontalAdvance(filename) + 8;
 
     // File size in dim text
     painter->setPen(dim_text_color);
     QString size_text = format_file_size(attachment_.size);
-    painter->drawText(x + icon_advance + name_advance, y + fm.ascent(), size_text);
+    painter->drawText(inner_x + icon_advance + name_advance, text_y, size_text);
 
     // Store in local coordinates (relative to block top-left) for hit_test
-    clickable_rect_ = QRect(padding_, padding_, rect.width() - 2 * padding_, file_row_height_);
+    clickable_rect_ = QRect(padding_, padding_, card_w, card_h);
   }
 
   painter->restore();
