@@ -1,23 +1,17 @@
 #pragma once
 
-#include <QString>
-#include <QTextLayout>
+#include "renderers/block_renderer.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace kind::gui {
 
 struct RenderedMessage {
-  std::shared_ptr<QTextLayout> text_layout;
-  QString time_str;
-  QString author_str;
-  int time_width{0};
-  int author_width{0};
+  std::vector<std::shared_ptr<BlockRenderer>> blocks;
   int height{0};
   int viewport_width{0};
   bool valid{false};
-  bool deleted{false};
-  bool edited{false};
 };
 
 } // namespace kind::gui

@@ -4,10 +4,15 @@
 #include "models/rendered_message.hpp"
 
 #include <QFont>
+#include <QPixmap>
+
+#include <string>
+#include <unordered_map>
 
 namespace kind::gui {
 
-// Compute a RenderedMessage synchronously. Must be called from the UI thread.
-RenderedMessage compute_layout(const kind::Message& message, int viewport_width, const QFont& font);
+RenderedMessage compute_layout(
+    const kind::Message& message, int viewport_width, const QFont& font,
+    const std::unordered_map<std::string, QPixmap>& images = {});
 
 } // namespace kind::gui
