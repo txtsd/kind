@@ -71,7 +71,8 @@ void AttachmentBlockRenderer::paint(QPainter* painter, const QRect& rect) const 
       QString dims = QString("%1x%2").arg(display_width_).arg(display_height_);
       painter->drawText(placeholder, Qt::AlignCenter, dims);
     }
-    clickable_rect_ = QRect(x, y, display_width_, display_height_);
+    // Store in local coordinates (relative to block top-left) for hit_test
+    clickable_rect_ = QRect(padding_, padding_, display_width_, display_height_);
   } else {
     QFontMetrics fm(font_);
 
@@ -93,7 +94,8 @@ void AttachmentBlockRenderer::paint(QPainter* painter, const QRect& rect) const 
     QString size_text = format_file_size(attachment_.size);
     painter->drawText(x + icon_advance + name_advance, y + fm.ascent(), size_text);
 
-    clickable_rect_ = QRect(x, y, rect.width() - 2 * padding_, file_row_height_);
+    // Store in local coordinates (relative to block top-left) for hit_test
+    clickable_rect_ = QRect(padding_, padding_, rect.width() - 2 * padding_, file_row_height_);
   }
 
   painter->restore();
