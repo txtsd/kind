@@ -45,6 +45,12 @@ void StatusBar::set_user(const QString& username) {
   user_->setText(username);
 }
 
+void StatusBar::set_connecting() {
+  connectivity_->setText("\u2B24 Connecting...");
+  connectivity_->setStyleSheet("color: #faa61a;");
+  latency_->clear();
+}
+
 void StatusBar::set_connected() {
   connectivity_->setText("\u2B24 Connected");
   connectivity_->setStyleSheet("color: #43b581;");

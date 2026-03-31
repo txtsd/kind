@@ -19,6 +19,7 @@ public:
 
 public slots:
   void set_user(const QString& username);
+  void set_connecting();
   void set_connected();
   void set_disconnected(const QString& reason = {});
   void set_reconnecting();

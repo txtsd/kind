@@ -244,6 +244,7 @@ int main(int argc, char* argv[]) {
   QObject::connect(&app, &kind::gui::App::login_success, status_bar,
                    [status_bar](const kind::User& user) {
                      status_bar->set_user(QString::fromStdString(user.username));
+                     status_bar->set_connecting();
                    });
 
   // Wire connectivity signals to status bar
