@@ -752,12 +752,14 @@ void Client::init_account_db(Snowflake user_id) {
   db_writer_ = std::make_unique<DatabaseWriter>(db_path.string());
   db_reader_ = std::make_unique<DatabaseReader>(db_path.string());
 
-  // Save this as the last active account
-  auto global_state_dir = platform_paths().state_dir;
-  std::filesystem::create_directories(global_state_dir);
-  std::ofstream last_account(global_state_dir / "last_account");
-  if (last_account) {
-    last_account << user_id << '\n';
+  // Save this as the last active account (skip for test overrides)
+  if (db_path_override_.empty()) {
+    auto global_state_dir = platform_paths().state_dir;
+    std::filesystem::create_directories(global_state_dir);
+    std::ofstream last_account(global_state_dir / "last_account");
+    if (last_account) {
+      last_account << user_id << '\n';
+    }
   }
 
   log::cache()->info("Account database initialized for user {} at {}", user_id, db_path.string());
