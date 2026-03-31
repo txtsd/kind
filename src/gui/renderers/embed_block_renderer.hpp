@@ -41,6 +41,7 @@ private:
   QColor sidebar_color_;
 
   bool bare_image_{false};  // true for "image" and "gifv" embed types (no card)
+  bool thumb_below_{false}; // true when thumbnail is wide/rectangular (shown below text)
   mutable QRect title_rect_;
   mutable QRect bare_image_rect_;
 

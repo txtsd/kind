@@ -119,6 +119,8 @@ RenderedMessage compute_layout(
   }
 
   // Embeds
+  int bare_image_count = 0;
+  int bare_image_skipped = 0;
   for (const auto& embed : message.embeds) {
     QPixmap embed_img;
     QPixmap embed_thumb;
@@ -132,7 +134,18 @@ RenderedMessage compute_layout(
       }
     }
     if (embed.thumbnail) {
-      int thumb_size = (embed.type == "video") ? 520 : 128;
+      // Use full size for video embeds and rectangular thumbnails;
+      // square-ish thumbnails only need 128px
+      bool squareish = true;
+      if (embed.thumbnail->width.has_value() && embed.thumbnail->height.has_value()) {
+        double w = *embed.thumbnail->width;
+        double h = *embed.thumbnail->height;
+        if (w > 0 && h > 0) {
+          double ratio = w / h;
+          squareish = (ratio >= 0.8 && ratio <= 1.2);
+        }
+      }
+      int thumb_size = (embed.type == "video" || !squareish) ? 520 : 128;
       std::string key = add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
       if (!key.empty()) {
         auto it = images.find(key);
@@ -141,8 +154,30 @@ RenderedMessage compute_layout(
         }
       }
     }
+    // Limit bare-image embeds (image/gifv) to one per message
+    bool is_bare_image = (embed.type == "image" || embed.type == "gifv");
+    if (is_bare_image) {
+      ++bare_image_count;
+      if (bare_image_count > 1) {
+        ++bare_image_skipped;
+        continue;
+      }
+    }
+
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
         embed, viewport_width, font, embed_img, embed_thumb));
+  }
+
+  // Show indicator for skipped bare-image embeds
+  if (bare_image_skipped > 0) {
+    kind::ParsedContent extra_content;
+    kind::TextSpan indicator;
+    indicator.text = "(+" + std::to_string(bare_image_skipped) + " more image"
+                     + (bare_image_skipped > 1 ? "s" : "") + ")";
+    indicator.style = kind::TextSpan::Normal;
+    extra_content.blocks.push_back(std::move(indicator));
+    result.blocks.push_back(std::make_shared<TextBlockRenderer>(
+        extra_content, viewport_width, font, QString(), QString()));
   }
 
   // Attachments

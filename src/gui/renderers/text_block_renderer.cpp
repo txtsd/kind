@@ -54,9 +54,30 @@ void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         ? end_line.position().y() + end_line.height() + rect.top() + padding_
         : start_line.position().y() + start_line.height() + rect.top() + padding_;
 
+    // Measure the widest line within the code block to size the background
+    constexpr qreal code_padding = 12.0;
+    qreal max_line_width = 0.0;
+    for (int li = 0; li < text_layout_->lineCount(); ++li) {
+      QTextLine line = text_layout_->lineAt(li);
+      if (!line.isValid()) continue;
+      qreal line_top = line.position().y() + rect.top() + padding_;
+      qreal line_bottom = line_top + line.height();
+      // Check if this line overlaps the code block vertical range
+      if (line_bottom > top && line_top < bottom) {
+        qreal w = line.naturalTextWidth();
+        if (w > max_line_width) {
+          max_line_width = w;
+        }
+      }
+    }
+
     constexpr qreal cb_radius = 4.0;
-    QRectF bg(rect.left() + padding_, top,
-              rect.width() - 2 * padding_, bottom - top);
+    qreal bg_width = max_line_width + 2 * code_padding;
+    // Ensure a minimum width and don't exceed the available width
+    constexpr qreal min_code_bg_width = 60.0;
+    bg_width = std::max(bg_width, min_code_bg_width);
+    bg_width = std::min(bg_width, static_cast<qreal>(rect.width() - 2 * padding_));
+    QRectF bg(rect.left() + padding_, top, bg_width, bottom - top);
     QPainterPath cb_path;
     cb_path.addRoundedRect(bg, cb_radius, cb_radius);
     painter->fillPath(cb_path, QColor(30, 31, 34));

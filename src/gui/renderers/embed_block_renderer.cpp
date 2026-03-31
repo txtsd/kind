@@ -8,6 +8,24 @@
 namespace kind::gui {
 
 static constexpr int corner_radius = 4;
+static constexpr int max_image_height = 400;
+
+// Returns true when the thumbnail's aspect ratio is near-square (0.8..1.2).
+static bool is_thumbnail_squareish(const std::optional<kind::EmbedImage>& thumb_meta,
+                                   const QPixmap& thumb_pix) {
+  double w = 0.0, h = 0.0;
+  if (!thumb_pix.isNull()) {
+    w = thumb_pix.width();
+    h = thumb_pix.height();
+  } else if (thumb_meta && thumb_meta->width.has_value() && thumb_meta->height.has_value()) {
+    w = *thumb_meta->width;
+    h = *thumb_meta->height;
+  }
+  if (w <= 0 || h <= 0) return true; // unknown dims, default to square treatment
+  double ratio = w / h;
+  return ratio >= 0.8 && ratio <= 1.2;
+}
+
 static const QColor default_sidebar_color(0x20, 0x22, 0x25);
 static const QColor embed_background(0x2f, 0x31, 0x36);
 static const QColor title_link_color(0x00, 0xa8, 0xfc);
@@ -40,6 +58,12 @@ EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_wi
   // "image" and "gifv" embeds render as standalone images without a card
   bare_image_ = (embed_.type == "image" || embed_.type == "gifv");
 
+  // Rectangular (non-square) thumbnails render below text like an image
+  if (!bare_image_ && !thumbnail_.isNull()
+      && !is_thumbnail_squareish(embed_.thumbnail, thumbnail_)) {
+    thumb_below_ = true;
+  }
+
   int available = viewport_width - 24;
   embed_width_ = std::min(available, max_embed_width_);
   if (embed_width_ < 100) {
@@ -62,6 +86,10 @@ int EmbedBlockRenderer::compute_layout() {
     if (!pix.isNull()) {
       int img_w = std::min(pix.width(), max_w);
       int img_h = pix.height() * img_w / std::max(pix.width(), 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       return img_h;
     }
     // Use API dimensions for placeholder when available
@@ -70,13 +98,18 @@ int EmbedBlockRenderer::compute_layout() {
       int orig_w = *dim_source->width;
       int orig_h = *dim_source->height;
       int img_w = std::min(orig_w, max_w);
-      return orig_h * img_w / std::max(orig_w, 1);
+      int img_h = orig_h * img_w / std::max(orig_w, 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
+      return img_h;
     }
     return image_placeholder_height_;
   }
 
   // For video embeds (e.g. YouTube), treat thumbnail as the main image
-  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull());
+  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull() && !thumb_below_);
 
   QFontMetrics fm(font_);
   QFontMetrics small_fm(small_font_);
@@ -84,7 +117,8 @@ int EmbedBlockRenderer::compute_layout() {
   QFontMetrics small_bold_fm(small_bold_font_);
 
   int content_width = embed_width_ - sidebar_width_ - 2 * padding_;
-  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image;
+  // Square-ish thumbnails go top-right; rectangular ones go below text
+  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image && !thumb_below_;
   int text_area_width = has_thumbnail ? content_width - thumbnail_size_ - padding_ : content_width;
 
   int y = padding_;
@@ -180,22 +214,45 @@ int EmbedBlockRenderer::compute_layout() {
     if (!image_.isNull()) {
       int img_w = std::min(image_.width(), content_width);
       int img_h = image_.height() * img_w / std::max(image_.width(), 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       y += img_h + section_spacing_;
     } else if (embed_.image->width.has_value() && embed_.image->height.has_value()) {
       int orig_w = *embed_.image->width;
       int orig_h = *embed_.image->height;
       int img_w = std::min(orig_w, content_width);
       int img_h = orig_h * img_w / std::max(orig_w, 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       y += img_h + section_spacing_;
     } else {
       y += image_placeholder_height_ + section_spacing_;
     }
   }
 
+  // Rectangular thumbnail rendered below text (like an image)
+  if (thumb_below_) {
+    int img_w = std::min(thumbnail_.width(), content_width);
+    int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    if (img_h > max_image_height) {
+      img_w = img_w * max_image_height / std::max(img_h, 1);
+      img_h = max_image_height;
+    }
+    y += img_h + section_spacing_;
+  }
+
   // Video thumbnail rendered as large image (e.g. YouTube)
   if (video_thumb_as_image) {
     int img_w = std::min(thumbnail_.width(), content_width);
     int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    if (img_h > max_image_height) {
+      img_w = img_w * max_image_height / std::max(img_h, 1);
+      img_h = max_image_height;
+    }
     y += img_h + section_spacing_;
   } else if (embed_.type == "video" && image_.isNull() && thumbnail_.isNull()
              && embed_.thumbnail.has_value()) {
@@ -205,6 +262,10 @@ int EmbedBlockRenderer::compute_layout() {
       int orig_h = *embed_.thumbnail->height;
       int img_w = std::min(orig_w, content_width);
       int img_h = orig_h * img_w / std::max(orig_w, 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       y += img_h + section_spacing_;
     } else {
       y += image_placeholder_height_ + section_spacing_;
@@ -236,6 +297,10 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     if (!pix.isNull()) {
       int img_w = std::min(pix.width(), max_w);
       int img_h = pix.height() * img_w / std::max(pix.width(), 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       painter->drawPixmap(rect.left(), rect.top(), img_w, img_h, pix);
       bare_image_rect_ = QRect(rect.left(), rect.top(), img_w, img_h);
     } else {
@@ -247,6 +312,10 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         int orig_h = *dim_source->height;
         ph_w = std::min(orig_w, max_w);
         ph_h = orig_h * ph_w / std::max(orig_w, 1);
+        if (ph_h > max_image_height) {
+          ph_w = ph_w * max_image_height / std::max(ph_h, 1);
+          ph_h = max_image_height;
+        }
       }
       QRect placeholder(rect.left(), rect.top(), ph_w, ph_h);
       painter->fillRect(placeholder, image_placeholder_color);
@@ -265,9 +334,9 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   QFontMetrics bold_fm(bold_font_);
   QFontMetrics small_bold_fm(small_bold_font_);
 
-  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull());
+  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull() && !thumb_below_);
   int content_width = embed_width_ - sidebar_width_ - 2 * padding_;
-  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image;
+  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image && !thumb_below_;
   int text_area_width = has_thumbnail ? content_width - thumbnail_size_ - padding_ : content_width;
 
   int left = rect.left();
@@ -396,6 +465,10 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     if (!image_.isNull()) {
       int img_w = std::min(image_.width(), content_width);
       int img_h = image_.height() * img_w / std::max(image_.width(), 1);
+      if (img_h > max_image_height) {
+        img_w = img_w * max_image_height / std::max(img_h, 1);
+        img_h = max_image_height;
+      }
       painter->drawPixmap(x_base, y, img_w, img_h, image_);
       y += img_h + section_spacing_;
     } else {
@@ -407,6 +480,10 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         int orig_h = *embed_.image->height;
         ph_w = std::min(orig_w, content_width);
         ph_h = orig_h * ph_w / std::max(orig_w, 1);
+        if (ph_h > max_image_height) {
+          ph_w = ph_w * max_image_height / std::max(ph_h, 1);
+          ph_h = max_image_height;
+        }
       }
       QRect placeholder(x_base, y, ph_w, ph_h);
       painter->fillRect(placeholder, image_placeholder_color);
@@ -421,10 +498,26 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     }
   }
 
+  // Rectangular thumbnail rendered below text (like an image)
+  if (thumb_below_) {
+    int img_w = std::min(thumbnail_.width(), content_width);
+    int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    if (img_h > max_image_height) {
+      img_w = img_w * max_image_height / std::max(img_h, 1);
+      img_h = max_image_height;
+    }
+    painter->drawPixmap(x_base, y, img_w, img_h, thumbnail_);
+    y += img_h + section_spacing_;
+  }
+
   // Video thumbnail rendered as large image (e.g. YouTube)
   if (video_thumb_as_image) {
     int img_w = std::min(thumbnail_.width(), content_width);
     int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    if (img_h > max_image_height) {
+      img_w = img_w * max_image_height / std::max(img_h, 1);
+      img_h = max_image_height;
+    }
     painter->drawPixmap(x_base, y, img_w, img_h, thumbnail_);
     y += img_h + section_spacing_;
   } else if (embed_.type == "video" && image_.isNull() && thumbnail_.isNull()
@@ -436,6 +529,10 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       int orig_h = *embed_.thumbnail->height;
       ph_w = std::min(orig_w, content_width);
       ph_h = orig_h * ph_w / std::max(orig_w, 1);
+      if (ph_h > max_image_height) {
+        ph_w = ph_w * max_image_height / std::max(ph_h, 1);
+        ph_h = max_image_height;
+      }
     }
     QRect placeholder(x_base, y, ph_w, ph_h);
     painter->fillRect(placeholder, image_placeholder_color);

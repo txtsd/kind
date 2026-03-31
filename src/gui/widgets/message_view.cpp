@@ -382,7 +382,13 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
       try_get(add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
     }
     if (embed.thumbnail) {
-      int thumb_size = (embed.type == "video") ? 520 : 128;
+      bool squareish = true;
+      if (embed.thumbnail->width.has_value() && embed.thumbnail->height.has_value()) {
+        double ratio = static_cast<double>(*embed.thumbnail->width) /
+                       std::max(*embed.thumbnail->height, 1);
+        squareish = (ratio >= 0.8 && ratio <= 1.2);
+      }
+      int thumb_size = (embed.type == "video" || !squareish) ? 520 : 128;
       try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
@@ -446,7 +452,13 @@ void MessageView::request_images(const kind::Message& msg) {
     }
     if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
-      int thumb_size = (embed.type == "video") ? 520 : 128;
+      bool squareish = true;
+      if (embed.thumbnail->width.has_value() && embed.thumbnail->height.has_value()) {
+        double ratio = static_cast<double>(*embed.thumbnail->width) /
+                       std::max(*embed.thumbnail->height, 1);
+        squareish = (ratio >= 0.8 && ratio <= 1.2);
+      }
+      int thumb_size = (embed.type == "video" || !squareish) ? 520 : 128;
       request_image(add_image_size(key, thumb_size));
     }
   }
