@@ -11,8 +11,9 @@ static const QColor pill_highlight_border(0x58, 0x65, 0xf2);
 static const QColor pill_normal_border(0x4f, 0x54, 0x5c);
 
 ReactionBlockRenderer::ReactionBlockRenderer(const std::vector<kind::Reaction>& reactions,
-                                             const QFont& font)
-    : reactions_(reactions), font_(font) {
+                                             const QFont& font,
+                                             std::unordered_map<std::string, QPixmap> emoji_images)
+    : reactions_(reactions), font_(font), emoji_images_(std::move(emoji_images)) {
   compute_layout();
 }
 
@@ -20,12 +21,20 @@ void ReactionBlockRenderer::compute_layout() {
   QFontMetrics fm(font_);
   pill_layouts_.clear();
 
+  int emoji_size = pill_height_ - 6; // leave some padding inside the pill
+
   int x = 0;
   for (const auto& reaction : reactions_) {
-    QString label = QString::fromStdString(reaction.emoji_name) +
-                    " " + QString::number(reaction.count);
-    int text_width = fm.horizontalAdvance(label);
-    int pill_width = text_width + 2 * pill_padding_h_;
+    bool has_custom = emoji_images_.contains(reaction.emoji_name);
+    QString count_text = " " + QString::number(reaction.count);
+    int content_width;
+    if (has_custom) {
+      content_width = emoji_size + fm.horizontalAdvance(count_text);
+    } else {
+      QString label = QString::fromStdString(reaction.emoji_name) + count_text;
+      content_width = fm.horizontalAdvance(label);
+    }
+    int pill_width = content_width + 2 * pill_padding_h_;
 
     pill_layouts_.push_back({x, pill_width});
     x += pill_width + pill_gap_;
@@ -67,9 +76,22 @@ void ReactionBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
 
     // Draw emoji + count text
     painter->setPen(pill_text_color);
-    QString label = QString::fromStdString(reaction.emoji_name) +
-                    " " + QString::number(reaction.count);
-    painter->drawText(pill_rect, Qt::AlignCenter, label);
+    auto emoji_it = emoji_images_.find(reaction.emoji_name);
+    if (emoji_it != emoji_images_.end() && !emoji_it->second.isNull()) {
+      int emoji_size = pill_height_ - 6;
+      QString count_text = " " + QString::number(reaction.count);
+      int count_width = QFontMetrics(font_).horizontalAdvance(count_text);
+      int total_w = emoji_size + count_width;
+      int start_x = static_cast<int>(pill_rect.left()) + (static_cast<int>(pill_rect.width()) - total_w) / 2;
+      int emoji_y = static_cast<int>(pill_rect.top()) + (pill_height_ - emoji_size) / 2;
+      painter->drawPixmap(start_x, emoji_y, emoji_size, emoji_size, emoji_it->second);
+      QRectF text_rect(start_x + emoji_size, pill_rect.top(), count_width, pill_height_);
+      painter->drawText(text_rect, Qt::AlignVCenter, count_text);
+    } else {
+      QString label = QString::fromStdString(reaction.emoji_name) +
+                      " " + QString::number(reaction.count);
+      painter->drawText(pill_rect, Qt::AlignCenter, label);
+    }
   }
 
   painter->restore();

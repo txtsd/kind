@@ -4,14 +4,18 @@
 #include "renderers/block_renderer.hpp"
 
 #include <QFont>
+#include <QPixmap>
 #include <QRect>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kind::gui {
 
 class ReactionBlockRenderer : public BlockRenderer {
 public:
-  ReactionBlockRenderer(const std::vector<kind::Reaction>& reactions, const QFont& font);
+  ReactionBlockRenderer(const std::vector<kind::Reaction>& reactions, const QFont& font,
+                        std::unordered_map<std::string, QPixmap> emoji_images = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -26,6 +30,7 @@ private:
 
   std::vector<kind::Reaction> reactions_;
   QFont font_;
+  std::unordered_map<std::string, QPixmap> emoji_images_;
   int total_height_{0};
 
   struct PillLayout {
