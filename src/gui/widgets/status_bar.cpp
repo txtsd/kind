@@ -2,6 +2,10 @@
 
 #include "client.hpp"
 
+#include <QEvent>
+#include <QHelpEvent>
+#include <QToolTip>
+
 namespace kind::gui {
 
 StatusBar::StatusBar(kind::Client& client, QWidget* parent)
@@ -18,6 +22,7 @@ StatusBar::StatusBar(kind::Client& client, QWidget* parent)
 
   loading_->setVisible(false);
   loading_->setMouseTracking(true);
+  loading_->installEventFilter(this);
 
   hide_loading_timer_ = new QTimer(this);
   hide_loading_timer_->setSingleShot(true);
@@ -101,6 +106,20 @@ void StatusBar::update_loading() {
   loading_->setText(QString("\u23F3 %1 pending").arg(total_pending_));
   loading_->setToolTip(tooltip_lines.join('\n'));
   loading_->setVisible(true);
+}
+
+bool StatusBar::eventFilter(QObject* obj, QEvent* event) {
+  if (obj == loading_ && event->type() == QEvent::ToolTip) {
+    auto tip = loading_->toolTip();
+    if (!tip.isEmpty()) {
+      // Position the tooltip above the loading label, centered
+      auto pos = loading_->mapToGlobal(QPoint(loading_->width() / 2, 0));
+      pos.setY(pos.y() - 30); // offset above the label
+      QToolTip::showText(pos, tip, loading_);
+    }
+    return true; // consume the event
+  }
+  return QStatusBar::eventFilter(obj, event);
 }
 
 void StatusBar::update_latency() {

@@ -37,6 +37,7 @@ private:
   QMap<QString, int> pending_requests_;
   int total_pending_{0};
 
+  bool eventFilter(QObject* obj, QEvent* event) override;
   void update_latency();
   void update_loading();
 };
