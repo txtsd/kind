@@ -151,7 +151,8 @@ RenderedMessage compute_layout(
           squareish = (ratio >= 0.8 && ratio <= 1.2);
         }
       }
-      int thumb_size = (embed.type == "video" || !squareish) ? 520 : 128;
+      bool is_bare = (embed.type == "image" || embed.type == "gifv");
+      int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
       std::string key = add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
       if (!key.empty()) {
         auto it = images.find(key);
