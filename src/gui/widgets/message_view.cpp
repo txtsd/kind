@@ -148,7 +148,8 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   std::vector<RenderedMessage> layouts;
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
-    layouts.push_back(compute_layout(msg, width, view_font));
+    auto images = cached_pixmaps_for(msg);
+    layouts.push_back(compute_layout(msg, width, view_font, images));
     request_images(msg);
 
     // Request referenced message data for replies with missing context
@@ -165,7 +166,6 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   jump_pill_->set_count(0);
   fetching_history_ = false;
   pending_images_.clear();
-  pixmap_cache_.clear();
 
   save_scroll_state();
   current_channel_id_ = channel_id;
@@ -413,6 +413,10 @@ void MessageView::request_images(const kind::Message& msg) {
 
   auto request_image = [&](const std::string& url) {
     if (url.empty()) {
+      return;
+    }
+    // Skip if already decoded in pixmap cache
+    if (pixmap_cache_.contains(url)) {
       return;
     }
     pending_images_[url].push_back(msg.id);
