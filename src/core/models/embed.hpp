@@ -13,6 +13,7 @@ struct Embed {
   std::optional<std::string> description;
   std::optional<std::string> url;
   std::optional<int> color;
+  std::optional<EmbedProvider> provider;
   std::optional<EmbedAuthor> author;
   std::optional<EmbedFooter> footer;
   std::optional<EmbedImage> image;

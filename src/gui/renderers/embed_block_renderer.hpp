@@ -18,6 +18,7 @@ public:
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
   bool hit_test(const QPoint& pos, HitResult& result) const override;
+  QString tooltip_at(const QPoint& pos) const override;
 
 private:
   static constexpr int sidebar_width_ = 4;
@@ -41,6 +42,7 @@ private:
 
   bool bare_image_{false};  // true for "image" and "gifv" embed types (no card)
   mutable QRect title_rect_;
+  mutable QRect bare_image_rect_;
 
   struct FieldRow {
     int y_offset{0};

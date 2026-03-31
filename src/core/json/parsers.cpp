@@ -192,6 +192,13 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     if (eobj.contains("url")) embed.url = eobj["url"].toString().toStdString();
     if (eobj.contains("color")) embed.color = eobj["color"].toInt();
 
+    if (eobj.contains("provider") && eobj["provider"].isObject()) {
+      auto pobj = eobj["provider"].toObject();
+      EmbedProvider provider;
+      provider.name = pobj["name"].toString().toStdString();
+      if (pobj.contains("url")) provider.url = pobj["url"].toString().toStdString();
+      embed.provider = std::move(provider);
+    }
     if (eobj.contains("author") && eobj["author"].isObject()) {
       auto aobj = eobj["author"].toObject();
       EmbedAuthor embed_author;
@@ -208,6 +215,7 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       auto iobj = eobj["image"].toObject();
       EmbedImage image;
       image.url = iobj["url"].toString().toStdString();
+      if (iobj.contains("proxy_url")) image.proxy_url = iobj["proxy_url"].toString().toStdString();
       if (iobj.contains("width")) image.width = iobj["width"].toInt();
       if (iobj.contains("height")) image.height = iobj["height"].toInt();
       embed.image = std::move(image);
@@ -216,6 +224,7 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       auto tobj = eobj["thumbnail"].toObject();
       EmbedImage thumb;
       thumb.url = tobj["url"].toString().toStdString();
+      if (tobj.contains("proxy_url")) thumb.proxy_url = tobj["proxy_url"].toString().toStdString();
       if (tobj.contains("width")) thumb.width = tobj["width"].toInt();
       if (tobj.contains("height")) thumb.height = tobj["height"].toInt();
       embed.thumbnail = std::move(thumb);

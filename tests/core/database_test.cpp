@@ -663,7 +663,7 @@ TEST_F(DatabaseReaderTest, FullEmbedRoundTrip) {
     embed.color = 0xFF0000;
     embed.author = kind::EmbedAuthor{"Author", "https://author.com"};
     embed.footer = kind::EmbedFooter{"Footer"};
-    embed.image = kind::EmbedImage{"https://img.com/img.png", 400, 300};
+    embed.image = kind::EmbedImage{"https://img.com/img.png", std::nullopt, 400, 300};
     embed.fields.push_back({"Field1", "Value1", true});
     msg.embeds.push_back(std::move(embed));
     emit writer.message_write_requested(msg);

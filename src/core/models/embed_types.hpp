@@ -19,9 +19,16 @@ struct EmbedFooter {
 
 struct EmbedImage {
   std::string url;
+  std::optional<std::string> proxy_url;
   std::optional<int> width;
   std::optional<int> height;
   bool operator==(const EmbedImage&) const = default;
+};
+
+struct EmbedProvider {
+  std::string name;
+  std::optional<std::string> url;
+  bool operator==(const EmbedProvider&) const = default;
 };
 
 struct EmbedField {

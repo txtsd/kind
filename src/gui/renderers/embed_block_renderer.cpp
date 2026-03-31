@@ -79,6 +79,11 @@ int EmbedBlockRenderer::compute_layout() {
 
   int y = padding_;
 
+  // Provider
+  if (embed_.provider.has_value() && !embed_.provider->name.empty()) {
+    y += small_fm.height() + section_spacing_;
+  }
+
   // Author
   if (embed_.author.has_value()) {
     y += small_bold_fm.height() + section_spacing_;
@@ -191,6 +196,7 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       int img_w = std::min(pix.width(), max_w);
       int img_h = pix.height() * img_w / std::max(pix.width(), 1);
       painter->drawPixmap(rect.left(), rect.top(), img_w, img_h, pix);
+      bare_image_rect_ = QRect(rect.left(), rect.top(), img_w, img_h);
     } else {
       QRect placeholder(rect.left(), rect.top(), max_w, image_placeholder_height_);
       painter->fillRect(placeholder, image_placeholder_color);
@@ -198,6 +204,7 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       painter->setFont(small_font_);
       painter->setPen(dim_text_color);
       painter->drawText(placeholder, Qt::AlignCenter, QStringLiteral("Image"));
+      bare_image_rect_ = placeholder;
     }
     painter->restore();
     return;
@@ -242,6 +249,15 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   if (has_thumbnail) {
     int thumb_x = left + sidebar_width_ + padding_ + text_area_width + padding_;
     painter->drawPixmap(thumb_x, top + padding_, thumbnail_size_, thumbnail_size_, thumbnail_);
+  }
+
+  // Provider
+  if (embed_.provider.has_value() && !embed_.provider->name.empty()) {
+    painter->setFont(small_font_);
+    painter->setPen(dim_text_color);
+    painter->drawText(x_base, y + small_fm.ascent(),
+                      QString::fromStdString(embed_.provider->name));
+    y += small_fm.height() + section_spacing_;
   }
 
   // Author
@@ -365,6 +381,14 @@ bool EmbedBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
   }
 
   return false;
+}
+
+QString EmbedBlockRenderer::tooltip_at(const QPoint& pos) const {
+  if (bare_image_ && embed_.url.has_value()
+      && bare_image_rect_.isValid() && bare_image_rect_.contains(pos)) {
+    return QString::fromStdString(*embed_.url);
+  }
+  return {};
 }
 
 } // namespace kind::gui
