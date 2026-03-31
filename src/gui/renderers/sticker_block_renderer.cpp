@@ -32,7 +32,10 @@ void StickerBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     painter->fillRect(placeholder, placeholder_color);
     painter->setFont(font_);
     painter->setPen(dim_text_color);
-    QString label = QString::fromStdString(sticker_.name);
+    bool is_lottie = (sticker_.format_type == 3);
+    QString label = is_lottie
+        ? QString("Lottie: %1").arg(QString::fromStdString(sticker_.name))
+        : QString::fromStdString(sticker_.name);
     painter->drawText(placeholder, Qt::AlignCenter | Qt::TextWordWrap, label);
   }
 
