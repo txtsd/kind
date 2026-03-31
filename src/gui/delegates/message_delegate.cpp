@@ -3,8 +3,11 @@
 #include "models/message_model.hpp"
 #include "models/rendered_message.hpp"
 
+#include <QDesktopServices>
 #include <QFontMetrics>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QUrl>
 
 namespace kind::gui {
 
@@ -62,6 +65,41 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem& option, const QModel
   // Fallback: estimate single line height
   QFontMetrics fm(option.font);
   return QSize(option.rect.width() > 0 ? option.rect.width() : 400, fm.height() + 2 * padding_);
+}
+
+bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
+                                  const QStyleOptionViewItem& option,
+                                  const QModelIndex& index) {
+  if (event->type() != QEvent::MouseButtonRelease) {
+    return false;
+  }
+
+  auto* mouse = static_cast<QMouseEvent*>(event);
+  auto click = mouse->position().toPoint();
+
+  auto ptr = index.data(MessageModel::RenderedLayoutRole).value<const void*>();
+  auto* rendered = static_cast<const RenderedMessage*>(ptr);
+  if (!rendered || !rendered->valid) {
+    return false;
+  }
+
+  int y = option.rect.top();
+  for (const auto& block : rendered->blocks) {
+    int block_h = block->height(option.rect.width());
+    QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+    if (block_rect.contains(click)) {
+      HitResult result;
+      QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
+      if (block->hit_test(local, result)) {
+        if (result.type == HitResult::Link && !result.url.empty()) {
+          QDesktopServices::openUrl(QUrl(QString::fromStdString(result.url)));
+          return true;
+        }
+      }
+    }
+    y += block_h;
+  }
+  return false;
 }
 
 } // namespace kind::gui
