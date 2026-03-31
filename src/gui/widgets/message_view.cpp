@@ -107,7 +107,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
     layouts.push_back(compute_layout(msg, width, view_font));
-    request_missing_images(msg);
+    request_images(msg);
   }
   return layouts;
 }
@@ -183,7 +183,7 @@ void MessageView::add_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
-  request_missing_images(msg);
+  request_images(msg);
 
   if (!auto_scroll_) {
     unread_count_++;
@@ -197,7 +197,7 @@ void MessageView::update_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
-  request_missing_images(msg);
+  request_images(msg);
 }
 
 void MessageView::mark_deleted(kind::Snowflake /*channel_id*/, kind::Snowflake message_id) {
@@ -328,48 +328,45 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
   return images;
 }
 
-void MessageView::request_missing_images(const kind::Message& msg) {
+void MessageView::request_images(const kind::Message& msg) {
   if (!image_cache_) {
     return;
   }
 
-  auto request_if_missing = [&](const std::string& url) {
+  auto request_image = [&](const std::string& url) {
     if (url.empty()) {
       return;
     }
-    if (!image_cache_->get(url)) {
-      log::client()->debug("Image cache miss, requesting: {}", url);
-      pending_images_[url].push_back(msg.id);
-      image_cache_->request(url);
-    }
+    pending_images_[url].push_back(msg.id);
+    image_cache_->request(url);
   };
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
       std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      request_if_missing(key);
+      request_image(key);
     }
     if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
-      request_if_missing(key);
+      request_image(key);
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      request_if_missing(att.url);
+      request_image(att.url);
     }
   }
   for (const auto& sticker : msg.sticker_items) {
     auto url = kind::sticker_cdn_url(sticker);
     if (url) {
-      request_if_missing(*url);
+      request_image(*url);
     }
   }
   for (const auto& reaction : msg.reactions) {
     if (reaction.emoji_id.has_value()) {
       auto url = "https://cdn.discordapp.com/emojis/"
                  + std::to_string(*reaction.emoji_id) + ".webp?size=48";
-      request_if_missing(url);
+      request_image(url);
     }
   }
 }

@@ -78,7 +78,7 @@ private:
   void scroll_to_bottom();
   void position_jump_pill();
   std::unordered_map<std::string, QPixmap> collect_images(const kind::Message& msg);
-  void request_missing_images(const kind::Message& msg);
+  void request_images(const kind::Message& msg);
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
 
