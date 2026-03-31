@@ -151,6 +151,18 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       msg.referenced_message_id = static_cast<Snowflake>(ref["message_id"].toString().toULongLong());
     }
   }
+  if (obj.contains("referenced_message") && obj["referenced_message"].isObject()) {
+    auto ref_msg = obj["referenced_message"].toObject();
+    if (ref_msg.contains("author") && ref_msg["author"].isObject()) {
+      msg.referenced_message_author = ref_msg["author"].toObject()["username"].toString().toStdString();
+    }
+    if (ref_msg.contains("content")) {
+      msg.referenced_message_content = ref_msg["content"].toString().toStdString();
+    }
+    if (!msg.referenced_message_id.has_value() && ref_msg.contains("id")) {
+      msg.referenced_message_id = static_cast<Snowflake>(ref_msg["id"].toString().toULongLong());
+    }
+  }
 
   // Mentions
   msg.mention_everyone = obj["mention_everyone"].toBool(false);

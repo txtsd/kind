@@ -27,6 +27,8 @@ struct Message {
   bool pinned{false};
   bool deleted{false};
   std::optional<Snowflake> referenced_message_id;
+  std::optional<std::string> referenced_message_author;
+  std::optional<std::string> referenced_message_content;
   std::vector<Mention> mentions;
   bool mention_everyone{false};
   std::vector<Snowflake> mention_roles;

@@ -45,8 +45,14 @@ RenderedMessage compute_layout(
 
     // Reply block before text
     if (message.referenced_message_id.has_value()) {
+      QString ref_author = message.referenced_message_author
+          ? QString::fromStdString(*message.referenced_message_author)
+          : QString("Unknown");
+      QString ref_content = message.referenced_message_content
+          ? QString::fromStdString(*message.referenced_message_content)
+          : QString("...");
       result.blocks.push_back(std::make_shared<ReplyBlockRenderer>(
-          QString("Unknown"), QString("..."),
+          ref_author, ref_content,
           *message.referenced_message_id, viewport_width, font));
     }
 
