@@ -52,5 +52,7 @@ endif()
 
 if(KIND_BUILD_TESTS)
   enable_testing()
+  cmake_host_system_information(RESULT _kind_num_cores QUERY NUMBER_OF_LOGICAL_CORES)
+  set(CMAKE_CTEST_ARGUMENTS "--parallel;${_kind_num_cores}")
   add_subdirectory(tests)
 endif()

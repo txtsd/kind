@@ -1,5 +1,6 @@
 #include "cache/image_cache.hpp"
 
+#include <atomic>
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QFile>
@@ -13,7 +14,10 @@ protected:
   std::filesystem::path cache_dir_;
 
   void SetUp() override {
-    cache_dir_ = std::filesystem::temp_directory_path() / "kind_img_cache_test";
+    static std::atomic<int> seq{0};
+    cache_dir_ = std::filesystem::temp_directory_path()
+        / ("kind_img_cache_test_" + std::to_string(static_cast<int>(getpid()))
+           + "_" + std::to_string(seq.fetch_add(1)));
     std::filesystem::remove_all(cache_dir_);
   }
 

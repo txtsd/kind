@@ -6,8 +6,20 @@
 #include <QSqlQuery>
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <gtest/gtest.h>
+
+namespace {
+std::filesystem::path unique_temp_dir(const std::string& prefix) {
+  static std::atomic<int> counter{0};
+  auto pid = std::to_string(static_cast<int>(getpid()));
+  auto seq = std::to_string(counter.fetch_add(1));
+  auto dir = std::filesystem::temp_directory_path() / (prefix + "_" + pid + "_" + seq);
+  std::filesystem::remove_all(dir);
+  return dir;
+}
+} // namespace
 
 class DatabaseManagerTest : public ::testing::Test {
 protected:
@@ -15,7 +27,7 @@ protected:
   std::filesystem::path db_path_;
 
   void SetUp() override {
-    db_dir_ = std::filesystem::temp_directory_path() / "kind_db_test";
+    db_dir_ = unique_temp_dir("kind_db_test");
     std::filesystem::remove_all(db_dir_);
     db_path_ = db_dir_ / "test.db";
   }
@@ -89,7 +101,7 @@ protected:
   std::filesystem::path db_path_;
 
   void SetUp() override {
-    db_dir_ = std::filesystem::temp_directory_path() / "kind_dbw_test";
+    db_dir_ = unique_temp_dir("kind_dbw_test");
     std::filesystem::remove_all(db_dir_);
     db_path_ = db_dir_ / "test.db";
     kind::DatabaseManager mgr(db_path_);
@@ -345,7 +357,7 @@ protected:
   std::filesystem::path db_path_;
 
   void SetUp() override {
-    db_dir_ = std::filesystem::temp_directory_path() / "kind_dbr_test";
+    db_dir_ = unique_temp_dir("kind_dbr_test");
     std::filesystem::remove_all(db_dir_);
     db_path_ = db_dir_ / "test.db";
     kind::DatabaseManager mgr(db_path_);
