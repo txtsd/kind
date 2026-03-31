@@ -180,9 +180,17 @@ private:
       }
     }
 
-    // Parse current user's roles per guild from merged_members (user tokens)
+    // Parse current user's roles per guild from merged_members (user tokens).
+    // merged_members indices correspond to guilds_array, not the filtered
+    // guilds vector (which skips unavailable guilds).
     auto merged_members = obj["merged_members"].toArray();
-    for (int i = 0; i < merged_members.size() && i < static_cast<int>(guilds.size()); ++i) {
+    for (int i = 0; i < merged_members.size() && i < guilds_array.size(); ++i) {
+      auto guild_obj = guilds_array[i].toObject();
+      if (guild_obj["unavailable"].toBool(false)) {
+        continue;
+      }
+      auto guild_id = static_cast<Snowflake>(guild_obj["id"].toString().toULongLong());
+
       auto member_array = merged_members[i].toArray();
       if (member_array.isEmpty()) {
         continue;
@@ -194,7 +202,6 @@ private:
       for (const auto& val : roles_array) {
         role_ids.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
       }
-      auto guild_id = guilds[static_cast<size_t>(i)].id;
       if (client_.db_writer_) {
         emit client_.db_writer_->member_roles_write_requested(guild_id, role_ids);
       }
