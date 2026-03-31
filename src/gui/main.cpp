@@ -179,6 +179,7 @@ int main(int argc, char* argv[]) {
   QObject::connect(hide_locked_action, &QAction::toggled,
                    [&config, &client, channel_list, &current_guild_id, &compute_channel_permissions](bool checked) {
                      config.set<bool>("appearance.hide_locked_channels", checked);
+                     config.save();
                      auto channels = client.channels(current_guild_id);
                      if (!channels.empty()) {
                        QVector<kind::Channel> qvec(channels.begin(), channels.end());
