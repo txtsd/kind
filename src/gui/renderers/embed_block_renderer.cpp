@@ -279,9 +279,9 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       painter->setPen(text_color);
     }
     QString title_text = QString::fromStdString(*embed_.title);
-    QRect text_rect(x_base, y, text_area_width, 0);
-    QRect bounding;
-    painter->drawText(text_rect, Qt::TextWordWrap, title_text, &bounding);
+    QRect bounding = bold_fm.boundingRect(x_base, y, text_area_width, 0,
+                                          Qt::TextWordWrap, title_text);
+    painter->drawText(bounding, Qt::TextWordWrap, title_text);
     title_rect_ = bounding;
     y += bounding.height() + section_spacing_;
   }
@@ -291,9 +291,9 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     painter->setFont(font_);
     painter->setPen(text_color);
     QString desc_text = QString::fromStdString(*embed_.description);
-    QRect text_rect(x_base, y, text_area_width, 0);
-    QRect bounding;
-    painter->drawText(text_rect, Qt::TextWordWrap, desc_text, &bounding);
+    QRect bounding = fm.boundingRect(x_base, y, text_area_width, 0,
+                                     Qt::TextWordWrap, desc_text);
+    painter->drawText(bounding, Qt::TextWordWrap, desc_text);
     y += bounding.height() + section_spacing_;
   }
 
@@ -311,16 +311,17 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         painter->setFont(small_bold_font_);
         painter->setPen(field_name_color);
         QString name = QString::fromStdString(field->name);
-        QRect name_rect(fx, fy, fw, 0);
-        QRect name_bounding;
-        painter->drawText(name_rect, Qt::TextWordWrap, name, &name_bounding);
+        QRect name_bounding = small_bold_fm.boundingRect(fx, fy, fw, 0,
+                                                         Qt::TextWordWrap, name);
+        painter->drawText(name_bounding, Qt::TextWordWrap, name);
 
         // Field value
         painter->setFont(font_);
         painter->setPen(field_value_color);
         QString value = QString::fromStdString(field->value);
-        QRect value_rect(fx, fy + name_bounding.height() + 4, fw, 0);
-        painter->drawText(value_rect, Qt::TextWordWrap, value);
+        QRect value_bounding = fm.boundingRect(fx, fy + name_bounding.height() + 4, fw, 0,
+                                               Qt::TextWordWrap, value);
+        painter->drawText(value_bounding, Qt::TextWordWrap, value);
       }
     }
   }
