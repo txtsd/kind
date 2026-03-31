@@ -186,6 +186,7 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
   for (const auto& val : obj["embeds"].toArray()) {
     auto eobj = val.toObject();
     Embed embed;
+    embed.type = eobj["type"].toString("rich").toStdString();
     if (eobj.contains("title")) embed.title = eobj["title"].toString().toStdString();
     if (eobj.contains("description")) embed.description = eobj["description"].toString().toStdString();
     if (eobj.contains("url")) embed.url = eobj["url"].toString().toStdString();

@@ -37,6 +37,9 @@ EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_wi
     sidebar_color_ = default_sidebar_color;
   }
 
+  // "image" and "gifv" embeds render as standalone images without a card
+  bare_image_ = (embed_.type == "image" || embed_.type == "gifv");
+
   int available = viewport_width - 24;
   embed_width_ = std::min(available, max_embed_width_);
   if (embed_width_ < 100) {
@@ -51,6 +54,20 @@ int EmbedBlockRenderer::height(int /*width*/) const {
 }
 
 int EmbedBlockRenderer::compute_layout() {
+  // Bare image embeds (image/gifv): just the image, no card
+  if (bare_image_) {
+    int max_w = embed_width_;
+    // Prefer the image field, fall back to thumbnail
+    const QPixmap& pix = !image_.isNull() ? image_ : thumbnail_;
+    if (!pix.isNull()) {
+      int img_w = std::min(pix.width(), max_w);
+      int img_h = pix.height() * img_w / std::max(pix.width(), 1);
+      return img_h;
+    }
+    // Placeholder while loading
+    return image_placeholder_height_;
+  }
+
   QFontMetrics fm(font_);
   QFontMetrics small_fm(small_font_);
   QFontMetrics bold_fm(bold_font_);
@@ -165,6 +182,26 @@ int EmbedBlockRenderer::compute_layout() {
 
 void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   painter->save();
+
+  // Bare image embeds: render just the image with no card
+  if (bare_image_) {
+    int max_w = embed_width_;
+    const QPixmap& pix = !image_.isNull() ? image_ : thumbnail_;
+    if (!pix.isNull()) {
+      int img_w = std::min(pix.width(), max_w);
+      int img_h = pix.height() * img_w / std::max(pix.width(), 1);
+      painter->drawPixmap(rect.left(), rect.top(), img_w, img_h, pix);
+    } else {
+      QRect placeholder(rect.left(), rect.top(), max_w, image_placeholder_height_);
+      painter->fillRect(placeholder, image_placeholder_color);
+      QFontMetrics small_fm(small_font_);
+      painter->setFont(small_font_);
+      painter->setPen(dim_text_color);
+      painter->drawText(placeholder, Qt::AlignCenter, QStringLiteral("Image"));
+    }
+    painter->restore();
+    return;
+  }
 
   QFontMetrics fm(font_);
   QFontMetrics small_fm(small_font_);

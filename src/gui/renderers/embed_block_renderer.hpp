@@ -39,6 +39,7 @@ private:
   QPixmap thumbnail_;
   QColor sidebar_color_;
 
+  bool bare_image_{false};  // true for "image" and "gifv" embed types (no card)
   mutable QRect title_rect_;
 
   struct FieldRow {

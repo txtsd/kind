@@ -8,6 +8,7 @@
 namespace kind {
 
 struct Embed {
+  std::string type;  // "rich", "image", "gifv", "video", "link", "article"
   std::optional<std::string> title;
   std::optional<std::string> description;
   std::optional<std::string> url;
