@@ -9,6 +9,7 @@ struct Attachment {
   Snowflake id{};
   std::string filename;
   std::string url;
+  std::string proxy_url;
   std::size_t size{};
   std::optional<std::string> content_type;
   std::optional<int> width;

@@ -19,8 +19,9 @@ AttachmentBlockRenderer::AttachmentBlockRenderer(const kind::Attachment& attachm
   is_image_ = !is_video_ && attachment_.width.has_value() && attachment_.height.has_value();
 
   if (is_image_ || is_video_) {
-    int orig_w = *attachment_.width;
-    int orig_h = *attachment_.height;
+    // Use actual image dimensions when available, fall back to attachment metadata
+    int orig_w = (!image_.isNull()) ? image_.width() : attachment_.width.value_or(320);
+    int orig_h = (!image_.isNull()) ? image_.height() : attachment_.height.value_or(240);
 
     display_width_ = orig_w;
     display_height_ = orig_h;

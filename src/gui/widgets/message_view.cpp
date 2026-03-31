@@ -388,7 +388,21 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      try_get(add_image_size(att.url, 520));
+      if (att.is_video() && !att.proxy_url.empty()) {
+        int req_w = att.width.value_or(520);
+        int req_h = att.height.value_or(520);
+        if (req_w > 520) {
+          req_h = req_h * 520 / std::max(req_w, 1);
+          req_w = 520;
+        }
+        if (req_h > 300) {
+          req_w = req_w * 300 / std::max(req_h, 1);
+          req_h = 300;
+        }
+        try_get(add_image_size(att.proxy_url, req_w, req_h) + "&format=webp");
+      } else {
+        try_get(add_image_size(att.url, 520));
+      }
     }
   }
   for (const auto& sticker : msg.sticker_items) {
@@ -438,7 +452,23 @@ void MessageView::request_images(const kind::Message& msg) {
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      request_image(add_image_size(att.url, 520));
+      if (att.is_video() && !att.proxy_url.empty()) {
+        // Use proxy URL with format=webp to get a video thumbnail frame
+        // Pass correct aspect ratio dimensions so Discord doesn't square-crop
+        int req_w = att.width.value_or(520);
+        int req_h = att.height.value_or(520);
+        if (req_w > 520) {
+          req_h = req_h * 520 / std::max(req_w, 1);
+          req_w = 520;
+        }
+        if (req_h > 300) {
+          req_w = req_w * 300 / std::max(req_h, 1);
+          req_h = 300;
+        }
+        request_image(add_image_size(att.proxy_url, req_w, req_h) + "&format=webp");
+      } else {
+        request_image(add_image_size(att.url, 520));
+      }
     }
   }
   for (const auto& sticker : msg.sticker_items) {

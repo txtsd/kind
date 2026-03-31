@@ -149,7 +149,23 @@ RenderedMessage compute_layout(
   for (const auto& att : message.attachments) {
     QPixmap att_img;
     if (att.width.has_value() && !att.url.empty()) {
-      auto it = images.find(add_image_size(att.url, 520));
+      std::string key;
+      if (att.is_video() && !att.proxy_url.empty()) {
+        int req_w = att.width.value_or(520);
+        int req_h = att.height.value_or(520);
+        if (req_w > 520) {
+          req_h = req_h * 520 / std::max(req_w, 1);
+          req_w = 520;
+        }
+        if (req_h > 300) {
+          req_w = req_w * 300 / std::max(req_h, 1);
+          req_h = 300;
+        }
+        key = add_image_size(att.proxy_url, req_w, req_h) + "&format=webp";
+      } else {
+        key = add_image_size(att.url, 520);
+      }
+      auto it = images.find(key);
       if (it != images.end()) {
         att_img = it->second;
       }
