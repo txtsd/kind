@@ -64,9 +64,19 @@ int EmbedBlockRenderer::compute_layout() {
       int img_h = pix.height() * img_w / std::max(pix.width(), 1);
       return img_h;
     }
-    // Placeholder while loading
+    // Use API dimensions for placeholder when available
+    const auto& dim_source = embed_.image ? embed_.image : embed_.thumbnail;
+    if (dim_source && dim_source->width.has_value() && dim_source->height.has_value()) {
+      int orig_w = *dim_source->width;
+      int orig_h = *dim_source->height;
+      int img_w = std::min(orig_w, max_w);
+      return orig_h * img_w / std::max(orig_w, 1);
+    }
     return image_placeholder_height_;
   }
+
+  // For video embeds (e.g. YouTube), treat thumbnail as the main image
+  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull());
 
   QFontMetrics fm(font_);
   QFontMetrics small_fm(small_font_);
@@ -74,7 +84,7 @@ int EmbedBlockRenderer::compute_layout() {
   QFontMetrics small_bold_fm(small_bold_font_);
 
   int content_width = embed_width_ - sidebar_width_ - 2 * padding_;
-  bool has_thumbnail = thumbnail_.isNull() == false;
+  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image;
   int text_area_width = has_thumbnail ? content_width - thumbnail_size_ - padding_ : content_width;
 
   int y = padding_;
@@ -171,6 +181,31 @@ int EmbedBlockRenderer::compute_layout() {
       int img_w = std::min(image_.width(), content_width);
       int img_h = image_.height() * img_w / std::max(image_.width(), 1);
       y += img_h + section_spacing_;
+    } else if (embed_.image->width.has_value() && embed_.image->height.has_value()) {
+      int orig_w = *embed_.image->width;
+      int orig_h = *embed_.image->height;
+      int img_w = std::min(orig_w, content_width);
+      int img_h = orig_h * img_w / std::max(orig_w, 1);
+      y += img_h + section_spacing_;
+    } else {
+      y += image_placeholder_height_ + section_spacing_;
+    }
+  }
+
+  // Video thumbnail rendered as large image (e.g. YouTube)
+  if (video_thumb_as_image) {
+    int img_w = std::min(thumbnail_.width(), content_width);
+    int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    y += img_h + section_spacing_;
+  } else if (embed_.type == "video" && image_.isNull() && thumbnail_.isNull()
+             && embed_.thumbnail.has_value()) {
+    // Video embed without loaded thumbnail: use API dimensions for placeholder
+    if (embed_.thumbnail->width.has_value() && embed_.thumbnail->height.has_value()) {
+      int orig_w = *embed_.thumbnail->width;
+      int orig_h = *embed_.thumbnail->height;
+      int img_w = std::min(orig_w, content_width);
+      int img_h = orig_h * img_w / std::max(orig_w, 1);
+      y += img_h + section_spacing_;
     } else {
       y += image_placeholder_height_ + section_spacing_;
     }
@@ -198,7 +233,16 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       painter->drawPixmap(rect.left(), rect.top(), img_w, img_h, pix);
       bare_image_rect_ = QRect(rect.left(), rect.top(), img_w, img_h);
     } else {
-      QRect placeholder(rect.left(), rect.top(), max_w, image_placeholder_height_);
+      int ph_w = max_w;
+      int ph_h = image_placeholder_height_;
+      const auto& dim_source = embed_.image ? embed_.image : embed_.thumbnail;
+      if (dim_source && dim_source->width.has_value() && dim_source->height.has_value()) {
+        int orig_w = *dim_source->width;
+        int orig_h = *dim_source->height;
+        ph_w = std::min(orig_w, max_w);
+        ph_h = orig_h * ph_w / std::max(orig_w, 1);
+      }
+      QRect placeholder(rect.left(), rect.top(), ph_w, ph_h);
       painter->fillRect(placeholder, image_placeholder_color);
       QFontMetrics small_fm(small_font_);
       painter->setFont(small_font_);
@@ -215,8 +259,9 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   QFontMetrics bold_fm(bold_font_);
   QFontMetrics small_bold_fm(small_bold_font_);
 
+  bool video_thumb_as_image = (embed_.type == "video" && !thumbnail_.isNull() && image_.isNull());
   int content_width = embed_width_ - sidebar_width_ - 2 * padding_;
-  bool has_thumbnail = !thumbnail_.isNull();
+  bool has_thumbnail = !thumbnail_.isNull() && !video_thumb_as_image;
   int text_area_width = has_thumbnail ? content_width - thumbnail_size_ - padding_ : content_width;
 
   int left = rect.left();
@@ -348,8 +393,16 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
       painter->drawPixmap(x_base, y, img_w, img_h, image_);
       y += img_h + section_spacing_;
     } else {
-      // Placeholder rectangle
-      QRect placeholder(x_base, y, content_width, image_placeholder_height_);
+      // Placeholder rectangle sized using API dimensions when available
+      int ph_w = content_width;
+      int ph_h = image_placeholder_height_;
+      if (embed_.image->width.has_value() && embed_.image->height.has_value()) {
+        int orig_w = *embed_.image->width;
+        int orig_h = *embed_.image->height;
+        ph_w = std::min(orig_w, content_width);
+        ph_h = orig_h * ph_w / std::max(orig_w, 1);
+      }
+      QRect placeholder(x_base, y, ph_w, ph_h);
       painter->fillRect(placeholder, image_placeholder_color);
       painter->setFont(small_font_);
       painter->setPen(dim_text_color);
@@ -358,8 +411,32 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         placeholder_text = QString("%1x%2").arg(*embed_.image->width).arg(*embed_.image->height);
       }
       painter->drawText(placeholder, Qt::AlignCenter, placeholder_text);
-      y += image_placeholder_height_ + section_spacing_;
+      y += ph_h + section_spacing_;
     }
+  }
+
+  // Video thumbnail rendered as large image (e.g. YouTube)
+  if (video_thumb_as_image) {
+    int img_w = std::min(thumbnail_.width(), content_width);
+    int img_h = thumbnail_.height() * img_w / std::max(thumbnail_.width(), 1);
+    painter->drawPixmap(x_base, y, img_w, img_h, thumbnail_);
+    y += img_h + section_spacing_;
+  } else if (embed_.type == "video" && image_.isNull() && thumbnail_.isNull()
+             && embed_.thumbnail.has_value()) {
+    int ph_w = content_width;
+    int ph_h = image_placeholder_height_;
+    if (embed_.thumbnail->width.has_value() && embed_.thumbnail->height.has_value()) {
+      int orig_w = *embed_.thumbnail->width;
+      int orig_h = *embed_.thumbnail->height;
+      ph_w = std::min(orig_w, content_width);
+      ph_h = orig_h * ph_w / std::max(orig_w, 1);
+    }
+    QRect placeholder(x_base, y, ph_w, ph_h);
+    painter->fillRect(placeholder, image_placeholder_color);
+    painter->setFont(small_font_);
+    painter->setPen(dim_text_color);
+    painter->drawText(placeholder, Qt::AlignCenter, QStringLiteral("Video"));
+    y += ph_h + section_spacing_;
   }
 
   // Footer
