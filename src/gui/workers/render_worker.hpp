@@ -11,8 +11,11 @@
 
 namespace kind::gui {
 
+enum class EditedIndicator { Text, Icon, Both };
+
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
-    const std::unordered_map<std::string, QPixmap>& images = {});
+    const std::unordered_map<std::string, QPixmap>& images = {},
+    EditedIndicator edited_style = EditedIndicator::Text);
 
 } // namespace kind::gui

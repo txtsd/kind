@@ -70,6 +70,17 @@ int main(int argc, char* argv[]) {
   auto* channel_list = new kind::gui::ChannelList();
   auto* message_view = new kind::gui::MessageView();
   message_view->set_image_cache(client.image_cache());
+
+  // Edited message indicator preference
+  auto edited_pref = config.get_or<std::string>("appearance.edited_indicator", "text");
+  if (edited_pref == "icon") {
+    message_view->set_edited_indicator(kind::gui::EditedIndicator::Icon);
+  } else if (edited_pref == "both") {
+    message_view->set_edited_indicator(kind::gui::EditedIndicator::Both);
+  } else {
+    message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
+  }
+
   auto* message_input = new kind::gui::MessageInput();
 
   // Populate server list from disk cache immediately

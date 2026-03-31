@@ -41,7 +41,8 @@ static std::string add_image_size(const std::string& url, int display_width, int
 
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
-    const std::unordered_map<std::string, QPixmap>& images) {
+    const std::unordered_map<std::string, QPixmap>& images,
+    EditedIndicator edited_style) {
   RenderedMessage result;
   result.viewport_width = viewport_width;
 
@@ -86,13 +87,20 @@ RenderedMessage compute_layout(
     // Parse content with markdown
     auto parsed = kind::markdown::parse(message.content);
 
-    // Append "(edited)" indicator as a separate span so it never
-    // becomes part of a link or other styled span.
+    // Append edited indicator based on user preference
     if (message.edited_timestamp.has_value()) {
-      kind::TextSpan edited_span;
-      edited_span.text = " (edited)";
-      edited_span.style = kind::TextSpan::Normal;
-      parsed.blocks.push_back(std::move(edited_span));
+      if (edited_style == EditedIndicator::Text || edited_style == EditedIndicator::Both) {
+        kind::TextSpan edited_span;
+        edited_span.text = " (edited)";
+        edited_span.style = kind::TextSpan::Dim;
+        parsed.blocks.push_back(std::move(edited_span));
+      }
+    }
+
+    // Prepend pencil icon to timestamp for edited messages
+    if (message.edited_timestamp.has_value()
+        && (edited_style == EditedIndicator::Icon || edited_style == EditedIndicator::Both)) {
+      time_str = QString::fromUtf8("\u270f ") + time_str;
     }
 
     // Hide message text when content is a single URL that produced an image/gifv embed

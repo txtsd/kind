@@ -3,6 +3,7 @@
 #include "models/message.hpp"
 #include "models/rendered_message.hpp"
 #include "models/snowflake.hpp"
+#include "workers/render_worker.hpp"
 
 #include <QHash>
 #include <QListView>
@@ -34,6 +35,7 @@ public:
   MessageModel* message_model() const { return model_; }
 
   void set_image_cache(kind::ImageCache* cache);
+  void set_edited_indicator(kind::gui::EditedIndicator style);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
   void scroll_to_message(kind::Snowflake message_id);
@@ -83,6 +85,8 @@ private:
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
   void updateGeometries() override;
+
+  kind::gui::EditedIndicator edited_indicator_{kind::gui::EditedIndicator::Text};
 
   kind::Snowflake highlight_id_{0};
   qreal highlight_opacity_{0.0};

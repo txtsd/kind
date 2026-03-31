@@ -222,6 +222,10 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
           fmt.setForeground(QColor(30, 30, 30));
           fmt.setBackground(QColor(30, 30, 30));
         }
+        if (span.style & TextSpan::Dim) {
+          fmt.setForeground(QColor(100, 100, 100));
+          fmt.setFontPointSize(std::max(font.pointSize() - 2, 7));
+        }
         if (span.link_url.has_value()) {
           fmt.setForeground(QColor(0, 168, 252));
           fmt.setFontUnderline(true);

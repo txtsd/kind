@@ -20,6 +20,7 @@ struct TextSpan {
     Underline = 1 << 3,
     InlineCode = 1 << 4,
     Spoiler = 1 << 5,
+    Dim = 1 << 6,
   };
   uint8_t style{0};
   std::optional<std::string> link_url;

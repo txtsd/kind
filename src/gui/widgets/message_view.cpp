@@ -60,7 +60,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     layouts.reserve(msgs.size());
     for (const auto& msg : msgs) {
       auto images = cached_pixmaps_for(msg);
-      layouts.push_back(compute_layout(msg, width, view_font, images));
+      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_));
     }
     model_->set_messages(msgs, std::move(layouts));
   });
@@ -149,7 +149,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
     auto images = cached_pixmaps_for(msg);
-    layouts.push_back(compute_layout(msg, width, view_font, images));
+    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_));
     request_images(msg);
 
     // Try to resolve reply context from locally loaded messages
@@ -232,7 +232,7 @@ void MessageView::add_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_));
   request_images(msg);
 
   if (!auto_scroll_) {
@@ -247,7 +247,7 @@ void MessageView::update_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_));
   request_images(msg);
 }
 
@@ -278,6 +278,10 @@ void MessageView::scroll_to_bottom() {
   QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
 }
 
+
+void MessageView::set_edited_indicator(kind::gui::EditedIndicator style) {
+  edited_indicator_ = style;
+}
 
 void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
@@ -346,7 +350,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
 
               const auto& msg = model_->messages()[row_idx];
               auto images = cached_pixmaps_for(msg);
-              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images));
+              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_));
 
               // Measure new height after re-render
               int new_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();
