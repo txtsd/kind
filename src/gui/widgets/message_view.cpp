@@ -3,6 +3,7 @@
 #include "cache/image_cache.hpp"
 #include "delegates/message_delegate.hpp"
 #include "models/message_model.hpp"
+#include "models/sticker_item.hpp"
 #include "widgets/jump_pill.hpp"
 #include "workers/render_worker.hpp"
 
@@ -308,8 +309,10 @@ std::unordered_map<std::string, QPixmap> MessageView::collect_images(const kind:
     }
   }
   for (const auto& sticker : msg.sticker_items) {
-    auto url = "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
-    try_load(url);
+    auto url = kind::sticker_cdn_url(sticker);
+    if (url) {
+      try_load(*url);
+    }
   }
 
   return images;
@@ -344,8 +347,10 @@ void MessageView::request_missing_images(const kind::Message& msg) {
     }
   }
   for (const auto& sticker : msg.sticker_items) {
-    auto url = "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
-    request_if_missing(url);
+    auto url = kind::sticker_cdn_url(sticker);
+    if (url) {
+      request_if_missing(*url);
+    }
   }
 }
 

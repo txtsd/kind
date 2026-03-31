@@ -107,11 +107,12 @@ RenderedMessage compute_layout(
   // Stickers
   for (const auto& sticker : message.sticker_items) {
     QPixmap sticker_img;
-    std::string sticker_url =
-        "https://cdn.discordapp.com/stickers/" + std::to_string(sticker.id) + ".png";
-    auto it = images.find(sticker_url);
-    if (it != images.end()) {
-      sticker_img = it->second;
+    auto sticker_url = kind::sticker_cdn_url(sticker);
+    if (sticker_url) {
+      auto it = images.find(*sticker_url);
+      if (it != images.end()) {
+        sticker_img = it->second;
+      }
     }
     result.blocks.push_back(std::make_shared<StickerBlockRenderer>(
         sticker, font, sticker_img));
