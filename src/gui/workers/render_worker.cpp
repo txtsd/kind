@@ -83,12 +83,13 @@ RenderedMessage compute_layout(
     // Parse content with markdown
     auto parsed = kind::markdown::parse(message.content);
 
-    // Append "(edited)" indicator to the last text span
-    if (message.edited_timestamp.has_value() && !parsed.blocks.empty()) {
-      auto* span = std::get_if<kind::TextSpan>(&parsed.blocks.back());
-      if (span) {
-        span->text += " (edited)";
-      }
+    // Append "(edited)" indicator as a separate span so it never
+    // becomes part of a link or other styled span.
+    if (message.edited_timestamp.has_value()) {
+      kind::TextSpan edited_span;
+      edited_span.text = " (edited)";
+      edited_span.style = kind::TextSpan::Normal;
+      parsed.blocks.push_back(std::move(edited_span));
     }
 
     // Hide message text when content is a single URL that produced an image/gifv embed
