@@ -124,6 +124,8 @@ void DatabaseManager::create_schema() {
       "  edited_at  TEXT,"
       "  pinned     INTEGER DEFAULT 0,"
       "  deleted    INTEGER DEFAULT 0,"
+      "  type       INTEGER DEFAULT 0,"
+      "  ref_msg_id INTEGER,"
       "  data       TEXT"
       ")");
 
@@ -154,7 +156,16 @@ void DatabaseManager::create_schema() {
       "  value TEXT"
       ")");
 
-  exec("INSERT OR IGNORE INTO schema_version (version) VALUES (1)");
+  exec("INSERT OR IGNORE INTO schema_version (version) VALUES (2)");
+
+  // Migrate from schema version 1 to 2: add type and ref_msg_id columns
+  QSqlQuery vq(db);
+  vq.exec("SELECT version FROM schema_version");
+  if (vq.next() && vq.value(0).toInt() < 2) {
+    q.exec("ALTER TABLE messages ADD COLUMN type INTEGER DEFAULT 0");
+    q.exec("ALTER TABLE messages ADD COLUMN ref_msg_id INTEGER");
+    q.exec("UPDATE schema_version SET version = 2");
+  }
 }
 
 } // namespace kind

@@ -632,3 +632,206 @@ TEST_F(DatabaseReaderTest, DeletedMessageLoadsCorrectly) {
   ASSERT_EQ(msgs.size(), 1u);
   EXPECT_TRUE(msgs[0].deleted);
 }
+
+TEST_F(DatabaseReaderTest, MessageTypeAndRefRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 900;
+    msg.channel_id = 42;
+    msg.type = 19;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "reply text";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    msg.referenced_message_id = 800;
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_EQ(msgs[0].type, 19);
+  ASSERT_TRUE(msgs[0].referenced_message_id.has_value());
+  EXPECT_EQ(*msgs[0].referenced_message_id, 800u);
+}
+
+TEST_F(DatabaseReaderTest, ReactionsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 901;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "reactions";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    msg.reactions.push_back({"👍", std::nullopt, 3, true});
+    msg.reactions.push_back({"custom", 777, 1, false});
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  ASSERT_EQ(msgs[0].reactions.size(), 2u);
+  EXPECT_EQ(msgs[0].reactions[0].emoji_name, "👍");
+  EXPECT_EQ(msgs[0].reactions[0].count, 3);
+  EXPECT_TRUE(msgs[0].reactions[0].me);
+  EXPECT_EQ(msgs[0].reactions[1].emoji_name, "custom");
+  ASSERT_TRUE(msgs[0].reactions[1].emoji_id.has_value());
+  EXPECT_EQ(*msgs[0].reactions[1].emoji_id, 777u);
+}
+
+TEST_F(DatabaseReaderTest, FullEmbedRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 902;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "embed";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    kind::Embed embed;
+    embed.title = "Title";
+    embed.description = "Desc";
+    embed.color = 0xFF0000;
+    embed.author = kind::EmbedAuthor{"Author", "https://author.com"};
+    embed.footer = kind::EmbedFooter{"Footer"};
+    embed.image = kind::EmbedImage{"https://img.com/img.png", 400, 300};
+    embed.fields.push_back({"Field1", "Value1", true});
+    msg.embeds.push_back(std::move(embed));
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  ASSERT_EQ(msgs[0].embeds.size(), 1u);
+  auto& e = msgs[0].embeds[0];
+  EXPECT_EQ(*e.title, "Title");
+  EXPECT_EQ(*e.description, "Desc");
+  EXPECT_EQ(*e.color, 0xFF0000);
+  ASSERT_TRUE(e.author.has_value());
+  EXPECT_EQ(e.author->name, "Author");
+  ASSERT_TRUE(e.author->url.has_value());
+  EXPECT_EQ(*e.author->url, "https://author.com");
+  ASSERT_TRUE(e.footer.has_value());
+  EXPECT_EQ(e.footer->text, "Footer");
+  ASSERT_TRUE(e.image.has_value());
+  EXPECT_EQ(e.image->url, "https://img.com/img.png");
+  EXPECT_EQ(*e.image->width, 400);
+  EXPECT_EQ(*e.image->height, 300);
+  ASSERT_EQ(e.fields.size(), 1u);
+  EXPECT_EQ(e.fields[0].name, "Field1");
+  EXPECT_EQ(e.fields[0].value, "Value1");
+  EXPECT_TRUE(e.fields[0].inline_field);
+}
+
+TEST_F(DatabaseReaderTest, AttachmentsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 903;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "file";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    kind::Attachment att;
+    att.id = 555;
+    att.filename = "image.png";
+    att.url = "https://cdn.example.com/image.png";
+    att.size = 12345;
+    att.width = 800;
+    att.height = 600;
+    msg.attachments.push_back(std::move(att));
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  ASSERT_EQ(msgs[0].attachments.size(), 1u);
+  auto& a = msgs[0].attachments[0];
+  EXPECT_EQ(a.id, 555u);
+  EXPECT_EQ(a.filename, "image.png");
+  EXPECT_EQ(a.url, "https://cdn.example.com/image.png");
+  EXPECT_EQ(a.size, 12345u);
+  ASSERT_TRUE(a.width.has_value());
+  EXPECT_EQ(*a.width, 800);
+  ASSERT_TRUE(a.height.has_value());
+  EXPECT_EQ(*a.height, 600);
+}
+
+TEST_F(DatabaseReaderTest, MentionsAndComponentsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 904;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "hey @everyone";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    msg.mention_everyone = true;
+    msg.mentions.push_back({99, "bob"});
+    msg.mention_roles.push_back(10);
+    msg.mention_roles.push_back(20);
+    kind::Component row;
+    row.type = 1;
+    kind::Component button;
+    button.type = 2;
+    button.custom_id = "btn_1";
+    button.label = "Click me";
+    button.style = 1;
+    row.children.push_back(std::move(button));
+    msg.components.push_back(std::move(row));
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  EXPECT_TRUE(msgs[0].mention_everyone);
+  ASSERT_EQ(msgs[0].mentions.size(), 1u);
+  EXPECT_EQ(msgs[0].mentions[0].id, 99u);
+  EXPECT_EQ(msgs[0].mentions[0].username, "bob");
+  ASSERT_EQ(msgs[0].mention_roles.size(), 2u);
+  EXPECT_EQ(msgs[0].mention_roles[0], 10u);
+  EXPECT_EQ(msgs[0].mention_roles[1], 20u);
+  ASSERT_EQ(msgs[0].components.size(), 1u);
+  EXPECT_EQ(msgs[0].components[0].type, 1);
+  ASSERT_EQ(msgs[0].components[0].children.size(), 1u);
+  auto& btn = msgs[0].components[0].children[0];
+  EXPECT_EQ(btn.type, 2);
+  ASSERT_TRUE(btn.custom_id.has_value());
+  EXPECT_EQ(*btn.custom_id, "btn_1");
+  ASSERT_TRUE(btn.label.has_value());
+  EXPECT_EQ(*btn.label, "Click me");
+  EXPECT_EQ(btn.style, 1);
+}
+
+TEST_F(DatabaseReaderTest, StickerItemsRoundTrip) {
+  {
+    kind::DatabaseWriter writer(db_path_.string());
+    kind::Message msg;
+    msg.id = 905;
+    msg.channel_id = 42;
+    msg.author.id = 1;
+    msg.author.username = "user";
+    msg.content = "";
+    msg.timestamp = "2026-01-01T00:00:00.000Z";
+    msg.sticker_items.push_back({123, "pepe", 1});
+    emit writer.message_write_requested(msg);
+    writer.flush_sync();
+  }
+  kind::DatabaseReader reader(db_path_.string());
+  auto msgs = reader.messages(42);
+  ASSERT_EQ(msgs.size(), 1u);
+  ASSERT_EQ(msgs[0].sticker_items.size(), 1u);
+  EXPECT_EQ(msgs[0].sticker_items[0].id, 123u);
+  EXPECT_EQ(msgs[0].sticker_items[0].name, "pepe");
+  EXPECT_EQ(msgs[0].sticker_items[0].format_type, 1);
+}

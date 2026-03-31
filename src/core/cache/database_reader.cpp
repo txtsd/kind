@@ -4,11 +4,13 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 
 #include <algorithm>
+#include <functional>
 
 namespace kind {
 
@@ -179,7 +181,8 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
     q.prepare(
         "SELECT m.id, m.channel_id, m.author_id, m.content, m.timestamp, "
         "       m.edited_at, m.pinned, m.deleted, "
-        "       u.username, u.discriminator, u.avatar, u.bot "
+        "       u.username, u.discriminator, u.avatar, u.bot, "
+        "       m.type, m.ref_msg_id, m.data "
         "FROM messages m "
         "LEFT JOIN users u ON m.author_id = u.id "
         "WHERE m.channel_id = :cid AND m.id < :before "
@@ -189,7 +192,8 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
     q.prepare(
         "SELECT m.id, m.channel_id, m.author_id, m.content, m.timestamp, "
         "       m.edited_at, m.pinned, m.deleted, "
-        "       u.username, u.discriminator, u.avatar, u.bot "
+        "       u.username, u.discriminator, u.avatar, u.bot, "
+        "       m.type, m.ref_msg_id, m.data "
         "FROM messages m "
         "LEFT JOIN users u ON m.author_id = u.id "
         "WHERE m.channel_id = :cid "
@@ -215,6 +219,132 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
     msg.author.discriminator = q.value(9).toString().toStdString();
     msg.author.avatar_hash = q.value(10).toString().toStdString();
     msg.author.bot = q.value(11).toBool();
+    msg.type = q.value(12).toInt();
+    if (!q.value(13).isNull()) {
+      msg.referenced_message_id = static_cast<Snowflake>(q.value(13).toLongLong());
+    }
+
+    auto data_str = q.value(14).toString();
+    if (!data_str.isEmpty()) {
+      auto data_doc = QJsonDocument::fromJson(data_str.toUtf8());
+      if (data_doc.isObject()) {
+        auto data = data_doc.object();
+
+        msg.mention_everyone = data["mention_everyone"].toBool(false);
+        for (const auto& val : data["mentions"].toArray()) {
+          auto mobj = val.toObject();
+          Mention mention;
+          mention.id = static_cast<Snowflake>(mobj["id"].toString().toULongLong());
+          mention.username = mobj["username"].toString().toStdString();
+          msg.mentions.push_back(std::move(mention));
+        }
+        for (const auto& val : data["mention_roles"].toArray()) {
+          msg.mention_roles.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
+        }
+
+        for (const auto& val : data["reactions"].toArray()) {
+          auto robj = val.toObject();
+          Reaction reaction;
+          reaction.emoji_name = robj["emoji_name"].toString().toStdString();
+          if (robj.contains("emoji_id")) {
+            reaction.emoji_id = static_cast<Snowflake>(robj["emoji_id"].toString().toULongLong());
+          }
+          reaction.count = robj["count"].toInt();
+          reaction.me = robj["me"].toBool();
+          msg.reactions.push_back(std::move(reaction));
+        }
+
+        for (const auto& val : data["sticker_items"].toArray()) {
+          auto sobj = val.toObject();
+          StickerItem sticker;
+          sticker.id = static_cast<Snowflake>(sobj["id"].toString().toULongLong());
+          sticker.name = sobj["name"].toString().toStdString();
+          sticker.format_type = sobj["format_type"].toInt(1);
+          msg.sticker_items.push_back(std::move(sticker));
+        }
+
+        std::function<Component(const QJsonObject&)> parse_comp;
+        parse_comp = [&](const QJsonObject& cobj) -> Component {
+          Component comp;
+          comp.type = cobj["type"].toInt();
+          if (cobj.contains("custom_id")) comp.custom_id = cobj["custom_id"].toString().toStdString();
+          if (cobj.contains("label")) comp.label = cobj["label"].toString().toStdString();
+          comp.style = cobj["style"].toInt();
+          comp.disabled = cobj["disabled"].toBool();
+          for (const auto& child : cobj["components"].toArray()) {
+            comp.children.push_back(parse_comp(child.toObject()));
+          }
+          return comp;
+        };
+        for (const auto& val : data["components"].toArray()) {
+          msg.components.push_back(parse_comp(val.toObject()));
+        }
+
+        if (data.contains("embeds")) {
+          for (const auto& val : data["embeds"].toArray()) {
+            auto eobj = val.toObject();
+            Embed embed;
+            if (eobj.contains("title")) embed.title = eobj["title"].toString().toStdString();
+            if (eobj.contains("description"))
+              embed.description = eobj["description"].toString().toStdString();
+            if (eobj.contains("url")) embed.url = eobj["url"].toString().toStdString();
+            if (eobj.contains("color")) embed.color = eobj["color"].toInt();
+            if (eobj.contains("author") && eobj["author"].isObject()) {
+              auto aobj = eobj["author"].toObject();
+              EmbedAuthor author;
+              author.name = aobj["name"].toString().toStdString();
+              if (aobj.contains("url")) author.url = aobj["url"].toString().toStdString();
+              embed.author = std::move(author);
+            }
+            if (eobj.contains("footer") && eobj["footer"].isObject()) {
+              EmbedFooter footer;
+              footer.text = eobj["footer"].toObject()["text"].toString().toStdString();
+              embed.footer = std::move(footer);
+            }
+            if (eobj.contains("image") && eobj["image"].isObject()) {
+              auto iobj = eobj["image"].toObject();
+              EmbedImage image;
+              image.url = iobj["url"].toString().toStdString();
+              if (iobj.contains("width")) image.width = iobj["width"].toInt();
+              if (iobj.contains("height")) image.height = iobj["height"].toInt();
+              embed.image = std::move(image);
+            }
+            if (eobj.contains("thumbnail") && eobj["thumbnail"].isObject()) {
+              auto tobj = eobj["thumbnail"].toObject();
+              EmbedImage thumb;
+              thumb.url = tobj["url"].toString().toStdString();
+              if (tobj.contains("width")) thumb.width = tobj["width"].toInt();
+              if (tobj.contains("height")) thumb.height = tobj["height"].toInt();
+              embed.thumbnail = std::move(thumb);
+            }
+            for (const auto& fval : eobj["fields"].toArray()) {
+              auto fobj = fval.toObject();
+              EmbedField field;
+              field.name = fobj["name"].toString().toStdString();
+              field.value = fobj["value"].toString().toStdString();
+              field.inline_field = fobj["inline"].toBool(false);
+              embed.fields.push_back(std::move(field));
+            }
+            msg.embeds.push_back(std::move(embed));
+          }
+        }
+
+        if (data.contains("attachments")) {
+          for (const auto& val : data["attachments"].toArray()) {
+            auto aobj = val.toObject();
+            Attachment att;
+            att.id = static_cast<Snowflake>(aobj["id"].toString().toULongLong());
+            att.filename = aobj["filename"].toString().toStdString();
+            att.url = aobj["url"].toString().toStdString();
+            att.size = static_cast<std::size_t>(aobj["size"].toInteger(0));
+            if (aobj.contains("width")) att.width = aobj["width"].toInt();
+            if (aobj.contains("height")) att.height = aobj["height"].toInt();
+            msg.attachments.push_back(std::move(att));
+          }
+        }
+      }
+    }
+
     result.push_back(std::move(msg));
   }
 

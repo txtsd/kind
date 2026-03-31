@@ -5,9 +5,12 @@
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+
+#include <functional>
 
 Q_DECLARE_METATYPE(kind::Guild)
 Q_DECLARE_METATYPE(kind::Channel)
@@ -119,9 +122,12 @@ void DatabaseWriteWorker::write_message(kind::Message message) {
   }
 
   QSqlQuery q(db);
-  q.prepare("INSERT OR REPLACE INTO messages "
-            "(id, channel_id, author_id, content, timestamp, edited_at, pinned, deleted) "
-            "VALUES (:id, :cid, :aid, :content, :ts, :edited, :pinned, :deleted)");
+  q.prepare(
+      "INSERT OR REPLACE INTO messages "
+      "(id, channel_id, author_id, content, timestamp, edited_at, pinned, deleted, "
+      " type, ref_msg_id, data) "
+      "VALUES (:id, :cid, :aid, :content, :ts, :edited, :pinned, :deleted, "
+      "        :type, :ref, :data)");
   q.bindValue(":id", static_cast<qint64>(message.id));
   q.bindValue(":cid", static_cast<qint64>(message.channel_id));
   q.bindValue(":aid", static_cast<qint64>(message.author.id));
@@ -132,6 +138,151 @@ void DatabaseWriteWorker::write_message(kind::Message message) {
                               : QVariant());
   q.bindValue(":pinned", message.pinned ? 1 : 0);
   q.bindValue(":deleted", message.deleted ? 1 : 0);
+  q.bindValue(":type", message.type);
+  q.bindValue(":ref", message.referenced_message_id
+                           ? QVariant(static_cast<qint64>(*message.referenced_message_id))
+                           : QVariant());
+
+  // Serialize extended fields into a JSON data blob
+  QJsonObject data;
+
+  if (!message.mentions.empty()) {
+    QJsonArray mentions_arr;
+    for (const auto& m : message.mentions) {
+      QJsonObject mobj;
+      mobj["id"] = QString::number(m.id);
+      mobj["username"] = QString::fromStdString(m.username);
+      mentions_arr.append(mobj);
+    }
+    data["mentions"] = mentions_arr;
+  }
+  data["mention_everyone"] = message.mention_everyone;
+  if (!message.mention_roles.empty()) {
+    QJsonArray roles_arr;
+    for (auto id : message.mention_roles) {
+      roles_arr.append(QString::number(id));
+    }
+    data["mention_roles"] = roles_arr;
+  }
+
+  if (!message.reactions.empty()) {
+    QJsonArray reactions_arr;
+    for (const auto& r : message.reactions) {
+      QJsonObject robj;
+      robj["emoji_name"] = QString::fromStdString(r.emoji_name);
+      if (r.emoji_id) robj["emoji_id"] = QString::number(*r.emoji_id);
+      robj["count"] = r.count;
+      robj["me"] = r.me;
+      reactions_arr.append(robj);
+    }
+    data["reactions"] = reactions_arr;
+  }
+
+  if (!message.sticker_items.empty()) {
+    QJsonArray stickers_arr;
+    for (const auto& s : message.sticker_items) {
+      QJsonObject sobj;
+      sobj["id"] = QString::number(s.id);
+      sobj["name"] = QString::fromStdString(s.name);
+      sobj["format_type"] = s.format_type;
+      stickers_arr.append(sobj);
+    }
+    data["sticker_items"] = stickers_arr;
+  }
+
+  std::function<QJsonObject(const kind::Component&)> comp_to_json;
+  comp_to_json = [&](const kind::Component& c) -> QJsonObject {
+    QJsonObject cobj;
+    cobj["type"] = c.type;
+    if (c.custom_id) cobj["custom_id"] = QString::fromStdString(*c.custom_id);
+    if (c.label) cobj["label"] = QString::fromStdString(*c.label);
+    cobj["style"] = c.style;
+    cobj["disabled"] = c.disabled;
+    if (!c.children.empty()) {
+      QJsonArray children;
+      for (const auto& child : c.children) {
+        children.append(comp_to_json(child));
+      }
+      cobj["components"] = children;
+    }
+    return cobj;
+  };
+  if (!message.components.empty()) {
+    QJsonArray comps_arr;
+    for (const auto& c : message.components) {
+      comps_arr.append(comp_to_json(c));
+    }
+    data["components"] = comps_arr;
+  }
+
+  if (!message.embeds.empty()) {
+    QJsonArray embeds_arr;
+    for (const auto& e : message.embeds) {
+      QJsonObject eobj;
+      if (e.title) eobj["title"] = QString::fromStdString(*e.title);
+      if (e.description) eobj["description"] = QString::fromStdString(*e.description);
+      if (e.url) eobj["url"] = QString::fromStdString(*e.url);
+      if (e.color) eobj["color"] = *e.color;
+      if (e.author) {
+        QJsonObject aobj;
+        aobj["name"] = QString::fromStdString(e.author->name);
+        if (e.author->url) aobj["url"] = QString::fromStdString(*e.author->url);
+        eobj["author"] = aobj;
+      }
+      if (e.footer) {
+        QJsonObject fobj;
+        fobj["text"] = QString::fromStdString(e.footer->text);
+        eobj["footer"] = fobj;
+      }
+      if (e.image) {
+        QJsonObject iobj;
+        iobj["url"] = QString::fromStdString(e.image->url);
+        if (e.image->width) iobj["width"] = *e.image->width;
+        if (e.image->height) iobj["height"] = *e.image->height;
+        eobj["image"] = iobj;
+      }
+      if (e.thumbnail) {
+        QJsonObject tobj;
+        tobj["url"] = QString::fromStdString(e.thumbnail->url);
+        if (e.thumbnail->width) tobj["width"] = *e.thumbnail->width;
+        if (e.thumbnail->height) tobj["height"] = *e.thumbnail->height;
+        eobj["thumbnail"] = tobj;
+      }
+      if (!e.fields.empty()) {
+        QJsonArray fields_arr;
+        for (const auto& f : e.fields) {
+          QJsonObject fobj;
+          fobj["name"] = QString::fromStdString(f.name);
+          fobj["value"] = QString::fromStdString(f.value);
+          fobj["inline"] = f.inline_field;
+          fields_arr.append(fobj);
+        }
+        eobj["fields"] = fields_arr;
+      }
+      embeds_arr.append(eobj);
+    }
+    data["embeds"] = embeds_arr;
+  }
+
+  if (!message.attachments.empty()) {
+    QJsonArray atts_arr;
+    for (const auto& a : message.attachments) {
+      QJsonObject aobj;
+      aobj["id"] = QString::number(a.id);
+      aobj["filename"] = QString::fromStdString(a.filename);
+      aobj["url"] = QString::fromStdString(a.url);
+      aobj["size"] = static_cast<qint64>(a.size);
+      if (a.width) aobj["width"] = *a.width;
+      if (a.height) aobj["height"] = *a.height;
+      atts_arr.append(aobj);
+    }
+    data["attachments"] = atts_arr;
+  }
+
+  QString data_json =
+      data.isEmpty() ? QString() : QJsonDocument(data).toJson(QJsonDocument::Compact);
+  q.bindValue(":data", data_json.isEmpty() ? QVariant() : data_json);
+
   if (!q.exec()) {
     log::cache()->warn("Writer: failed to write message {}: {}", message.id,
                        q.lastError().text().toStdString());
