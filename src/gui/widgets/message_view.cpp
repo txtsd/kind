@@ -231,7 +231,8 @@ void MessageView::add_message(const kind::Message& msg) {
   model_->append_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
+  auto images = cached_pixmaps_for(msg);
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
   request_images(msg);
 
   if (!auto_scroll_) {
@@ -245,7 +246,8 @@ void MessageView::update_message(const kind::Message& msg) {
   model_->update_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font()));
+  auto images = cached_pixmaps_for(msg);
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images));
   request_images(msg);
 }
 
