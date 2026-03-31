@@ -253,3 +253,16 @@ TEST(MarkdownParser, CodeBlockBeforeText) {
   EXPECT_TRUE(std::holds_alternative<CodeBlock>(result.blocks[0]));
   EXPECT_TRUE(std::holds_alternative<TextSpan>(result.blocks[1]));
 }
+
+TEST(MarkdownParser, MultipleCodeBlocksWithTextBetween) {
+  auto result = markdown::parse("```lua\ncode1\n```\ntext between\n```lua\ncode2\n```");
+  ASSERT_EQ(result.blocks.size(), 3u);
+  auto& cb1 = std::get<CodeBlock>(result.blocks[0]);
+  EXPECT_EQ(cb1.language, "lua");
+  EXPECT_EQ(cb1.code, "code1\n");
+  auto& span = std::get<TextSpan>(result.blocks[1]);
+  EXPECT_EQ(span.text, "text between\n");
+  auto& cb2 = std::get<CodeBlock>(result.blocks[2]);
+  EXPECT_EQ(cb2.language, "lua");
+  EXPECT_EQ(cb2.code, "code2\n");
+}
