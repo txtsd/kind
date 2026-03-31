@@ -42,6 +42,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   renderers/attachment_block_renderer.cpp
   renderers/reaction_block_renderer.hpp
   renderers/reaction_block_renderer.cpp
+  renderers/sticker_block_renderer.hpp
+  renderers/sticker_block_renderer.cpp
   workers/render_worker.hpp
   workers/render_worker.cpp
 )
