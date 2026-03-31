@@ -45,6 +45,7 @@ target_link_libraries(kind-core
   PRIVATE
     Qt6::Core
     Qt6::Gui
+    Qt6::Concurrent
     Qt6::Network
     Qt6::WebSockets
     Qt6::Sql

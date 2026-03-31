@@ -7,6 +7,7 @@
 #include <QImage>
 #include <QNetworkReply>
 #include <QTimer>
+#include <QtConcurrent>
 
 #include <filesystem>
 
@@ -59,13 +60,21 @@ void ImageCache::request(const std::string& url) {
 
   in_flight_.insert(url);
 
-  // Try disk cache asynchronously via a deferred call
-  QTimer::singleShot(0, this, [this, url]() {
-    auto from_disk = load_from_disk(url);
-    if (from_disk) {
+  // Try disk cache on a worker thread
+  auto future = QtConcurrent::run([this, url]() -> std::optional<CachedImage> {
+    return load_from_disk(url);
+  });
+
+  auto* watcher = new QFutureWatcher<std::optional<CachedImage>>(this);
+  connect(watcher, &QFutureWatcher<std::optional<CachedImage>>::finished,
+          this, [this, watcher, url]() {
+    watcher->deleteLater();
+    auto result = watcher->result();
+
+    if (result) {
       in_flight_.erase(url);
-      add_to_memory(url, *from_disk);
-      emit image_ready(QString::fromStdString(url), *from_disk);
+      add_to_memory(url, *result);
+      emit image_ready(QString::fromStdString(url), *result);
       return;
     }
 
@@ -95,12 +104,17 @@ void ImageCache::request(const std::string& url) {
                             .toString()
                             .toStdString();
 
-      save_to_disk(url, image);
       add_to_memory(url, image);
-
       emit image_ready(QString::fromStdString(url), image);
+
+      // Save to disk on worker thread
+      QtConcurrent::run([this, url, image]() {
+        save_to_disk(url, image);
+      });
     });
   });
+
+  watcher->setFuture(future);
 }
 
 std::string ImageCache::url_to_filename(const std::string& url) const {
@@ -154,7 +168,6 @@ void ImageCache::save_to_disk(const std::string& url, const CachedImage& image) 
 }
 
 void ImageCache::add_to_memory(const std::string& url, const CachedImage& image) const {
-  // If already present, just promote
   auto it = memory_cache_.find(url);
   if (it != memory_cache_.end()) {
     lru_order_.erase(it->second.lru_it);

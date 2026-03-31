@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 
