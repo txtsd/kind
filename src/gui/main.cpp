@@ -3,6 +3,7 @@
 #include "config/config_manager.hpp"
 #include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
+#include "dialogs/preferences_dialog.hpp"
 #include "permissions.hpp"
 #include "rest/qt_rest_client.hpp"
 #include "version.hpp"
@@ -71,6 +72,11 @@ int main(int argc, char* argv[]) {
   auto* message_view = new kind::gui::MessageView();
   message_view->set_image_cache(client.image_cache());
 
+  // Guild display mode preference
+  server_list->set_image_cache(client.image_cache());
+  auto guild_display_pref = config.get_or<std::string>("appearance.guild_display", "text");
+  server_list->set_guild_display(guild_display_pref);
+
   // Edited message indicator preference
   auto edited_pref = config.get_or<std::string>("appearance.edited_indicator", "text");
   if (edited_pref == "icon") {
@@ -133,6 +139,9 @@ int main(int argc, char* argv[]) {
   // File menu
   auto* file_menu = menu_bar->addMenu("&File");
 
+  auto* preferences_action = file_menu->addAction("&Preferences...");
+  file_menu->addSeparator();
+
   auto* logout_action = file_menu->addAction("&Logout");
   QObject::connect(logout_action, &QAction::triggered, [&client, &qapp]() {
     client.logout();
@@ -147,12 +156,6 @@ int main(int argc, char* argv[]) {
 
   // View menu
   auto* view_menu = menu_bar->addMenu("&View");
-
-  auto* hide_locked_action = view_menu->addAction("&Hide locked channels");
-  hide_locked_action->setCheckable(true);
-  hide_locked_action->setChecked(config.get_or<bool>("appearance.hide_locked_channels", false));
-
-  // hide_locked_action connection deferred until current_guild_id and compute_channel_permissions exist
 
   auto* collapse_all_action = view_menu->addAction("&Collapse all categories");
   QObject::connect(collapse_all_action, &QAction::triggered,
@@ -218,18 +221,40 @@ int main(int argc, char* argv[]) {
     return perms;
   };
 
-  // Deferred: wire hide_locked_action now that current_guild_id and compute_channel_permissions exist
-  QObject::connect(hide_locked_action, &QAction::toggled,
-                   [&config, &client, channel_list, &current_guild_id, &compute_channel_permissions](bool checked) {
-                     config.set<bool>("appearance.hide_locked_channels", checked);
-                     config.save();
-                     auto channels = client.channels(current_guild_id);
-                     if (!channels.empty()) {
-                       QVector<kind::Channel> qvec(channels.begin(), channels.end());
-                       auto perms = compute_channel_permissions(current_guild_id, qvec);
-                       channel_list->set_channels(qvec, perms, checked);
-                     }
-                   });
+  // Wire preferences dialog
+  QObject::connect(preferences_action, &QAction::triggered, [&config, &main_window,
+      &client, server_list, channel_list, message_view,
+      &current_guild_id, &compute_channel_permissions]() {
+    auto* prefs = new kind::gui::PreferencesDialog(config, &main_window);
+    prefs->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(prefs, &kind::gui::PreferencesDialog::settings_changed,
+                     [&config, &client, server_list, channel_list, message_view,
+                      &current_guild_id, &compute_channel_permissions]() {
+      // Re-apply edited indicator
+      auto edited = config.get_or<std::string>("appearance.edited_indicator", "text");
+      if (edited == "icon") {
+        message_view->set_edited_indicator(kind::gui::EditedIndicator::Icon);
+      } else if (edited == "both") {
+        message_view->set_edited_indicator(kind::gui::EditedIndicator::Both);
+      } else {
+        message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
+      }
+
+      // Re-apply guild display mode
+      auto guild_disp = config.get_or<std::string>("appearance.guild_display", "text");
+      server_list->set_guild_display(guild_disp);
+
+      // Re-apply hide locked channels
+      bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
+      auto channels = client.channels(current_guild_id);
+      if (!channels.empty()) {
+        QVector<kind::Channel> qvec(channels.begin(), channels.end());
+        auto perms = compute_channel_permissions(current_guild_id, qvec);
+        channel_list->set_channels(qvec, perms, hide_locked);
+      }
+    });
+    prefs->open();
+  });
 
   // Wire login dialog signals to client actions
   QObject::connect(&login_dialog, &kind::gui::LoginDialog::token_login_requested,
