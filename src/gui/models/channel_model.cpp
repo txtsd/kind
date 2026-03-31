@@ -99,9 +99,17 @@ void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
   }
   for (auto& cat : categories) {
     auto cat_id = cat.id;
+    auto children_it = by_parent.find(cat_id);
+    bool has_children = children_it != by_parent.end() && !children_it->second.empty();
+
+    // Skip empty categories when hiding locked channels
+    if (hide_locked && !has_children) {
+      continue;
+    }
+
     all_channels_.push_back(std::move(cat));
-    if (auto it = by_parent.find(cat_id); it != by_parent.end()) {
-      for (auto& ch : it->second) {
+    if (has_children) {
+      for (auto& ch : children_it->second) {
         all_channels_.push_back(std::move(ch));
       }
     }
