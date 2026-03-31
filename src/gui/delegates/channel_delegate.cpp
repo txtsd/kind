@@ -16,14 +16,18 @@ void ChannelDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     paint_category(painter, option, index);
     break;
   case 2:  // GUILD_VOICE
+    paint_channel(painter, option, index, QStringLiteral("\U0001F50A "));
+    break;
   case 13: // GUILD_STAGE_VOICE
-    paint_channel(painter, option, index, QStringLiteral("\u266A "));
+    paint_channel(painter, option, index, QStringLiteral("\U0001F3A4 "));
     break;
   case 15: // GUILD_FORUM
-    paint_channel(painter, option, index, QStringLiteral("\u2637 "));
+    paint_channel(painter, option, index, QStringLiteral("\U0001F4AC "));
+    break;
+  case 5: // GUILD_ANNOUNCEMENT
+    paint_channel(painter, option, index, QStringLiteral("\U0001F4E2 "));
     break;
   case 0: // GUILD_TEXT
-  case 5: // GUILD_ANNOUNCEMENT
   default:
     paint_channel(painter, option, index, QStringLiteral("# "));
     break;
