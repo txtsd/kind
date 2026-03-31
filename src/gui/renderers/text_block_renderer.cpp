@@ -1,6 +1,7 @@
 #include "renderers/text_block_renderer.hpp"
 
 #include <QFontMetrics>
+#include <QPainterPath>
 #include <QTextOption>
 
 namespace kind::gui {
@@ -43,22 +44,25 @@ void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   mono_font.setPointSize(base_font.pointSize() > 0 ? base_font.pointSize() : 10);
   mono_font.setStyleHint(QFont::Monospace);
 
-  constexpr qreal cb_pad = 6.0;
   for (const auto& cb : code_blocks_) {
     auto start_line = text_layout_->lineForTextPosition(cb.start);
     auto end_line = text_layout_->lineForTextPosition(cb.start + cb.length);
     if (!start_line.isValid()) continue;
 
-    // Draw a background rect covering all lines of the code block
-    // with equal padding on every side
     qreal top = start_line.position().y() + rect.top() + padding_;
     qreal bottom = end_line.isValid()
         ? end_line.position().y() + end_line.height() + rect.top() + padding_
         : start_line.position().y() + start_line.height() + rect.top() + padding_;
 
-    QRectF bg(rect.left() + padding_ - cb_pad, top - cb_pad,
-              rect.width() - 2 * padding_ + 2 * cb_pad, bottom - top + 2 * cb_pad);
-    painter->fillRect(bg, QColor(40, 40, 40));
+    constexpr qreal cb_inset = 4.0;
+    constexpr qreal cb_radius = 4.0;
+    QRectF bg(rect.left() + padding_, top - cb_inset,
+              rect.width() - 2 * padding_, bottom - top + 2 * cb_inset);
+    QPainterPath cb_path;
+    cb_path.addRoundedRect(bg, cb_radius, cb_radius);
+    painter->fillPath(cb_path, QColor(30, 31, 34));
+    painter->setPen(QPen(QColor(60, 63, 68), 1.0));
+    painter->drawPath(cb_path);
   }
 
   // Draw inline code backgrounds and spoiler overlays
