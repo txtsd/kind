@@ -54,10 +54,9 @@ void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
         ? end_line.position().y() + end_line.height() + rect.top() + padding_
         : start_line.position().y() + start_line.height() + rect.top() + padding_;
 
-    constexpr qreal cb_inset = 4.0;
     constexpr qreal cb_radius = 4.0;
-    QRectF bg(rect.left() + padding_, top - cb_inset,
-              rect.width() - 2 * padding_, bottom - top + 2 * cb_inset);
+    QRectF bg(rect.left() + padding_, top,
+              rect.width() - 2 * padding_, bottom - top);
     QPainterPath cb_path;
     cb_path.addRoundedRect(bg, cb_radius, cb_radius);
     painter->fillPath(cb_path, QColor(30, 31, 34));
@@ -217,10 +216,12 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
       }
     } else if (std::holds_alternative<CodeBlock>(block)) {
       const auto& cb = std::get<CodeBlock>(block);
-      // Add a newline separator if there is preceding text
+      // Add blank line before code block for visual separation
       if (!full_text.isEmpty() && !full_text.endsWith('\n')) {
         full_text += '\n';
       }
+      full_text += '\n'; // Extra blank line above for background padding
+
       int start = full_text.size();
       QString code_text = QString::fromStdString(cb.code);
       full_text += code_text;
@@ -240,10 +241,11 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
       range.format = fmt;
       format_ranges.push_back(range);
 
-      // Trailing newline so subsequent text starts on a new line
+      // Trailing newlines for background padding and separation
       if (!code_text.endsWith('\n')) {
         full_text += '\n';
       }
+      full_text += '\n'; // Extra blank line below for background padding
     }
   }
 
