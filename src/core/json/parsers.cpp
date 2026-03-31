@@ -238,7 +238,7 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       embed.fields.push_back(std::move(field));
     }
     log::client()->debug("Embed: type={}, title={}, desc={}, url={}, provider={}, author={}, "
-                         "image={}, thumbnail={}, fields={}",
+                         "image={}, image_proxy={}, thumb={}, thumb_proxy={}, fields={}",
                          embed.type,
                          embed.title.value_or("(none)"),
                          embed.description.value_or("(none)").substr(0, 50),
@@ -246,7 +246,9 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
                          embed.provider ? embed.provider->name : "(none)",
                          embed.author ? embed.author->name : "(none)",
                          embed.image ? embed.image->url : "(none)",
+                         embed.image && embed.image->proxy_url ? *embed.image->proxy_url : "(none)",
                          embed.thumbnail ? embed.thumbnail->url : "(none)",
+                         embed.thumbnail && embed.thumbnail->proxy_url ? *embed.thumbnail->proxy_url : "(none)",
                          embed.fields.size());
     msg.embeds.push_back(std::move(embed));
   }
