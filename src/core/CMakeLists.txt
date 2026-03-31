@@ -9,6 +9,7 @@ target_sources(kind-core PRIVATE
   cache/database_manager.cpp
   cache/database_writer.cpp
   cache/database_reader.cpp
+  cache/image_cache.cpp
   json/parsers.cpp
   auth/auth_manager.cpp
   auth/keychain_token_store.cpp
@@ -43,6 +44,7 @@ target_link_libraries(kind-core
     tomlplusplus::tomlplusplus
   PRIVATE
     Qt6::Core
+    Qt6::Gui
     Qt6::Network
     Qt6::WebSockets
     Qt6::Sql
