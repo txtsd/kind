@@ -1,6 +1,8 @@
 # Build
 /build*/
 /out/
+/CMakeFiles/
+CMakeCache.txt
 compile_commands.json
 
 # IDE
