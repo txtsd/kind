@@ -13,6 +13,9 @@ class MessageDelegate : public QStyledItemDelegate {
 public:
   explicit MessageDelegate(QObject* parent = nullptr);
 
+  void set_highlight(kind::Snowflake message_id, qreal opacity);
+  void clear_highlight();
+
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
   bool editorEvent(QEvent* event, QAbstractItemModel* model,
@@ -33,6 +36,8 @@ signals:
 
 private:
   static constexpr int padding_ = 4;
+  kind::Snowflake highlight_id_{0};
+  qreal highlight_opacity_{0.0};
 };
 
 } // namespace kind::gui

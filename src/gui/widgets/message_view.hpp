@@ -84,6 +84,10 @@ private:
   void resizeEvent(QResizeEvent* event) override;
   void updateGeometries() override;
 
+  kind::Snowflake highlight_id_{0};
+  qreal highlight_opacity_{0.0};
+  QTimer* highlight_timer_{nullptr};
+
   kind::ImageCache* image_cache_{nullptr};
   // Maps image URL to set of message IDs waiting for that image
   std::unordered_map<std::string, std::vector<kind::Snowflake>> pending_images_;

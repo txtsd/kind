@@ -15,6 +15,16 @@ namespace kind::gui {
 
 MessageDelegate::MessageDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 
+void MessageDelegate::set_highlight(kind::Snowflake message_id, qreal opacity) {
+  highlight_id_ = message_id;
+  highlight_opacity_ = opacity;
+}
+
+void MessageDelegate::clear_highlight() {
+  highlight_id_ = 0;
+  highlight_opacity_ = 0.0;
+}
+
 void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
   painter->save();
 
@@ -27,6 +37,14 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     painter->fillRect(option.rect, alt);
   } else {
     painter->fillRect(option.rect, option.palette.base());
+  }
+
+  // Flash highlight for scroll-to-message
+  auto msg_id = static_cast<kind::Snowflake>(
+      index.data(MessageModel::MessageIdRole).value<qulonglong>());
+  if (msg_id == highlight_id_ && highlight_opacity_ > 0.0) {
+    QColor flash(255, 200, 50, static_cast<int>(highlight_opacity_ * 80));
+    painter->fillRect(option.rect, flash);
   }
 
   auto ptr = index.data(MessageModel::RenderedLayoutRole).value<const void*>();

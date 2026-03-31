@@ -460,6 +460,30 @@ void MessageView::scroll_to_message(kind::Snowflake message_id) {
   if (row) {
     auto_scroll_ = false;
     scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtCenter);
+
+    // Start highlight flash
+    highlight_id_ = message_id;
+    highlight_opacity_ = 1.0;
+    delegate_->set_highlight(message_id, highlight_opacity_);
+    viewport()->update();
+
+    if (!highlight_timer_) {
+      highlight_timer_ = new QTimer(this);
+      highlight_timer_->setInterval(30);
+      connect(highlight_timer_, &QTimer::timeout, this, [this]() {
+        highlight_opacity_ -= 0.03;
+        if (highlight_opacity_ <= 0.0) {
+          highlight_opacity_ = 0.0;
+          highlight_id_ = 0;
+          delegate_->clear_highlight();
+          highlight_timer_->stop();
+        } else {
+          delegate_->set_highlight(highlight_id_, highlight_opacity_);
+        }
+        viewport()->update();
+      });
+    }
+    highlight_timer_->start();
   }
 }
 
