@@ -81,6 +81,7 @@ private:
   void request_images(const kind::Message& msg);
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
+  void updateGeometries() override;
 
   kind::ImageCache* image_cache_{nullptr};
   // Maps image URL to set of message IDs waiting for that image

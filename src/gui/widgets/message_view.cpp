@@ -94,6 +94,11 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   setMouseTracking(true);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
+  // Lock scroll step to 3 lines regardless of item heights so the scroll
+  // wheel doesn't accelerate when large images load.
+  QFontMetrics default_fm(font());
+  verticalScrollBar()->setSingleStep(default_fm.height() * 3);
+
   // Track whether the user is scrolled to the bottom for auto-scroll,
   // and detect scroll-to-top for loading older messages
   connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
@@ -270,6 +275,14 @@ void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
   int pill_y = viewport()->height() - jump_pill_->height() - 8;
   jump_pill_->move(pill_x, pill_y);
+}
+
+void MessageView::updateGeometries() {
+  QListView::updateGeometries();
+  // Re-apply fixed scroll step; QListView::updateGeometries resets it
+  // based on item heights which causes scroll acceleration with tall items.
+  QFontMetrics fm(font());
+  verticalScrollBar()->setSingleStep(fm.height() * 3);
 }
 
 void MessageView::set_image_cache(kind::ImageCache* cache) {
