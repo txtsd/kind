@@ -15,17 +15,25 @@
 
 namespace kind::gui {
 
-// Append ?size= to cdn.discordapp.com URLs, rounding up to the next power of 2
-static std::string add_cdn_size(const std::string& url, int size) {
-  if (url.find("cdn.discordapp.com") == std::string::npos) {
-    return url;
-  }
-  int s = 16;
-  while (s < size && s < 4096) {
-    s *= 2;
+// Append size parameters to Discord image URLs.
+static std::string add_image_size(const std::string& url, int display_width, int display_height = 0) {
+  if (display_height == 0) {
+    display_height = display_width;
   }
   char sep = (url.find('?') != std::string::npos) ? '&' : '?';
-  return url + sep + "size=" + std::to_string(s);
+  if (url.find("cdn.discordapp.com") != std::string::npos) {
+    int s = 16;
+    while (s < display_width && s < 4096) {
+      s *= 2;
+    }
+    return url + sep + "size=" + std::to_string(s);
+  }
+  if (url.find("discordapp.net") != std::string::npos
+      || url.find("discord.com") != std::string::npos) {
+    return url + sep + "width=" + std::to_string(display_width)
+           + "&height=" + std::to_string(display_height);
+  }
+  return url;
 }
 
 RenderedMessage compute_layout(
@@ -111,7 +119,7 @@ RenderedMessage compute_layout(
     QPixmap embed_img;
     QPixmap embed_thumb;
     if (embed.image) {
-      std::string key = add_cdn_size(embed.image->proxy_url.value_or(embed.image->url), 520);
+      std::string key = add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -121,7 +129,7 @@ RenderedMessage compute_layout(
     }
     if (embed.thumbnail) {
       int thumb_size = (embed.type == "video") ? 520 : 128;
-      std::string key = add_cdn_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
+      std::string key = add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -137,7 +145,7 @@ RenderedMessage compute_layout(
   for (const auto& att : message.attachments) {
     QPixmap att_img;
     if (att.width.has_value() && !att.url.empty()) {
-      auto it = images.find(add_cdn_size(att.url, 520));
+      auto it = images.find(add_image_size(att.url, 520));
       if (it != images.end()) {
         att_img = it->second;
       }

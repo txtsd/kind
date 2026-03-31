@@ -15,17 +15,31 @@
 
 namespace kind::gui {
 
-// Append ?size= to cdn.discordapp.com URLs, rounding up to the next power of 2
-static std::string add_cdn_size(const std::string& url, int size) {
-  if (url.find("cdn.discordapp.com") == std::string::npos) {
-    return url;
+// Append size parameters to Discord image URLs.
+// cdn.discordapp.com: ?size=N (power of 2, 16-4096)
+// images-ext-*.discordapp.net / media.discordapp.net: ?width=N&height=N
+static std::string add_image_size(const std::string& url, int display_width, int display_height = 0) {
+  if (display_height == 0) {
+    display_height = display_width;
   }
-  int s = 16;
-  while (s < size && s < 4096) {
-    s *= 2;
-  }
+
   char sep = (url.find('?') != std::string::npos) ? '&' : '?';
-  return url + sep + "size=" + std::to_string(s);
+
+  if (url.find("cdn.discordapp.com") != std::string::npos) {
+    int s = 16;
+    while (s < display_width && s < 4096) {
+      s *= 2;
+    }
+    return url + sep + "size=" + std::to_string(s);
+  }
+
+  if (url.find("discordapp.net") != std::string::npos
+      || url.find("discord.com") != std::string::npos) {
+    return url + sep + "width=" + std::to_string(display_width)
+           + "&height=" + std::to_string(display_height);
+  }
+
+  return url;
 }
 
 MessageView::MessageView(QWidget* parent) : QListView(parent) {
@@ -315,16 +329,16 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      try_get(add_cdn_size(embed.image->proxy_url.value_or(embed.image->url), 520));
+      try_get(add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
     }
     if (embed.thumbnail) {
       int thumb_size = (embed.type == "video") ? 520 : 128;
-      try_get(add_cdn_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
+      try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      try_get(add_cdn_size(att.url, 520));
+      try_get(add_image_size(att.url, 520));
     }
   }
   for (const auto& sticker : msg.sticker_items) {
@@ -360,18 +374,18 @@ void MessageView::request_images(const kind::Message& msg) {
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
       std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      request_image(add_cdn_size(key, 520));
+      request_image(add_image_size(key, 520));
     }
     if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
       // Video embeds render thumbnail as a large image, not 80x80
       int thumb_size = (embed.type == "video") ? 520 : 128;
-      request_image(add_cdn_size(key, thumb_size));
+      request_image(add_image_size(key, thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      request_image(add_cdn_size(att.url, 520));
+      request_image(add_image_size(att.url, 520));
     }
   }
   for (const auto& sticker : msg.sticker_items) {
