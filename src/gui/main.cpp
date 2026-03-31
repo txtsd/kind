@@ -21,6 +21,21 @@
 #include <unordered_map>
 
 int main(int argc, char* argv[]) {
+  // Suppress Qt 6 Wayland "supports grabbing the mouse only for popup windows"
+  // warnings triggered by menu popups. Known Qt platform plugin bug, not actionable.
+  static QtMessageHandler prev_msg_handler = nullptr;
+  prev_msg_handler = qInstallMessageHandler(
+      [](QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
+        if (msg.contains("supports grabbing the mouse only for popup windows")) {
+          return;
+        }
+        if (prev_msg_handler) {
+          prev_msg_handler(type, ctx, msg);
+        } else {
+          fprintf(stderr, "%s\n", qPrintable(msg));
+        }
+      });
+
   kind::log::init();
 
   QApplication qapp(argc, argv);
