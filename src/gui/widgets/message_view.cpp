@@ -296,8 +296,17 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
             }
             pixmap_cache_[std_url] = pixmap;
 
+            // Find the first visible row to detect if images load above viewport
+            int first_visible_row = -1;
+            auto first_idx = indexAt(QPoint(0, 0));
+            if (first_idx.isValid()) {
+              first_visible_row = first_idx.row();
+            }
+
             int width = viewport()->width() > 0 ? viewport()->width() : 400;
             QFont view_font = font();
+            int scroll_delta = 0;
+
             for (auto msg_id : message_ids) {
               auto row = model_->row_for_id(msg_id);
               if (!row) {
@@ -307,9 +316,29 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
               if (row_idx >= model_->messages().size()) {
                 continue;
               }
+
+              // Measure old height before re-render
+              QStyleOptionViewItem opt;
+              opt.initFrom(viewport());
+              opt.rect = QRect(0, 0, width, 0);
+              int old_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();
+
               const auto& msg = model_->messages()[row_idx];
               auto images = cached_pixmaps_for(msg);
               model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images));
+
+              // Measure new height after re-render
+              int new_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();
+
+              // If this message is above the viewport, accumulate the delta
+              if (first_visible_row >= 0 && *row < first_visible_row) {
+                scroll_delta += (new_height - old_height);
+              }
+            }
+
+            // Adjust scroll position to compensate for height changes above viewport
+            if (scroll_delta != 0 && !auto_scroll_) {
+              verticalScrollBar()->setValue(verticalScrollBar()->value() + scroll_delta);
             }
           });
 }
