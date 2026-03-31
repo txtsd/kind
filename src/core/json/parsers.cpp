@@ -194,6 +194,14 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     if (aobj.contains("height") && !aobj["height"].isNull()) {
       att.height = aobj["height"].toInt();
     }
+    log::client()->debug("Attachment: filename={}, content_type={}, size={}, "
+                         "width={}, height={}, url={}",
+                         att.filename,
+                         att.content_type.value_or("(none)"),
+                         att.size,
+                         att.width.value_or(-1),
+                         att.height.value_or(-1),
+                         att.url.substr(0, 80));
     msg.attachments.push_back(std::move(att));
   }
 
