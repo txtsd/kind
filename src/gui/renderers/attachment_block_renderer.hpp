@@ -30,6 +30,7 @@ private:
   QPixmap image_;
   int total_height_{0};
   bool is_image_{false};
+  bool is_video_{false};
   int display_width_{0};
   int display_height_{0};
 

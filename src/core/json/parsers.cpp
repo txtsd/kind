@@ -185,6 +185,9 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     att.filename = aobj["filename"].toString().toStdString();
     att.url = aobj["url"].toString().toStdString();
     att.size = static_cast<std::size_t>(aobj["size"].toInteger(0));
+    if (aobj.contains("content_type")) {
+      att.content_type = aobj["content_type"].toString().toStdString();
+    }
     if (aobj.contains("width") && !aobj["width"].isNull()) {
       att.width = aobj["width"].toInt();
     }

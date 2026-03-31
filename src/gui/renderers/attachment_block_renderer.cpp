@@ -15,9 +15,10 @@ static const QColor link_color(0x00, 0xa8, 0xfc);
 AttachmentBlockRenderer::AttachmentBlockRenderer(const kind::Attachment& attachment,
                                                  const QFont& font, const QPixmap& image)
     : attachment_(attachment), font_(font), image_(image) {
-  is_image_ = attachment_.width.has_value() && attachment_.height.has_value();
+  is_video_ = attachment_.is_video();
+  is_image_ = !is_video_ && attachment_.width.has_value() && attachment_.height.has_value();
 
-  if (is_image_) {
+  if (is_image_ || is_video_) {
     int orig_w = *attachment_.width;
     int orig_h = *attachment_.height;
 
@@ -60,19 +61,40 @@ void AttachmentBlockRenderer::paint(QPainter* painter, const QRect& rect) const 
   int x = rect.left() + padding_;
   int y = rect.top() + padding_;
 
-  if (is_image_) {
+  if (is_image_ || is_video_) {
+    QRect area(x, y, display_width_, display_height_);
     if (!image_.isNull()) {
       painter->drawPixmap(x, y, display_width_, display_height_, image_);
     } else {
-      // Placeholder rectangle for image not yet loaded
-      QRect placeholder(x, y, display_width_, display_height_);
-      painter->fillRect(placeholder, placeholder_color);
+      painter->fillRect(area, placeholder_color);
       painter->setFont(font_);
       painter->setPen(dim_text_color);
       QString dims = QString("%1x%2").arg(display_width_).arg(display_height_);
-      painter->drawText(placeholder, Qt::AlignCenter, dims);
+      painter->drawText(area, Qt::AlignCenter, dims);
     }
-    // Store in local coordinates (relative to block top-left) for hit_test
+    // Draw play icon overlay for video attachments
+    if (is_video_) {
+      int icon_size = std::min(48, std::min(display_width_, display_height_) / 3);
+      int icon_x = x + (display_width_ - icon_size) / 2;
+      int icon_y = y + (display_height_ - icon_size) / 2;
+
+      painter->setRenderHint(QPainter::Antialiasing);
+      // Semi-transparent dark circle
+      QPainterPath circle;
+      circle.addEllipse(QRectF(icon_x, icon_y, icon_size, icon_size));
+      painter->fillPath(circle, QColor(0, 0, 0, 160));
+      // White play triangle
+      QPainterPath triangle;
+      qreal tri_x = icon_x + icon_size * 0.38;
+      qreal tri_y = icon_y + icon_size * 0.25;
+      qreal tri_w = icon_size * 0.35;
+      qreal tri_h = icon_size * 0.50;
+      triangle.moveTo(tri_x, tri_y);
+      triangle.lineTo(tri_x + tri_w, tri_y + tri_h / 2);
+      triangle.lineTo(tri_x, tri_y + tri_h);
+      triangle.closeSubpath();
+      painter->fillPath(triangle, Qt::white);
+    }
     clickable_rect_ = QRect(padding_, padding_, display_width_, display_height_);
   } else {
     QFontMetrics fm(font_);
