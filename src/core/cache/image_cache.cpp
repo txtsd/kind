@@ -29,28 +29,19 @@ ImageCache::ImageCache(const std::filesystem::path& disk_cache_dir,
 }
 
 std::optional<CachedImage> ImageCache::get(const std::string& url) const {
-  // Check memory cache first
+  // Memory-only lookup. No disk I/O.
   auto it = memory_cache_.find(url);
   if (it != memory_cache_.end()) {
-    // Promote to front of LRU
     lru_order_.erase(it->second.lru_it);
     lru_order_.push_front(url);
     it->second.lru_it = lru_order_.begin();
     return it->second.image;
   }
-
-  // Check disk cache
-  auto from_disk = load_from_disk(url);
-  if (from_disk) {
-    add_to_memory(url, *from_disk);
-    return from_disk;
-  }
-
   return std::nullopt;
 }
 
 void ImageCache::request(const std::string& url) {
-  // Serve from cache if available
+  // Already in memory: emit asynchronously
   auto cached = get(url);
   if (cached) {
     auto q_url = QString::fromStdString(url);
@@ -61,49 +52,54 @@ void ImageCache::request(const std::string& url) {
     return;
   }
 
-  // Already downloading this URL
+  // Already in-flight (disk load or network download)
   if (in_flight_.contains(url)) {
     return;
   }
 
   in_flight_.insert(url);
 
-  QNetworkRequest req(QUrl(QString::fromStdString(url)));
-  auto* reply = network_->get(req);
-
-  connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
-    reply->deleteLater();
-    in_flight_.erase(url);
-
-    if (reply->error() != QNetworkReply::NoError) {
-      log::cache()->warn("Image download failed for {}: {}",
-                         url, reply->errorString().toStdString());
+  // Try disk cache asynchronously via a deferred call
+  QTimer::singleShot(0, this, [this, url]() {
+    auto from_disk = load_from_disk(url);
+    if (from_disk) {
+      in_flight_.erase(url);
+      add_to_memory(url, *from_disk);
+      emit image_ready(QString::fromStdString(url), *from_disk);
       return;
     }
 
-    QByteArray data = reply->readAll();
-    if (data.isEmpty()) {
-      log::cache()->warn("Empty response for image {}", url);
-      return;
-    }
+    // Not on disk: download from network
+    QNetworkRequest req(QUrl(QString::fromStdString(url)));
+    auto* reply = network_->get(req);
 
-    CachedImage image;
-    image.data = data;
-    image.mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
-                          .toString()
-                          .toStdString();
+    connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
+      reply->deleteLater();
+      in_flight_.erase(url);
 
-    // Extract dimensions from image data
-    QImage qi = QImage::fromData(data);
-    if (!qi.isNull()) {
-      image.width = qi.width();
-      image.height = qi.height();
-    }
+      if (reply->error() != QNetworkReply::NoError) {
+        log::cache()->warn("Image download failed for {}: {}",
+                           url, reply->errorString().toStdString());
+        return;
+      }
 
-    save_to_disk(url, image);
-    add_to_memory(url, image);
+      QByteArray data = reply->readAll();
+      if (data.isEmpty()) {
+        log::cache()->warn("Empty response for image {}", url);
+        return;
+      }
 
-    emit image_ready(QString::fromStdString(url), image);
+      CachedImage image;
+      image.data = data;
+      image.mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
+                            .toString()
+                            .toStdString();
+
+      save_to_disk(url, image);
+      add_to_memory(url, image);
+
+      emit image_ready(QString::fromStdString(url), image);
+    });
   });
 }
 

@@ -4,6 +4,7 @@
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QFile>
+#include <QSignalSpy>
 #include <QImage>
 
 #include <filesystem>
@@ -73,13 +74,18 @@ TEST_F(ImageCacheTest, DiskCacheRoundTrip) {
     file.close();
   }
 
-  // Second cache instance: should find the file on disk
+  // Second cache instance: request should find the file on disk asynchronously
   kind::ImageCache cache2(cache_dir_);
-  auto result = cache2.get(url);
-  ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result->width, 1);
-  EXPECT_EQ(result->height, 1);
-  EXPECT_FALSE(result->data.isEmpty());
+  QSignalSpy spy(&cache2, &kind::ImageCache::image_ready);
+  cache2.request(url);
+  ASSERT_TRUE(spy.wait(1000));
+  ASSERT_EQ(spy.count(), 1);
+  auto args = spy.takeFirst();
+  EXPECT_EQ(args.at(0).toString().toStdString(), url);
+  auto image = args.at(1).value<kind::CachedImage>();
+  EXPECT_EQ(image.width, 1);
+  EXPECT_EQ(image.height, 1);
+  EXPECT_FALSE(image.data.isEmpty());
 }
 
 TEST_F(ImageCacheTest, MemoryLruEviction) {
@@ -108,19 +114,28 @@ TEST_F(ImageCacheTest, MemoryLruEviction) {
     file.close();
   }
 
-  // Load images 1, 2, 3 into memory via get()
+  // Load images 1, 2, 3 into memory via request() + event loop
+  auto load = [&](const std::string& url) {
+    QSignalSpy spy(&cache, &kind::ImageCache::image_ready);
+    cache.request(url);
+    spy.wait(1000);
+  };
+  load("https://example.com/img1.png");
+  load("https://example.com/img2.png");
+  load("https://example.com/img3.png");
+
+  // All three should be in memory now
   ASSERT_TRUE(cache.get("https://example.com/img1.png").has_value());
   ASSERT_TRUE(cache.get("https://example.com/img2.png").has_value());
   ASSERT_TRUE(cache.get("https://example.com/img3.png").has_value());
 
   // Loading image 4 should evict image 1 (the least recently used)
-  ASSERT_TRUE(cache.get("https://example.com/img4.png").has_value());
+  load("https://example.com/img4.png");
 
-  // Image 1 should still be loadable from disk, but was evicted from memory.
-  // We can verify disk still works:
-  auto result = cache.get("https://example.com/img1.png");
-  ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result->width, 1);
+  // Image 1 should be evicted from memory
+  EXPECT_FALSE(cache.get("https://example.com/img1.png").has_value());
+  // But image 4 is in memory
+  EXPECT_TRUE(cache.get("https://example.com/img4.png").has_value());
 }
 
 TEST_F(ImageCacheTest, MemoryPromotionOnAccess) {
@@ -147,10 +162,15 @@ TEST_F(ImageCacheTest, MemoryPromotionOnAccess) {
     file.close();
   }
 
-  // Load 1, 2, 3 into memory
-  cache.get("https://example.com/p1.png");
-  cache.get("https://example.com/p2.png");
-  cache.get("https://example.com/p3.png");
+  // Load 1, 2, 3 into memory via request
+  auto load = [&](const std::string& url) {
+    QSignalSpy spy(&cache, &kind::ImageCache::image_ready);
+    cache.request(url);
+    spy.wait(1000);
+  };
+  load("https://example.com/p1.png");
+  load("https://example.com/p2.png");
+  load("https://example.com/p3.png");
 
   // Access p1 again to promote it (now p2 is least recently used)
   cache.get("https://example.com/p1.png");
@@ -175,14 +195,14 @@ TEST_F(ImageCacheTest, MemoryPromotionOnAccess) {
     file.write(png_data);
     file.close();
   }
-  cache.get("https://example.com/p4.png");
+  load("https://example.com/p4.png");
 
   // p1 and p3 should still be in memory (p1 was promoted, p3 was more recent than p2)
-  // p2 was evicted but is still on disk
   auto p1 = cache.get("https://example.com/p1.png");
-  auto p2 = cache.get("https://example.com/p2.png");
   ASSERT_TRUE(p1.has_value());
   EXPECT_EQ(p1->width, 1);
-  ASSERT_TRUE(p2.has_value());
-  EXPECT_EQ(p2->width, 2);
+  EXPECT_TRUE(cache.get("https://example.com/p3.png").has_value());
+
+  // p2 was evicted from memory
+  EXPECT_FALSE(cache.get("https://example.com/p2.png").has_value());
 }
