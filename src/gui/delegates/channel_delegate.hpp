@@ -14,11 +14,11 @@ public:
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 
 private:
-  static constexpr int category_height_ = 24;
-  static constexpr int channel_height_ = 28;
-  static constexpr int channel_indent_ = 20;
-  static constexpr int category_top_margin_ = 8;
-  static constexpr int horizontal_padding_ = 6;
+  static constexpr int category_height_ = 18;
+  static constexpr int channel_height_ = 20;
+  static constexpr int channel_indent_ = 12;
+  static constexpr int category_top_margin_ = 4;
+  static constexpr int horizontal_padding_ = 4;
 
   void paint_category(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const;
   void paint_channel(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index,
