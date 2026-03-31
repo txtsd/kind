@@ -14,7 +14,9 @@ add_executable(kind-tests
   core/markdown_test.cpp
   core/message_parse_test.cpp
   gui/message_model_test.cpp
+  gui/text_block_renderer_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
 )
 
 set_target_properties(kind-tests PROPERTIES AUTOMOC ON)
