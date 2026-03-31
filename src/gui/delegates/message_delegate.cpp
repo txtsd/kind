@@ -3,11 +3,9 @@
 #include "models/message_model.hpp"
 #include "models/rendered_message.hpp"
 
-#include <QDesktopServices>
 #include <QFontMetrics>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QUrl>
 
 namespace kind::gui {
 
@@ -83,6 +81,11 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     return false;
   }
 
+  auto message_id = static_cast<kind::Snowflake>(
+      index.data(MessageModel::MessageIdRole).value<qulonglong>());
+  auto channel_id = static_cast<kind::Snowflake>(
+      index.data(MessageModel::ChannelIdRole).value<qulonglong>());
+
   int y = option.rect.top();
   for (const auto& block : rendered->blocks) {
     int block_h = block->height(option.rect.width());
@@ -91,9 +94,51 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
       HitResult result;
       QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
       if (block->hit_test(local, result)) {
-        if (result.type == HitResult::Link && !result.url.empty()) {
-          QDesktopServices::openUrl(QUrl(QString::fromStdString(result.url)));
+        switch (result.type) {
+        case HitResult::Link:
+          if (!result.url.empty()) {
+            emit link_clicked(QString::fromStdString(result.url));
+            return true;
+          }
+          break;
+
+        case HitResult::Reaction:
+          if (result.reaction_index >= 0) {
+            // Look up the reaction from the original message data to get
+            // the emoji name and whether the user already reacted
+            auto* msg_model = qobject_cast<const MessageModel*>(index.model());
+            if (msg_model) {
+              const auto& messages = msg_model->messages();
+              int row = index.row();
+              if (row >= 0 && row < static_cast<int>(messages.size())) {
+                const auto& msg = messages[row];
+                if (result.reaction_index < static_cast<int>(msg.reactions.size())) {
+                  const auto& reaction = msg.reactions[result.reaction_index];
+                  QString emoji = QString::fromStdString(reaction.emoji_name);
+                  // If user already reacted, clicking should remove; otherwise add
+                  emit reaction_toggled(channel_id, message_id, emoji, !reaction.me);
+                  return true;
+                }
+              }
+            }
+          }
+          break;
+
+        case HitResult::Spoiler:
+          emit spoiler_toggled(message_id);
           return true;
+
+        case HitResult::ScrollToMessage:
+          if (result.id != 0) {
+            emit scroll_to_message_requested(result.id);
+            return true;
+          }
+          break;
+
+        case HitResult::None:
+        case HitResult::Mention:
+        case HitResult::Button:
+          break;
         }
       }
     }

@@ -33,6 +33,15 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     scroll_to_bottom();
   });
 
+  // Forward delegate interaction signals as view signals
+  connect(delegate_, &MessageDelegate::link_clicked, this, &MessageView::link_clicked);
+  connect(delegate_, &MessageDelegate::reaction_toggled, this, &MessageView::reaction_toggled);
+  connect(delegate_, &MessageDelegate::spoiler_toggled, this, &MessageView::spoiler_toggled);
+  connect(delegate_, &MessageDelegate::scroll_to_message_requested, this, &MessageView::scroll_to_message_requested);
+
+  // Handle scroll-to-message internally as well
+  connect(delegate_, &MessageDelegate::scroll_to_message_requested, this, &MessageView::scroll_to_message);
+
   setModel(model_);
   setItemDelegate(delegate_);
 
@@ -215,6 +224,14 @@ void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
   int pill_y = viewport()->height() - jump_pill_->height() - 8;
   jump_pill_->move(pill_x, pill_y);
+}
+
+void MessageView::scroll_to_message(kind::Snowflake message_id) {
+  auto row = model_->row_for_id(message_id);
+  if (row) {
+    auto_scroll_ = false;
+    scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtCenter);
+  }
 }
 
 void MessageView::resizeEvent(QResizeEvent* event) {

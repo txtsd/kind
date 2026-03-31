@@ -14,10 +14,12 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDesktopServices>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSplitter>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <unordered_map>
@@ -348,6 +350,17 @@ int main(int argc, char* argv[]) {
                      if (current_channel_id != 0) {
                        client.fetch_message_history(current_channel_id, before_id);
                      }
+                   });
+
+  // Open links via system handler
+  QObject::connect(message_view, &kind::gui::MessageView::link_clicked,
+                   [](const QString& url) { QDesktopServices::openUrl(QUrl(url)); });
+
+  // Toggle reactions via client
+  QObject::connect(message_view, &kind::gui::MessageView::reaction_toggled,
+                   [&client](kind::Snowflake channel_id, kind::Snowflake message_id,
+                             const QString& emoji, bool add) {
+                     client.toggle_reaction(channel_id, message_id, emoji.toStdString(), add);
                    });
 
   // Shared actions for guild/channel selection (used by signals and restore)

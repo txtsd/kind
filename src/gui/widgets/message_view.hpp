@@ -28,8 +28,15 @@ public:
 
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
+  void scroll_to_message(kind::Snowflake message_id);
+
 signals:
   void load_more_requested(kind::Snowflake before_id);
+  void link_clicked(const QString& url);
+  void reaction_toggled(kind::Snowflake channel_id, kind::Snowflake message_id,
+                        const QString& emoji, bool add);
+  void spoiler_toggled(kind::Snowflake message_id);
+  void scroll_to_message_requested(kind::Snowflake message_id);
 
 public slots:
   void set_messages(const QVector<kind::Message>& messages);
