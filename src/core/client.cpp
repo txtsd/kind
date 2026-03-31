@@ -24,6 +24,7 @@
 #include "logging.hpp"
 #include <algorithm>
 #include <charconv>
+#include <fstream>
 #include <set>
 #include <string>
 
@@ -46,6 +47,12 @@ public:
 
   void on_login_success(const User& user) override {
     client_.store_->set_current_user(user);
+
+    // Initialize per-account database now that we know the user ID
+    if (!client_.test_mode_ && !client_.db_manager_) {
+      client_.init_account_db(user.id);
+      client_.load_cache();
+    }
 
     if (client_.db_writer_) {
       emit client_.db_writer_->current_user_write_requested(user);
@@ -371,6 +378,8 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
   auto reconnect_max = config.get_or<int64_t>("behavior.reconnect_max_delay_ms", 30000);
   auto reconnect_retries = config.get_or<int64_t>("behavior.reconnect_max_retries", 10);
 
+  keychain_service_ = keychain_service;
+  db_path_override_ = db_path_override;
   token_store_ = std::make_unique<KeychainTokenStore>(keychain_service);
 
   auto qt_rest = std::make_unique<QtRestClient>();
@@ -394,13 +403,8 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
 
   store_ = std::make_unique<DataStore>(max_messages);
 
-  auto db_path = db_path_override.empty()
-      ? platform_paths().state_dir / "kind.db"
-      : std::filesystem::path(db_path_override);
-  db_manager_ = std::make_unique<DatabaseManager>(db_path);
-  db_manager_->initialize();
-  db_writer_ = std::make_unique<DatabaseWriter>(db_path.string());
-  db_reader_ = std::make_unique<DatabaseReader>(db_path.string());
+  // DB is NOT created here — it's deferred to init_account_db() after login
+  // so the path can be scoped by user ID.
 
   auth_ = std::make_unique<AuthManager>(*rest_, *token_store_);
 
@@ -409,6 +413,7 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
 
 Client::Client(ConfigManager& config, ClientDeps deps)
     : config_(config),
+      test_mode_(true),
       token_store_(std::move(deps.token_store)),
       rest_(std::move(deps.rest)),
       gateway_(std::move(deps.gateway)),
@@ -630,6 +635,61 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
 
 void Client::logout() {
   auth_->logout();
+}
+
+bool Client::try_load_last_account() {
+  if (!db_path_override_.empty()) {
+    // Test mode: use the override path directly
+    init_account_db(0);
+    return db_reader_ != nullptr;
+  }
+
+  auto last_account_path = platform_paths().state_dir / "last_account";
+  std::ifstream in(last_account_path);
+  if (!in) {
+    return false;
+  }
+
+  std::string id_str;
+  if (!std::getline(in, id_str) || id_str.empty()) {
+    return false;
+  }
+
+  Snowflake user_id = safe_stoull(id_str);
+  if (user_id == 0) {
+    return false;
+  }
+
+  init_account_db(user_id);
+  return db_reader_ != nullptr;
+}
+
+void Client::init_account_db(Snowflake user_id) {
+  if (db_manager_) {
+    return; // Already initialized
+  }
+
+  std::filesystem::path db_path;
+  if (!db_path_override_.empty()) {
+    db_path = std::filesystem::path(db_path_override_);
+  } else {
+    db_path = platform_paths().state_dir / "accounts" / std::to_string(user_id) / "kind.db";
+  }
+
+  db_manager_ = std::make_unique<DatabaseManager>(db_path);
+  db_manager_->initialize();
+  db_writer_ = std::make_unique<DatabaseWriter>(db_path.string());
+  db_reader_ = std::make_unique<DatabaseReader>(db_path.string());
+
+  // Save this as the last active account
+  auto global_state_dir = platform_paths().state_dir;
+  std::filesystem::create_directories(global_state_dir);
+  std::ofstream last_account(global_state_dir / "last_account");
+  if (last_account) {
+    last_account << user_id << '\n';
+  }
+
+  log::cache()->info("Account database initialized for user {} at {}", user_id, db_path.string());
 }
 
 void Client::load_cache() {

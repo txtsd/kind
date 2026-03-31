@@ -76,7 +76,9 @@ public:
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});
   void logout();
 
-  // Persistence
+  // Account-scoped persistence
+  void init_account_db(Snowflake user_id);
+  bool try_load_last_account();  // Returns true if a last account was found and DB opened
   void load_cache();
   void save_cache();
   void save_last_selection(Snowflake guild_id, Snowflake channel_id);
@@ -120,7 +122,10 @@ private:
   ObserverList<AuthObserver> auth_observers_;
   ObserverList<GatewayObserver> gateway_observers_;
 
-  // SQLite cache (production only; null in test constructor)
+  // Account-scoped SQLite cache (initialized after login when user ID is known)
+  bool test_mode_{false};
+  std::string keychain_service_;
+  std::string db_path_override_;
   std::unique_ptr<DatabaseManager> db_manager_;
   std::unique_ptr<DatabaseWriter> db_writer_;
   std::unique_ptr<DatabaseReader> db_reader_;

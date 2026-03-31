@@ -51,7 +51,10 @@ int main(int argc, char* argv[]) {
 
   kind::ConfigManager config;
   kind::Client client(config);
-  client.load_cache();
+  // Try to open the last active account's database for cached display
+  if (client.try_load_last_account()) {
+    client.load_cache();
+  }
   kind::gui::App app(client);
 
   // Display cached guilds immediately before Discord connects
