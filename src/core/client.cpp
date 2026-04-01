@@ -327,6 +327,24 @@ private:
             mute_settings.push_back(std::move(gs));
           }
           msm->load_guild_settings(mute_settings);
+
+          // Persist mute state to disk
+          if (dbw) {
+            std::vector<std::tuple<Snowflake, int, bool>> db_entries;
+            for (const auto& gs : mute_settings) {
+              if (gs.guild_id != 0) {
+                db_entries.emplace_back(gs.guild_id, 0, gs.muted);
+              }
+              for (const auto& co : gs.channel_overrides) {
+                if (co.channel_id != 0) {
+                  db_entries.emplace_back(co.channel_id, 1, co.muted);
+                }
+              }
+            }
+            if (!db_entries.empty()) {
+              emit dbw->mute_state_bulk_write_requested(std::move(db_entries));
+            }
+          }
         }
       }
     });
@@ -980,6 +998,12 @@ void Client::load_cache() {
   auto read_states = db_reader_->read_states();
   if (!read_states.empty()) {
     read_state_manager_->load_read_states(read_states);
+  }
+
+  // Load mute states from database
+  auto mute_states = db_reader_->mute_states();
+  if (!mute_states.empty()) {
+    mute_state_manager_->load_from_db(mute_states);
   }
 
   log::cache()->info("Loaded cache from database");

@@ -4,6 +4,7 @@
 
 #include <QObject>
 
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -27,6 +28,9 @@ public:
 
   // Bulk load from READY payload
   void load_guild_settings(const std::vector<GuildMuteSettings>& settings);
+
+  // Load from DB (type 0 = guild, type 1 = channel)
+  void load_from_db(const std::vector<std::tuple<Snowflake, int, bool>>& entries);
 
   // Query
   bool is_guild_muted(Snowflake guild_id) const;

@@ -368,6 +368,20 @@ std::vector<std::pair<Snowflake, ReadState>> DatabaseReader::read_states() const
   return result;
 }
 
+std::vector<std::tuple<Snowflake, int, bool>> DatabaseReader::mute_states() const {
+  std::vector<std::tuple<Snowflake, int, bool>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT id, type, muted FROM mute_state");
+  while (q.next()) {
+    auto id = static_cast<Snowflake>(q.value(0).toLongLong());
+    int type = q.value(1).toInt();
+    bool muted = q.value(2).toBool();
+    result.emplace_back(id, type, muted);
+  }
+  return result;
+}
+
 std::optional<std::string> DatabaseReader::app_state(const std::string& key) const {
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);

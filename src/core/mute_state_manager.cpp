@@ -20,6 +20,21 @@ void MuteStateManager::load_guild_settings(const std::vector<GuildMuteSettings>&
   }
 }
 
+void MuteStateManager::load_from_db(
+    const std::vector<std::tuple<Snowflake, int, bool>>& entries) {
+  muted_guilds_.clear();
+  muted_channels_.clear();
+
+  for (const auto& [id, type, muted] : entries) {
+    if (!muted) continue;
+    if (type == 0) {
+      muted_guilds_.insert(id);
+    } else if (type == 1) {
+      muted_channels_.insert(id);
+    }
+  }
+}
+
 bool MuteStateManager::is_guild_muted(Snowflake guild_id) const {
   return muted_guilds_.contains(guild_id);
 }

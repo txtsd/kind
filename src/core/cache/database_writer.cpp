@@ -18,6 +18,8 @@ Q_DECLARE_METATYPE(kind::User)
 Q_DECLARE_METATYPE(std::vector<kind::Role>)
 Q_DECLARE_METATYPE(std::vector<kind::PermissionOverwrite>)
 Q_DECLARE_METATYPE(std::vector<kind::Snowflake>)
+using MuteStateEntryVec = std::vector<std::tuple<kind::Snowflake, int, bool>>;
+Q_DECLARE_METATYPE(MuteStateEntryVec)
 
 static const int guild_reg = qRegisterMetaType<kind::Guild>("kind::Guild");
 static const int channel_reg = qRegisterMetaType<kind::Channel>("kind::Channel");
@@ -28,6 +30,8 @@ static const int ow_vec_reg = qRegisterMetaType<std::vector<kind::PermissionOver
     "std::vector<kind::PermissionOverwrite>");
 static const int sf_vec_reg =
     qRegisterMetaType<std::vector<kind::Snowflake>>("std::vector<kind::Snowflake>");
+static const int mute_vec_reg =
+    qRegisterMetaType<MuteStateEntryVec>("MuteStateEntryVec");
 
 namespace kind {
 
@@ -471,6 +475,45 @@ void DatabaseWriteWorker::write_app_state(QString key, QString value) {
   q.exec();
 }
 
+void DatabaseWriteWorker::write_mute_state(kind::Snowflake id, int type, bool muted) {
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.prepare("INSERT OR REPLACE INTO mute_state (id, type, muted) "
+            "VALUES (:id, :type, :muted)");
+  q.bindValue(":id", static_cast<qint64>(id));
+  q.bindValue(":type", type);
+  q.bindValue(":muted", muted ? 1 : 0);
+  if (!q.exec()) {
+    log::cache()->warn("Writer: failed to write mute_state for {}: {}", id,
+                       q.lastError().text().toStdString());
+  }
+}
+
+void DatabaseWriteWorker::write_mute_state_bulk(
+    std::vector<std::tuple<kind::Snowflake, int, bool>> entries) {
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  db.transaction();
+
+  QSqlQuery del(db);
+  del.exec("DELETE FROM mute_state");
+
+  QSqlQuery q(db);
+  q.prepare("INSERT INTO mute_state (id, type, muted) "
+            "VALUES (:id, :type, :muted)");
+  for (const auto& [id, type, muted] : entries) {
+    q.bindValue(":id", static_cast<qint64>(id));
+    q.bindValue(":type", type);
+    q.bindValue(":muted", muted ? 1 : 0);
+    if (!q.exec()) {
+      log::cache()->warn("Writer: failed to bulk write mute_state for {}: {}", id,
+                         q.lastError().text().toStdString());
+    }
+  }
+  db.commit();
+}
+
 void DatabaseWriteWorker::flush() {
   emit flushed();
 }
@@ -509,6 +552,10 @@ DatabaseWriter::DatabaseWriter(const std::string& db_path, QObject* parent)
           &DatabaseWriteWorker::write_read_state);
   connect(this, &DatabaseWriter::app_state_write_requested, worker_,
           &DatabaseWriteWorker::write_app_state);
+  connect(this, &DatabaseWriter::mute_state_write_requested, worker_,
+          &DatabaseWriteWorker::write_mute_state);
+  connect(this, &DatabaseWriter::mute_state_bulk_write_requested, worker_,
+          &DatabaseWriteWorker::write_mute_state_bulk);
   connect(this, &DatabaseWriter::flush_requested, worker_, &DatabaseWriteWorker::flush);
 
   thread_.start();

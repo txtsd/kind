@@ -156,6 +156,13 @@ void DatabaseManager::create_schema() {
       "  value TEXT"
       ")");
 
+  exec(
+      "CREATE TABLE IF NOT EXISTS mute_state ("
+      "  id    INTEGER PRIMARY KEY,"
+      "  type  INTEGER NOT NULL,"
+      "  muted INTEGER NOT NULL DEFAULT 0"
+      ")");
+
   exec("INSERT OR IGNORE INTO schema_version (version) VALUES (2)");
 
   // Migrate from schema version 1 to 2: add type and ref_msg_id columns
