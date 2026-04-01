@@ -293,6 +293,42 @@ private:
       }
     }
 
+    // Parse user_guild_settings for mute state
+    {
+      auto settings_obj = obj["user_guild_settings"].toObject();
+      auto entries = settings_obj["entries"].toArray();
+      if (entries.isEmpty()) {
+        // Some payloads may have user_guild_settings as a direct array
+        entries = obj["user_guild_settings"].toArray();
+      }
+      if (!entries.isEmpty()) {
+        std::vector<GuildMuteSettings> mute_settings;
+        mute_settings.reserve(entries.size());
+        for (const auto& val : entries) {
+          auto entry = val.toObject();
+          GuildMuteSettings gs;
+          gs.guild_id = static_cast<Snowflake>(entry["guild_id"].toString().toULongLong());
+          gs.muted = entry["muted"].toBool(false);
+
+          auto overrides = entry["channel_overrides"].toArray();
+          gs.channel_overrides.reserve(overrides.size());
+          for (const auto& ov : overrides) {
+            auto ov_obj = ov.toObject();
+            GuildMuteSettings::ChannelOverride co;
+            co.channel_id = static_cast<Snowflake>(ov_obj["channel_id"].toString().toULongLong());
+            co.muted = ov_obj["muted"].toBool(false);
+            gs.channel_overrides.push_back(co);
+          }
+
+          log::client()->debug("Guild settings entry: guild_id={}, muted={}, overrides={}",
+                               gs.guild_id, gs.muted, gs.channel_overrides.size());
+          mute_settings.push_back(std::move(gs));
+        }
+        client_.mute_state_manager_->load_guild_settings(mute_settings);
+        log::client()->debug("Loaded {} user_guild_settings entries from READY", mute_settings.size());
+      }
+    }
+
     client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
   }
 
@@ -518,6 +554,7 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
   store_ = std::make_unique<DataStore>(max_messages);
   image_cache_ = std::make_unique<ImageCache>(platform_paths().cache_dir / "images");
   read_state_manager_ = std::make_unique<ReadStateManager>();
+  mute_state_manager_ = std::make_unique<MuteStateManager>();
 
   // DB is NOT created here — it's deferred to init_account_db() after login
   // so the path can be scoped by user ID.
@@ -535,7 +572,8 @@ Client::Client(ConfigManager& config, ClientDeps deps)
       gateway_(std::move(deps.gateway)),
       auth_(std::move(deps.auth)),
       store_(std::move(deps.store)),
-      read_state_manager_(std::make_unique<ReadStateManager>()) {
+      read_state_manager_(std::make_unique<ReadStateManager>()),
+      mute_state_manager_(std::make_unique<MuteStateManager>()) {
   wire_bridges();
 }
 

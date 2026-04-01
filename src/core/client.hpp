@@ -12,6 +12,7 @@
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
 
+#include "mute_state_manager.hpp"
 #include "read_state_manager.hpp"
 
 #include <atomic>
@@ -118,6 +119,9 @@ public:
   // Returns the read state manager for unread/mention tracking.
   ReadStateManager* read_state_manager() const { return read_state_manager_.get(); }
 
+  // Returns the mute state manager for guild/channel mute tracking.
+  MuteStateManager* mute_state_manager() const { return mute_state_manager_.get(); }
+
 private:
   void wire_bridges();
 
@@ -129,6 +133,7 @@ private:
   std::unique_ptr<DataStore> store_;
   std::unique_ptr<ImageCache> image_cache_;
   std::unique_ptr<ReadStateManager> read_state_manager_;
+  std::unique_ptr<MuteStateManager> mute_state_manager_;
 
   // Internal observer bridges
   class AuthBridge;
