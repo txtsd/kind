@@ -26,7 +26,7 @@ private:
   static constexpr int pill_height_ = 24;
   static constexpr int pill_padding_h_ = 8;
   static constexpr int pill_gap_ = 4;
-  static constexpr int pill_radius_ = 12;
+  static constexpr int pill_radius_ = 3;
 
   std::vector<kind::Reaction> reactions_;
   QFont font_;

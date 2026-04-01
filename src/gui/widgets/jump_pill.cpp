@@ -12,7 +12,7 @@ JumpPill::JumpPill(QWidget* parent) : QPushButton(parent) {
       "  background-color: rgba(88, 101, 242, 220);"
       "  color: white;"
       "  border: none;"
-      "  border-radius: 16px;"
+      "  border-radius: 3px;"
       "  padding: 4px 16px;"
       "  font-weight: bold;"
       "}");
