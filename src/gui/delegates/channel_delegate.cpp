@@ -9,15 +9,13 @@ namespace kind::gui {
 
 ChannelDelegate::ChannelDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 
-void ChannelDelegate::set_unread_options(bool dot, bool badge, bool glow) {
-  show_dot_ = dot;
+void ChannelDelegate::set_unread_options(bool bar, bool badge) {
+  show_bar_ = bar;
   show_badge_ = badge;
-  show_glow_ = glow;
 }
 
-void ChannelDelegate::set_mention_options(bool badge_channel, bool highlight_channel) {
+void ChannelDelegate::set_mention_options(bool badge_channel) {
   mention_badge_ = badge_channel;
-  mention_highlight_ = highlight_channel;
 }
 
 void ChannelDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
@@ -75,7 +73,7 @@ void ChannelDelegate::paint_category(QPainter* painter, const QStyleOptionViewIt
   int text_area_top = option.rect.top() + category_top_margin_;
   int text_area_height = option.rect.height() - category_top_margin_;
   int text_y = text_area_top + (text_area_height - fm.height()) / 2 + fm.ascent();
-  int left_offset = show_dot_ ? dot_column_width_ : 0;
+  int left_offset = show_bar_ ? bar_column_width_ : 0;
   int text_x = option.rect.left() + left_offset + horizontal_padding_;
   int available_width = option.rect.width() - left_offset - 2 * horizontal_padding_;
 
@@ -95,9 +93,9 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   bool has_unreads = unread_count > 0;
   bool has_mentions = mention_count > 0;
 
-  int left_offset = show_dot_ ? dot_column_width_ : 0;
+  int left_offset = show_bar_ ? bar_column_width_ : 0;
 
-  // Background layers: base first, then selection, then glow/mention overlay
+  // Background layers: base first, then selection
   bool opaque_selection = false;
   bool selected = option.state & QStyle::State_Selected;
 
@@ -115,27 +113,22 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
     painter->fillRect(option.rect, option.palette.base());
   }
 
-  // Overlay glow/mention highlight on top
-  if (has_mentions && mention_highlight_ && !locked) {
-    auto highlight_color = QColor(237, 66, 69);
-    highlight_color.setAlpha(selected ? 50 : 30);
-    painter->fillRect(option.rect, highlight_color);
-  } else if (has_unreads && show_glow_ && !locked) {
-    auto glow_color = option.palette.highlight().color();
-    glow_color.setAlpha(selected ? 50 : 30);
-    painter->fillRect(option.rect, glow_color);
-  }
-
-  // Dot indicator on the left
-  if (show_dot_ && has_unreads && !locked) {
-    auto dot_color = option.palette.highlight().color();
-    painter->setRenderHint(QPainter::Antialiasing);
-    painter->setBrush(dot_color);
-    painter->setPen(Qt::NoPen);
-    int dot_cx = option.rect.left() + dot_column_width_ / 2;
-    int dot_cy = option.rect.top() + option.rect.height() / 2;
-    painter->drawEllipse(QPoint(dot_cx, dot_cy), dot_radius_, dot_radius_);
-    painter->setRenderHint(QPainter::Antialiasing, false);
+  // Accent bars on the left edge
+  if (show_bar_ && !locked) {
+    if (has_unreads && has_mentions) {
+      // Unread bar at left edge
+      QRect unread_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
+      painter->fillRect(unread_bar, option.palette.highlight().color());
+      // Mention bar immediately to the right
+      QRect mention_bar(option.rect.left() + bar_width_, option.rect.top(), bar_width_, option.rect.height());
+      painter->fillRect(mention_bar, QColor(237, 66, 69));
+    } else if (has_mentions) {
+      QRect mention_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
+      painter->fillRect(mention_bar, QColor(237, 66, 69));
+    } else if (has_unreads) {
+      QRect unread_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
+      painter->fillRect(unread_bar, option.palette.highlight().color());
+    }
   }
 
   QString name = index.data(Qt::DisplayRole).toString();
@@ -159,16 +152,24 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   // Compute badge width to reserve space
   int badge_space = 0;
   if (!locked) {
+    auto compute_pill_width = [&](int count) {
+      QString badge_text = count > 99 ? QStringLiteral("99+") : QString::number(count);
+      QFontMetrics badge_fm(option.font);
+      int text_w = badge_fm.horizontalAdvance(badge_text);
+      return std::max(badge_height_, text_w + 2 * badge_hpad_);
+    };
+
     if (has_mentions && mention_badge_) {
-      QString badge_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
-      QFontMetrics badge_fm(option.font);
-      int text_w = badge_fm.horizontalAdvance(badge_text);
-      badge_space = std::max(badge_height_, text_w + 2 * badge_hpad_) + badge_right_margin_;
-    } else if (has_unreads && show_badge_) {
-      QString badge_text = unread_count > 99 ? QStringLiteral("99+") : QString::number(unread_count);
-      QFontMetrics badge_fm(option.font);
-      int text_w = badge_fm.horizontalAdvance(badge_text);
-      badge_space = std::max(badge_height_, text_w + 2 * badge_hpad_) + badge_right_margin_;
+      badge_space += compute_pill_width(mention_count) + badge_right_margin_;
+    }
+    if (has_unreads && show_badge_) {
+      if (badge_space > 0) {
+        badge_space += 4; // gap between dual badges
+      }
+      badge_space += compute_pill_width(unread_count);
+      if (!(has_mentions && mention_badge_)) {
+        badge_space += badge_right_margin_;
+      }
     }
   }
 
@@ -179,13 +180,20 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   QString elided = fm.elidedText(display_text, Qt::ElideRight, available_width);
   painter->drawText(text_x, text_y, elided);
 
-  // Draw badge
+  // Draw badges (dual layout: mention on right, unread to its left)
   if (!locked) {
+    int badge_right = option.rect.right() - badge_right_margin_;
     if (has_mentions && mention_badge_) {
-      paint_badge(painter, option.rect, mention_count,
+      paint_badge(painter, badge_right, option.rect, mention_count,
                   QColor(237, 66, 69), Qt::white);
-    } else if (has_unreads && show_badge_) {
-      paint_badge(painter, option.rect, unread_count,
+      QString badge_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
+      QFontMetrics badge_fm(option.font);
+      int text_w = badge_fm.horizontalAdvance(badge_text);
+      int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
+      badge_right -= pill_w + 4;
+    }
+    if (has_unreads && show_badge_) {
+      paint_badge(painter, badge_right, option.rect, unread_count,
                   QColor(150, 150, 150), Qt::white);
     }
   }
@@ -193,7 +201,7 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   painter->restore();
 }
 
-void ChannelDelegate::paint_badge(QPainter* painter, const QRect& item_rect, int count,
+void ChannelDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect, int count,
                                   const QColor& bg, const QColor& fg) const {
   painter->save();
   painter->setRenderHint(QPainter::Antialiasing);
@@ -206,12 +214,12 @@ void ChannelDelegate::paint_badge(QPainter* painter, const QRect& item_rect, int
 
   int text_w = fm.horizontalAdvance(text);
   int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
-  int pill_x = item_rect.right() - badge_right_margin_ - pill_w;
+  int pill_x = badge_right - pill_w;
   int pill_y = item_rect.top() + (item_rect.height() - badge_height_) / 2;
   QRect pill_rect(pill_x, pill_y, pill_w, badge_height_);
 
   QPainterPath path;
-  path.addRoundedRect(pill_rect, badge_height_ / 2.0, badge_height_ / 2.0);
+  path.addRoundedRect(pill_rect, 3.0, 3.0);
   painter->setPen(Qt::NoPen);
   painter->setBrush(bg);
   painter->drawPath(path);
@@ -225,7 +233,7 @@ void ChannelDelegate::paint_badge(QPainter* painter, const QRect& item_rect, int
 
 QSize ChannelDelegate::sizeHint(const QStyleOptionViewItem& /*option*/, const QModelIndex& index) const {
   int channel_type = index.data(ChannelModel::ChannelTypeRole).toInt();
-  int extra_width = show_dot_ ? dot_column_width_ : 0;
+  int extra_width = show_bar_ ? bar_column_width_ : 0;
 
   if (channel_type == 4) {
     // Category: compact header height plus top margin
