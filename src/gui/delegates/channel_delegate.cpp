@@ -98,6 +98,7 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   int left_offset = show_dot_ ? dot_column_width_ : 0;
 
   // Background: mention highlight, glow, selection, hover, or base
+  bool opaque_selection = false;
   if (has_mentions && mention_highlight_) {
     auto highlight_color = QColor(237, 66, 69); // Discord red
     highlight_color.setAlpha(30);
@@ -110,6 +111,7 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
     painter->fillRect(option.rect, option.palette.base());
   } else if (option.state & QStyle::State_Selected) {
     painter->fillRect(option.rect, option.palette.highlight());
+    opaque_selection = true;
   } else if (option.state & QStyle::State_MouseOver) {
     auto hover_color = option.palette.highlight().color();
     hover_color.setAlpha(40);
@@ -142,7 +144,7 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   painter->setFont(channel_font);
   if (locked) {
     painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
-  } else if (option.state & QStyle::State_Selected) {
+  } else if (opaque_selection) {
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::HighlightedText));
   } else {
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
