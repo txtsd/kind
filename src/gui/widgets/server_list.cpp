@@ -4,6 +4,7 @@
 
 #include <QImage>
 #include <QScrollBar>
+#include <QStyle>
 
 namespace kind::gui {
 
@@ -14,6 +15,7 @@ ServerList::ServerList(QWidget* parent)
   setModel(model_);
   setItemDelegate(delegate_);
   setMouseTracking(true);
+  setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
   connect(selectionModel(), &QItemSelectionModel::currentChanged, this, &ServerList::on_selection_changed);
 }
@@ -117,8 +119,8 @@ void ServerList::update_width() {
     }
   }
 
-  // Add scrollbar width and frame margins
-  int scrollbar_w = verticalScrollBar()->isVisible() ? verticalScrollBar()->width() : 0;
+  // Always reserve scrollbar width so content doesn't shift
+  int scrollbar_w = style()->pixelMetric(QStyle::PM_ScrollBarExtent);
   int frame_w = 2 * frameWidth();
   int total = max_width + scrollbar_w + frame_w + 4;
 

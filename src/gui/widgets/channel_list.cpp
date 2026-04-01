@@ -9,6 +9,7 @@ ChannelList::ChannelList(QWidget* parent)
   setModel(model_);
   setItemDelegate(delegate_);
   setMouseTracking(true);
+  setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
   connect(selectionModel(), &QItemSelectionModel::currentChanged, this, &ChannelList::on_selection_changed);
 }
