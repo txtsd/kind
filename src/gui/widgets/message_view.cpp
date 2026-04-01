@@ -7,6 +7,7 @@
 #include "read_state_manager.hpp"
 #include "renderers/divider_renderer.hpp"
 #include "widgets/jump_pill.hpp"
+#include "widgets/loading_pill.hpp"
 #include "workers/render_worker.hpp"
 
 #include "logging.hpp"
@@ -67,6 +68,8 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     }
     model_->set_messages(msgs, std::move(layouts));
   });
+
+  loading_pill_ = new LoadingPill(this);
 
   jump_pill_ = new JumpPill(this);
   connect(jump_pill_, &JumpPill::jump_requested, this, [this]() {
@@ -133,6 +136,8 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       auto oldest = model_->oldest_message_id();
       if (oldest.has_value()) {
         fetching_history_ = true;
+        position_loading_pill();
+        loading_pill_->fade_in();
         emit load_more_requested(oldest.value());
       }
     }
@@ -208,6 +213,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   unread_count_ = 0;
   jump_pill_->set_count(0);
   fetching_history_ = false;
+  loading_pill_->hide_immediately();
   pending_images_.clear();
 
   save_scroll_state();
@@ -250,6 +256,7 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
 
 void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
   fetching_history_ = false;
+  loading_pill_->fade_out();
 
   if (messages.isEmpty()) {
     return;
@@ -380,6 +387,12 @@ void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
   int pill_y = viewport()->height() - jump_pill_->height() - 8;
   jump_pill_->move(pill_x, pill_y);
+}
+
+void MessageView::position_loading_pill() {
+  int pill_x = (viewport()->width() - loading_pill_->width()) / 2;
+  int pill_y = 8;
+  loading_pill_->move(pill_x, pill_y);
 }
 
 void MessageView::updateGeometries() {
@@ -633,6 +646,7 @@ void MessageView::resizeEvent(QResizeEvent* event) {
   QListView::resizeEvent(event);
   resize_timer_->start();
   position_jump_pill();
+  position_loading_pill();
 }
 
 } // namespace kind::gui

@@ -24,6 +24,7 @@ class ReadStateManager;
 namespace kind::gui {
 
 class JumpPill;
+class LoadingPill;
 class MessageModel;
 class MessageDelegate;
 
@@ -66,6 +67,7 @@ private:
   MessageDelegate* delegate_;
   QTimer* resize_timer_;
   JumpPill* jump_pill_;
+  LoadingPill* loading_pill_;
 
   struct ScrollAnchor {
     kind::Snowflake message_id{0};  // Bottom-most fully visible message
@@ -88,6 +90,7 @@ private:
   void save_scroll_state();
   void scroll_to_bottom();
   void position_jump_pill();
+  void position_loading_pill();
   void check_visible_messages();
   std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
