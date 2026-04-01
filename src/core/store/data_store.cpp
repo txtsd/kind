@@ -47,6 +47,20 @@ std::vector<Guild> DataStore::guilds() const {
   return result;
 }
 
+std::optional<Guild> DataStore::guild(Snowflake guild_id) const {
+  std::shared_lock lock(mutex_);
+  auto it = guilds_.find(guild_id);
+  if (it == guilds_.end()) {
+    return std::nullopt;
+  }
+  auto result = it->second;
+  auto ch_it = guild_channels_.find(guild_id);
+  if (ch_it != guild_channels_.end()) {
+    result.channels = ch_it->second;
+  }
+  return result;
+}
+
 std::vector<Channel> DataStore::channels(Snowflake guild_id) const {
   std::shared_lock lock(mutex_);
   auto it = guild_channels_.find(guild_id);

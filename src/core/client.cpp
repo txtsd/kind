@@ -1008,6 +1008,9 @@ int Client::latency_ms() const {
 std::vector<Guild> Client::guilds() const {
   return store_->guilds();
 }
+std::optional<Guild> Client::guild(Snowflake guild_id) const {
+  return store_->guild(guild_id);
+}
 std::vector<Channel> Client::channels(Snowflake guild_id) const {
   return store_->channels(guild_id);
 }

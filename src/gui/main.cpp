@@ -222,15 +222,12 @@ int main(int argc, char* argv[]) {
     auto user = client.current_user();
     kind::Snowflake user_id = user ? user->id : 0;
 
-    auto all_guilds = client.guilds();
     std::vector<kind::Role> guild_roles;
     kind::Snowflake owner_id = 0;
-    for (const auto& guild : all_guilds) {
-      if (guild.id == guild_id) {
-        guild_roles = guild.roles;
-        owner_id = guild.owner_id;
-        break;
-      }
+    auto guild_opt = client.guild(guild_id);
+    if (guild_opt) {
+      guild_roles = guild_opt->roles;
+      owner_id = guild_opt->owner_id;
     }
 
     auto member_role_ids = client.member_roles(guild_id);
@@ -507,13 +504,10 @@ int main(int argc, char* argv[]) {
       auto member_role_ids = client.member_roles(guild_id);
       std::vector<kind::Role> guild_roles;
       kind::Snowflake owner_id = 0;
-      auto all_guilds = client.guilds();
-      for (const auto& guild : all_guilds) {
-        if (guild.id == guild_id) {
-          guild_roles = guild.roles;
-          owner_id = guild.owner_id;
-          break;
-        }
+      auto guild_opt = client.guild(guild_id);
+      if (guild_opt) {
+        guild_roles = guild_opt->roles;
+        owner_id = guild_opt->owner_id;
       }
       auto chs = client.channels(guild_id);
       std::vector<kind::PermissionOverwrite> overwrites;
@@ -560,15 +554,12 @@ int main(int argc, char* argv[]) {
     }
     channel_list->blockSignals(false);
 
-    auto all_guilds = client.guilds();
     std::vector<kind::Role> guild_roles;
     kind::Snowflake owner_id = 0;
-    for (const auto& guild : all_guilds) {
-      if (guild.id == current_guild_id) {
-        guild_roles = guild.roles;
-        owner_id = guild.owner_id;
-        break;
-      }
+    auto guild_opt = client.guild(current_guild_id);
+    if (guild_opt) {
+      guild_roles = guild_opt->roles;
+      owner_id = guild_opt->owner_id;
     }
     auto user = client.current_user();
     kind::Snowflake user_id = user ? user->id : 0;

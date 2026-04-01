@@ -22,6 +22,7 @@ public:
 
   // Thread-safe reads (return copies)
   std::vector<Guild> guilds() const;
+  std::optional<Guild> guild(Snowflake guild_id) const;
   std::vector<Channel> channels(Snowflake guild_id) const;
   std::vector<Message> messages(Snowflake channel_id) const;
   std::vector<Message> messages(Snowflake channel_id,
