@@ -195,14 +195,6 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     if (aobj.contains("height") && !aobj["height"].isNull()) {
       att.height = aobj["height"].toInt();
     }
-    log::client()->debug("Attachment: filename={}, content_type={}, size={}, "
-                         "width={}, height={}, url={}",
-                         att.filename,
-                         att.content_type.value_or("(none)"),
-                         att.size,
-                         att.width.value_or(-1),
-                         att.height.value_or(-1),
-                         att.url.substr(0, 80));
     msg.attachments.push_back(std::move(att));
   }
 
@@ -261,19 +253,6 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
       field.inline_field = fobj["inline"].toBool(false);
       embed.fields.push_back(std::move(field));
     }
-    log::client()->debug("Embed: type={}, title={}, desc={}, url={}, provider={}, author={}, "
-                         "image={}, image_proxy={}, thumb={}, thumb_proxy={}, fields={}",
-                         embed.type,
-                         embed.title.value_or("(none)"),
-                         embed.description.value_or("(none)").substr(0, 50),
-                         embed.url.value_or("(none)"),
-                         embed.provider ? embed.provider->name : "(none)",
-                         embed.author ? embed.author->name : "(none)",
-                         embed.image ? embed.image->url : "(none)",
-                         embed.image && embed.image->proxy_url ? *embed.image->proxy_url : "(none)",
-                         embed.thumbnail ? embed.thumbnail->url : "(none)",
-                         embed.thumbnail && embed.thumbnail->proxy_url ? *embed.thumbnail->proxy_url : "(none)",
-                         embed.fields.size());
     msg.embeds.push_back(std::move(embed));
   }
 

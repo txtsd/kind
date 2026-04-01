@@ -10,8 +10,6 @@
 #include "widgets/loading_pill.hpp"
 #include "workers/render_worker.hpp"
 
-#include "logging.hpp"
-
 #include <QDateTime>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -410,7 +408,6 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
   }
   connect(cache, &kind::ImageCache::image_ready, this,
           [this](const QString& url, const kind::CachedImage& image) {
-            log::client()->debug("Image arrived: {}", url.toStdString());
             auto std_url = url.toStdString();
             auto it = pending_images_.find(std_url);
             if (it == pending_images_.end()) {
