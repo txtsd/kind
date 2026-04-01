@@ -24,5 +24,6 @@ std::shared_ptr<spdlog::logger> cache();
 std::shared_ptr<spdlog::logger> auth();
 std::shared_ptr<spdlog::logger> config();
 std::shared_ptr<spdlog::logger> store();
+std::shared_ptr<spdlog::logger> gui();
 
 } // namespace kind::log

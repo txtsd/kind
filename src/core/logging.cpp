@@ -74,6 +74,7 @@ void init() {
   get_or_create("auth");
   get_or_create("config");
   get_or_create("store");
+  get_or_create("gui");
 }
 
 void init_console_only() {
@@ -85,6 +86,7 @@ void init_console_only() {
   get_or_create("auth");
   get_or_create("config");
   get_or_create("store");
+  get_or_create("gui");
 }
 
 std::shared_ptr<spdlog::logger> gateway() { return get_or_create("gateway"); }
@@ -94,6 +96,7 @@ std::shared_ptr<spdlog::logger> cache() { return get_or_create("cache"); }
 std::shared_ptr<spdlog::logger> auth() { return get_or_create("auth"); }
 std::shared_ptr<spdlog::logger> config() { return get_or_create("config"); }
 std::shared_ptr<spdlog::logger> store() { return get_or_create("store"); }
+std::shared_ptr<spdlog::logger> gui() { return get_or_create("gui"); }
 
 void apply_level_spec(const std::string& spec) {
   // Split on commas
