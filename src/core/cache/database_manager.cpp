@@ -145,9 +145,11 @@ void DatabaseManager::create_schema() {
 
   exec(
       "CREATE TABLE IF NOT EXISTS read_state ("
-      "  channel_id    INTEGER PRIMARY KEY,"
-      "  last_read_id  INTEGER,"
-      "  mention_count INTEGER DEFAULT 0"
+      "  channel_id      INTEGER PRIMARY KEY,"
+      "  last_read_id    INTEGER,"
+      "  mention_count   INTEGER DEFAULT 0,"
+      "  unread_count    INTEGER DEFAULT 0,"
+      "  last_message_id INTEGER DEFAULT 0"
       ")");
 
   exec(

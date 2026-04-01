@@ -450,15 +450,20 @@ void DatabaseWriteWorker::mark_message_deleted(kind::Snowflake channel_id,
 
 void DatabaseWriteWorker::write_read_state(kind::Snowflake channel_id,
                                            kind::Snowflake last_read_id,
-                                           int mention_count) {
+                                           int mention_count,
+                                           int unread_count,
+                                           kind::Snowflake last_message_id) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.prepare("INSERT OR REPLACE INTO read_state (channel_id, last_read_id, mention_count) "
-            "VALUES (:cid, :lrid, :mc)");
+  q.prepare("INSERT OR REPLACE INTO read_state "
+            "(channel_id, last_read_id, mention_count, unread_count, last_message_id) "
+            "VALUES (:cid, :lrid, :mc, :uc, :lmid)");
   q.bindValue(":cid", static_cast<qint64>(channel_id));
   q.bindValue(":lrid", static_cast<qint64>(last_read_id));
   q.bindValue(":mc", mention_count);
+  q.bindValue(":uc", unread_count);
+  q.bindValue(":lmid", static_cast<qint64>(last_message_id));
   if (!q.exec()) {
     log::cache()->warn("Writer: failed to write read_state for channel {}: {}",
                        channel_id, q.lastError().text().toStdString());

@@ -42,7 +42,8 @@ public slots:
   void delete_channel(kind::Snowflake id);
   void mark_message_deleted(kind::Snowflake channel_id, kind::Snowflake message_id);
   void write_read_state(kind::Snowflake channel_id, kind::Snowflake last_read_id,
-                        int mention_count);
+                        int mention_count, int unread_count,
+                        kind::Snowflake last_message_id);
   void write_app_state(QString key, QString value);
   void write_mute_state(kind::Snowflake id, int type, bool muted);
   void write_mute_state_bulk(std::vector<std::tuple<kind::Snowflake, int, bool>> entries);
@@ -89,7 +90,8 @@ signals:
   void channel_delete_requested(kind::Snowflake id);
   void message_delete_requested(kind::Snowflake channel_id, kind::Snowflake message_id);
   void read_state_write_requested(kind::Snowflake channel_id,
-                                  kind::Snowflake last_read_id, int mention_count);
+                                  kind::Snowflake last_read_id, int mention_count,
+                                  int unread_count, kind::Snowflake last_message_id);
   void app_state_write_requested(QString key, QString value);
   void mute_state_write_requested(kind::Snowflake id, int type, bool muted);
   void mute_state_bulk_write_requested(

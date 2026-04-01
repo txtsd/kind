@@ -357,12 +357,15 @@ std::vector<std::pair<Snowflake, ReadState>> DatabaseReader::read_states() const
   std::vector<std::pair<Snowflake, ReadState>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT channel_id, last_read_id, mention_count FROM read_state");
+  q.exec("SELECT channel_id, last_read_id, mention_count, unread_count, last_message_id "
+         "FROM read_state");
   while (q.next()) {
     auto channel_id = static_cast<Snowflake>(q.value(0).toLongLong());
     ReadState rs;
     rs.last_read_id = static_cast<Snowflake>(q.value(1).toLongLong());
     rs.mention_count = q.value(2).toInt();
+    rs.unread_count = q.value(3).toInt();
+    rs.last_message_id = static_cast<Snowflake>(q.value(4).toLongLong());
     result.emplace_back(channel_id, rs);
   }
   return result;
