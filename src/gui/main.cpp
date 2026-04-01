@@ -88,6 +88,32 @@ int main(int argc, char* argv[]) {
     message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
   }
 
+  // Set ReadStateManager on channel and guild models
+  channel_list->channel_model()->set_read_state_manager(client.read_state_manager());
+  server_list->guild_model()->set_read_state_manager(client.read_state_manager());
+
+  // Apply initial unread indicator options from config
+  auto apply_unread_options = [&config, channel_list, server_list]() {
+    bool ch_dot = config.get_or<bool>("appearance.channel_unread_dot", true);
+    bool ch_badge = config.get_or<bool>("appearance.channel_unread_badge", true);
+    bool ch_glow = config.get_or<bool>("appearance.channel_unread_glow", false);
+    channel_list->channel_delegate()->set_unread_options(ch_dot, ch_badge, ch_glow);
+
+    bool mention_badge_ch = config.get_or<bool>("appearance.mention_badge_channel", true);
+    bool mention_hl_ch = config.get_or<bool>("appearance.mention_highlight_channel", false);
+    channel_list->channel_delegate()->set_mention_options(mention_badge_ch, mention_hl_ch);
+
+    bool g_dot = config.get_or<bool>("appearance.guild_unread_dot", true);
+    bool g_badge = config.get_or<bool>("appearance.guild_unread_badge", true);
+    bool g_glow = config.get_or<bool>("appearance.guild_unread_glow", false);
+    server_list->guild_delegate()->set_unread_options(g_dot, g_badge, g_glow);
+
+    bool mention_badge_g = config.get_or<bool>("appearance.mention_badge_guild", true);
+    bool mention_hl_g = config.get_or<bool>("appearance.mention_highlight_guild", false);
+    server_list->guild_delegate()->set_mention_options(mention_badge_g, mention_hl_g);
+  };
+  apply_unread_options();
+
   auto* message_input = new kind::gui::MessageInput();
 
   // Populate server list from disk cache immediately
@@ -225,12 +251,12 @@ int main(int argc, char* argv[]) {
   // Wire preferences dialog
   QObject::connect(preferences_action, &QAction::triggered, [&config, &main_window,
       &client, server_list, channel_list, message_view,
-      &current_guild_id, &compute_channel_permissions]() {
+      &current_guild_id, &compute_channel_permissions, &apply_unread_options]() {
     auto* prefs = new kind::gui::PreferencesDialog(config, &main_window);
     prefs->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(prefs, &kind::gui::PreferencesDialog::settings_changed,
                      [&config, &client, server_list, channel_list, message_view,
-                      &current_guild_id, &compute_channel_permissions]() {
+                      &current_guild_id, &compute_channel_permissions, &apply_unread_options]() {
       // Re-apply edited indicator
       auto edited = config.get_or<std::string>("appearance.edited_indicator", "text");
       if (edited == "icon") {
@@ -253,6 +279,9 @@ int main(int argc, char* argv[]) {
         auto perms = compute_channel_permissions(current_guild_id, qvec);
         channel_list->set_channels(qvec, perms, hide_locked);
       }
+
+      // Re-apply unread indicator options
+      apply_unread_options();
     });
     prefs->open();
   });

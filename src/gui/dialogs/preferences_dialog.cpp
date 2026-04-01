@@ -50,6 +50,45 @@ void PreferencesDialog::setup_ui() {
   hide_locked_checkbox_ = new QCheckBox("Hide channels you cannot access");
   appearance_layout->addRow("Hide locked channels:", hide_locked_checkbox_);
 
+  // -- Channel unread indicators --
+  appearance_layout->addRow(new QLabel("<b>Channel unread indicators</b>"));
+
+  channel_unread_dot_ = new QCheckBox("Show dot indicator");
+  appearance_layout->addRow(channel_unread_dot_);
+
+  channel_unread_badge_ = new QCheckBox("Show count badge");
+  appearance_layout->addRow(channel_unread_badge_);
+
+  channel_unread_glow_ = new QCheckBox("Show glow effect");
+  appearance_layout->addRow(channel_unread_glow_);
+
+  // -- Guild unread indicators --
+  appearance_layout->addRow(new QLabel("<b>Guild unread indicators</b>"));
+
+  guild_unread_dot_ = new QCheckBox("Show dot indicator");
+  appearance_layout->addRow(guild_unread_dot_);
+
+  guild_unread_badge_ = new QCheckBox("Show count badge");
+  appearance_layout->addRow(guild_unread_badge_);
+
+  guild_unread_glow_ = new QCheckBox("Show glow effect");
+  appearance_layout->addRow(guild_unread_glow_);
+
+  // -- Mention indicators --
+  appearance_layout->addRow(new QLabel("<b>Mention indicators</b>"));
+
+  mention_badge_channel_ = new QCheckBox("Badge on channels");
+  appearance_layout->addRow(mention_badge_channel_);
+
+  mention_badge_guild_ = new QCheckBox("Badge on guilds");
+  appearance_layout->addRow(mention_badge_guild_);
+
+  mention_highlight_channel_ = new QCheckBox("Highlight channels");
+  appearance_layout->addRow(mention_highlight_channel_);
+
+  mention_highlight_guild_ = new QCheckBox("Highlight guilds");
+  appearance_layout->addRow(mention_highlight_guild_);
+
   pages_->addWidget(appearance_page);
 
   // -- Network page (placeholder) --
@@ -121,6 +160,22 @@ void PreferencesDialog::load_settings() {
 
   // Hide locked channels
   hide_locked_checkbox_->setChecked(config_.get_or<bool>("appearance.hide_locked_channels", false));
+
+  // Channel unread indicators
+  channel_unread_dot_->setChecked(config_.get_or<bool>("appearance.channel_unread_dot", true));
+  channel_unread_badge_->setChecked(config_.get_or<bool>("appearance.channel_unread_badge", true));
+  channel_unread_glow_->setChecked(config_.get_or<bool>("appearance.channel_unread_glow", false));
+
+  // Guild unread indicators
+  guild_unread_dot_->setChecked(config_.get_or<bool>("appearance.guild_unread_dot", true));
+  guild_unread_badge_->setChecked(config_.get_or<bool>("appearance.guild_unread_badge", true));
+  guild_unread_glow_->setChecked(config_.get_or<bool>("appearance.guild_unread_glow", false));
+
+  // Mention indicators
+  mention_badge_channel_->setChecked(config_.get_or<bool>("appearance.mention_badge_channel", true));
+  mention_badge_guild_->setChecked(config_.get_or<bool>("appearance.mention_badge_guild", true));
+  mention_highlight_channel_->setChecked(config_.get_or<bool>("appearance.mention_highlight_channel", false));
+  mention_highlight_guild_->setChecked(config_.get_or<bool>("appearance.mention_highlight_guild", false));
 }
 
 void PreferencesDialog::save_settings() {
@@ -130,6 +185,23 @@ void PreferencesDialog::save_settings() {
                            guild_display_combo_->currentData().toString().toStdString());
   config_.set<bool>("appearance.hide_locked_channels",
                     hide_locked_checkbox_->isChecked());
+
+  // Channel unread indicators
+  config_.set<bool>("appearance.channel_unread_dot", channel_unread_dot_->isChecked());
+  config_.set<bool>("appearance.channel_unread_badge", channel_unread_badge_->isChecked());
+  config_.set<bool>("appearance.channel_unread_glow", channel_unread_glow_->isChecked());
+
+  // Guild unread indicators
+  config_.set<bool>("appearance.guild_unread_dot", guild_unread_dot_->isChecked());
+  config_.set<bool>("appearance.guild_unread_badge", guild_unread_badge_->isChecked());
+  config_.set<bool>("appearance.guild_unread_glow", guild_unread_glow_->isChecked());
+
+  // Mention indicators
+  config_.set<bool>("appearance.mention_badge_channel", mention_badge_channel_->isChecked());
+  config_.set<bool>("appearance.mention_badge_guild", mention_badge_guild_->isChecked());
+  config_.set<bool>("appearance.mention_highlight_channel", mention_highlight_channel_->isChecked());
+  config_.set<bool>("appearance.mention_highlight_guild", mention_highlight_guild_->isChecked());
+
   config_.save();
 }
 
