@@ -38,13 +38,29 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
   }
   case UnreadCountRole:
     if (read_state_manager_) {
+      if (mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id)) {
+        return 0;
+      }
       auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
+      if (mute_state_manager_) {
+        std::erase_if(ids, [this](kind::Snowflake id) {
+          return mute_state_manager_->is_channel_muted(id);
+        });
+      }
       return read_state_manager_->guild_unread_channels(ids);
     }
     return 0;
   case MentionCountRole:
     if (read_state_manager_) {
+      if (mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id)) {
+        return 0;
+      }
       auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
+      if (mute_state_manager_) {
+        std::erase_if(ids, [this](kind::Snowflake id) {
+          return mute_state_manager_->is_channel_muted(id);
+        });
+      }
       return read_state_manager_->guild_mention_count(ids);
     }
     return 0;
@@ -76,6 +92,24 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, &GuildModel::on_unread_changed);
     connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
             this, &GuildModel::on_mention_changed);
+  }
+}
+
+void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
+  if (mute_state_manager_) {
+    disconnect(mute_state_manager_, nullptr, this, nullptr);
+  }
+  mute_state_manager_ = mgr;
+  if (mute_state_manager_) {
+    connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
+            this, [this](kind::Snowflake /*id*/) {
+      // Mute state changed: refresh all guild rows since guild-level mute
+      // affects the entire row and channel-level mute affects aggregation
+      if (!guilds_.empty()) {
+        emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
+                         {UnreadCountRole, MentionCountRole});
+      }
+    });
   }
 }
 

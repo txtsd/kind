@@ -50,11 +50,19 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
     return channel.type == 4;
   case UnreadCountRole:
     if (read_state_manager_) {
+      if (mute_state_manager_ &&
+          mute_state_manager_->is_effectively_muted(channel.id, channel.guild_id)) {
+        return 0;
+      }
       return read_state_manager_->unread_count(channel.id);
     }
     return 0;
   case MentionCountRole:
     if (read_state_manager_) {
+      if (mute_state_manager_ &&
+          mute_state_manager_->is_effectively_muted(channel.id, channel.guild_id)) {
+        return 0;
+      }
       return read_state_manager_->mention_count(channel.id);
     }
     return 0;
@@ -206,6 +214,24 @@ int ChannelModel::row_for_channel(kind::Snowflake channel_id) const {
     }
   }
   return -1;
+}
+
+void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
+  if (mute_state_manager_) {
+    disconnect(mute_state_manager_, nullptr, this, nullptr);
+  }
+  mute_state_manager_ = mgr;
+  if (mute_state_manager_) {
+    connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
+            this, [this](kind::Snowflake id) {
+      // Mute state changed: refresh unread/mention roles for affected channel(s)
+      int row = row_for_channel(id);
+      if (row >= 0) {
+        auto idx = index(row);
+        emit dataChanged(idx, idx, {UnreadCountRole, MentionCountRole});
+      }
+    });
+  }
 }
 
 void ChannelModel::on_unread_changed(kind::Snowflake channel_id) {

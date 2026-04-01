@@ -88,9 +88,11 @@ int main(int argc, char* argv[]) {
     message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
   }
 
-  // Set ReadStateManager on channel and guild models
+  // Set ReadStateManager and MuteStateManager on channel and guild models
   channel_list->channel_model()->set_read_state_manager(client.read_state_manager());
+  channel_list->channel_model()->set_mute_state_manager(client.mute_state_manager());
   server_list->guild_model()->set_read_state_manager(client.read_state_manager());
+  server_list->guild_model()->set_mute_state_manager(client.mute_state_manager());
 
   // Apply initial unread indicator options from config
   auto apply_unread_options = [&config, channel_list, server_list]() {

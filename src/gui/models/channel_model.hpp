@@ -2,6 +2,7 @@
 
 #include "models/channel.hpp"
 #include "models/snowflake.hpp"
+#include "mute_state_manager.hpp"
 #include "read_state_manager.hpp"
 
 #include <QAbstractListModel>
@@ -42,6 +43,7 @@ public:
   void expand_all();
 
   void set_read_state_manager(kind::ReadStateManager* mgr);
+  void set_mute_state_manager(kind::MuteStateManager* mgr);
 
 private:
   void rebuild_visible();
@@ -57,6 +59,7 @@ private:
   std::unordered_set<kind::Snowflake> collapsed_;
   bool hide_locked_{false};
   kind::ReadStateManager* read_state_manager_{nullptr};
+  kind::MuteStateManager* mute_state_manager_{nullptr};
 };
 
 } // namespace kind::gui

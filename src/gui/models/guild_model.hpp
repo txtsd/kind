@@ -2,6 +2,7 @@
 
 #include "models/guild.hpp"
 #include "models/snowflake.hpp"
+#include "mute_state_manager.hpp"
 #include "read_state_manager.hpp"
 
 #include <QAbstractListModel>
@@ -30,6 +31,7 @@ public:
   kind::Snowflake guild_id_at(int row) const;
 
   void set_read_state_manager(kind::ReadStateManager* mgr);
+  void set_mute_state_manager(kind::MuteStateManager* mgr);
 
 private:
   void on_unread_changed(kind::Snowflake channel_id);
@@ -39,6 +41,7 @@ private:
 
   std::vector<kind::Guild> guilds_;
   kind::ReadStateManager* read_state_manager_{nullptr};
+  kind::MuteStateManager* mute_state_manager_{nullptr};
 };
 
 } // namespace kind::gui
