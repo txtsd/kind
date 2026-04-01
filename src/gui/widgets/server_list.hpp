@@ -25,6 +25,7 @@ public:
   explicit ServerList(QWidget* parent = nullptr);
 
   GuildModel* guild_model() const { return model_; }
+  GuildDelegate* guild_delegate() const { return delegate_; }
 
   void set_image_cache(kind::ImageCache* cache);
   void set_guild_display(const std::string& mode);

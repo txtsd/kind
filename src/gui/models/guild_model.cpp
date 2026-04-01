@@ -36,6 +36,18 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
         .arg(guild.id)
         .arg(QString::fromStdString(guild.icon_hash));
   }
+  case UnreadCountRole:
+    if (read_state_manager_) {
+      auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
+      return read_state_manager_->guild_unread_channels(ids);
+    }
+    return 0;
+  case MentionCountRole:
+    if (read_state_manager_) {
+      auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
+      return read_state_manager_->guild_mention_count(ids);
+    }
+    return 0;
   default:
     return {};
   }
@@ -52,6 +64,56 @@ kind::Snowflake GuildModel::guild_id_at(int row) const {
     return 0;
   }
   return guilds_[static_cast<size_t>(row)].id;
+}
+
+void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
+  if (read_state_manager_) {
+    disconnect(read_state_manager_, nullptr, this, nullptr);
+  }
+  read_state_manager_ = mgr;
+  if (read_state_manager_) {
+    connect(read_state_manager_, &kind::ReadStateManager::unread_changed,
+            this, &GuildModel::on_unread_changed);
+    connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
+            this, &GuildModel::on_mention_changed);
+  }
+}
+
+std::vector<kind::Snowflake> GuildModel::channel_ids_for_guild(size_t guild_index) const {
+  const auto& guild = guilds_[guild_index];
+  std::vector<kind::Snowflake> ids;
+  ids.reserve(guild.channels.size());
+  for (const auto& ch : guild.channels) {
+    ids.push_back(ch.id);
+  }
+  return ids;
+}
+
+int GuildModel::row_for_guild_with_channel(kind::Snowflake channel_id) const {
+  for (int i = 0; i < static_cast<int>(guilds_.size()); ++i) {
+    for (const auto& ch : guilds_[static_cast<size_t>(i)].channels) {
+      if (ch.id == channel_id) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
+  int row = row_for_guild_with_channel(channel_id);
+  if (row >= 0) {
+    auto idx = index(row);
+    emit dataChanged(idx, idx, {UnreadCountRole});
+  }
+}
+
+void GuildModel::on_mention_changed(kind::Snowflake channel_id) {
+  int row = row_for_guild_with_channel(channel_id);
+  if (row >= 0) {
+    auto idx = index(row);
+    emit dataChanged(idx, idx, {MentionCountRole});
+  }
 }
 
 } // namespace kind::gui

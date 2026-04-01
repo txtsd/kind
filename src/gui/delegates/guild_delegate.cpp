@@ -17,6 +17,17 @@ void GuildDelegate::set_pixmap(const std::string& url, const QPixmap& pixmap) {
   pixmap_cache_[url] = pixmap;
 }
 
+void GuildDelegate::set_unread_options(bool dot, bool badge, bool glow) {
+  show_dot_ = dot;
+  show_badge_ = badge;
+  show_glow_ = glow;
+}
+
+void GuildDelegate::set_mention_options(bool badge_guild, bool highlight_guild) {
+  mention_badge_ = badge_guild;
+  mention_highlight_ = highlight_guild;
+}
+
 void GuildDelegate::draw_initials(QPainter* painter, const QRect& rect, const QString& name,
                                   bool selected, const QStyleOptionViewItem& option) const {
   // Build initials from the first letter of each word
@@ -63,9 +74,23 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   painter->save();
 
   bool selected = option.state & QStyle::State_Selected;
+  int unread_count = index.data(GuildModel::UnreadCountRole).toInt();
+  int mention_count = index.data(GuildModel::MentionCountRole).toInt();
+  bool has_unreads = unread_count > 0;
+  bool has_mentions = mention_count > 0;
 
-  // Background highlight for selected or hovered items
-  if (selected) {
+  int left_offset = show_dot_ ? dot_column_width_ : 0;
+
+  // Background: mention highlight, glow, selection, hover, or base
+  if (has_mentions && mention_highlight_) {
+    auto highlight_color = QColor(237, 66, 69);
+    highlight_color.setAlpha(30);
+    painter->fillRect(option.rect, highlight_color);
+  } else if (has_unreads && show_glow_) {
+    auto glow_color = option.palette.highlight().color();
+    glow_color.setAlpha(30);
+    painter->fillRect(option.rect, glow_color);
+  } else if (selected) {
     painter->fillRect(option.rect, option.palette.highlight());
   } else if (option.state & QStyle::State_MouseOver) {
     auto hover_color = option.palette.highlight().color();
@@ -75,11 +100,22 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     painter->fillRect(option.rect, option.palette.base());
   }
 
+  // Dot indicator on the left
+  if (show_dot_ && has_unreads) {
+    auto dot_color = option.palette.highlight().color();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setBrush(dot_color);
+    painter->setPen(Qt::NoPen);
+    int dot_cx = option.rect.left() + dot_column_width_ / 2;
+    int dot_cy = option.rect.top() + option.rect.height() / 2;
+    painter->drawEllipse(QPoint(dot_cx, dot_cy), dot_radius_, dot_radius_);
+    painter->setRenderHint(QPainter::Antialiasing, false);
+  }
+
   QString name = index.data(Qt::DisplayRole).toString();
   QString icon_url = index.data(GuildModel::GuildIconUrlRole).toString();
 
   if (guild_display_ == "text") {
-    // Text-only mode: same as the original behavior
     QFont bold_font = option.font;
     bold_font.setBold(true);
     QFontMetrics fm(bold_font);
@@ -92,22 +128,20 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     }
 
     int text_y = option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
-    int text_x = option.rect.left() + left_padding_;
-    int available_width = option.rect.width() - left_padding_ - vertical_padding_;
+    int text_x = option.rect.left() + left_offset + left_padding_;
+    int available_width = option.rect.width() - left_offset - left_padding_ - vertical_padding_;
 
     QString elided = fm.elidedText(name, Qt::ElideRight, available_width);
     painter->drawText(text_x, text_y, elided);
 
   } else if (guild_display_ == "icon_text") {
-    // Icon + text mode
-    int icon_x = option.rect.left() + left_padding_;
+    int icon_x = option.rect.left() + left_offset + left_padding_;
     int icon_y = option.rect.top() + (option.rect.height() - icon_text_size_) / 2;
     QRect icon_rect(icon_x, icon_y, icon_text_size_, icon_text_size_);
 
     auto url_key = icon_url.toStdString();
     auto it = pixmap_cache_.find(url_key);
     if (it != pixmap_cache_.end() && !it->second.isNull()) {
-      // Clip to circle and draw
       QPainterPath circle;
       circle.addEllipse(icon_rect);
       painter->setClipPath(circle);
@@ -117,7 +151,6 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
       draw_initials(painter, icon_rect, name, selected, option);
     }
 
-    // Text to the right of the icon
     int text_x = icon_x + icon_text_size_ + icon_text_gap_;
     int available_width = option.rect.right() - text_x - vertical_padding_;
 
@@ -137,8 +170,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     painter->drawText(text_x, text_y, elided);
 
   } else if (guild_display_ == "icon") {
-    // Icon-only mode
-    int icon_x = option.rect.left() + (option.rect.width() - icon_only_size_) / 2;
+    int icon_x = option.rect.left() + left_offset + (option.rect.width() - left_offset - icon_only_size_) / 2;
     int icon_y = option.rect.top() + (option.rect.height() - icon_only_size_) / 2;
     QRect icon_rect(icon_x, icon_y, icon_only_size_, icon_only_size_);
 
@@ -155,13 +187,54 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     }
   }
 
+  // Draw badge (mention takes priority over unread)
+  if (has_mentions && mention_badge_) {
+    paint_badge(painter, option.rect, mention_count,
+                QColor(237, 66, 69), Qt::white);
+  } else if (has_unreads && show_badge_) {
+    paint_badge(painter, option.rect, unread_count,
+                QColor(150, 150, 150), Qt::white);
+  }
+
+  painter->restore();
+}
+
+void GuildDelegate::paint_badge(QPainter* painter, const QRect& item_rect, int count,
+                                const QColor& bg, const QColor& fg) const {
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing);
+
+  QString text = count > 99 ? QStringLiteral("99+") : QString::number(count);
+  QFont badge_font = painter->font();
+  badge_font.setPixelSize(11);
+  badge_font.setBold(true);
+  QFontMetrics fm(badge_font);
+
+  int text_w = fm.horizontalAdvance(text);
+  int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
+  int pill_x = item_rect.right() - badge_right_margin_ - pill_w;
+  int pill_y = item_rect.top() + (item_rect.height() - badge_height_) / 2;
+  QRect pill_rect(pill_x, pill_y, pill_w, badge_height_);
+
+  QPainterPath path;
+  path.addRoundedRect(pill_rect, badge_height_ / 2.0, badge_height_ / 2.0);
+  painter->setPen(Qt::NoPen);
+  painter->setBrush(bg);
+  painter->drawPath(path);
+
+  painter->setFont(badge_font);
+  painter->setPen(fg);
+  painter->drawText(pill_rect, Qt::AlignCenter, text);
+
   painter->restore();
 }
 
 QSize GuildDelegate::sizeHint(const QStyleOptionViewItem& option,
                               const QModelIndex& index) const {
+  int extra = show_dot_ ? dot_column_width_ : 0;
+
   if (guild_display_ == "icon") {
-    int width = left_padding_ + icon_only_size_ + left_padding_;
+    int width = extra + left_padding_ + icon_only_size_ + left_padding_;
     return QSize(width, icon_only_item_height_);
   }
 
@@ -172,12 +245,12 @@ QSize GuildDelegate::sizeHint(const QStyleOptionViewItem& option,
   int text_width = fm.horizontalAdvance(name);
 
   if (guild_display_ == "icon_text") {
-    int width = left_padding_ + icon_text_size_ + icon_text_gap_ + text_width + left_padding_;
+    int width = extra + left_padding_ + icon_text_size_ + icon_text_gap_ + text_width + left_padding_;
     return QSize(width, icon_text_item_height_);
   }
 
   // Text mode
-  int width = left_padding_ + text_width + left_padding_;
+  int width = extra + left_padding_ + text_width + left_padding_;
   return QSize(width, text_item_height_);
 }
 
