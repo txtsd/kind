@@ -37,10 +37,19 @@ public:
 private:
   void on_unread_changed(kind::Snowflake channel_id);
   void on_mention_changed(kind::Snowflake channel_id);
+  void recompute_guild_cache(int row);
+  void recompute_all_caches();
   int row_for_guild_with_channel(kind::Snowflake channel_id) const;
   std::vector<kind::Snowflake> channel_ids_for_guild(size_t guild_index) const;
 
+  struct GuildCache {
+    int unread_channels{0};
+    int mention_count{0};
+    bool muted{false};
+  };
+
   std::vector<kind::Guild> guilds_;
+  std::vector<GuildCache> cache_;
   kind::ReadStateManager* read_state_manager_{nullptr};
   kind::MuteStateManager* mute_state_manager_{nullptr};
 };

@@ -17,6 +17,7 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
   }
 
   const auto& guild = guilds_[static_cast<size_t>(index.row())];
+  const auto& cached = cache_[static_cast<size_t>(index.row())];
 
   switch (role) {
   case Qt::DisplayRole:
@@ -31,44 +32,16 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
     if (guild.icon_hash.empty()) {
       return QString();
     }
-    // https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.webp?size=64
     return QString("https://cdn.discordapp.com/icons/%1/%2.webp?size=64")
         .arg(guild.id)
         .arg(QString::fromStdString(guild.icon_hash));
   }
   case MutedRole:
-    if (mute_state_manager_) {
-      return mute_state_manager_->is_guild_muted(guild.id);
-    }
-    return false;
+    return cached.muted;
   case UnreadCountRole:
-    if (read_state_manager_) {
-      if (mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id)) {
-        return 0;
-      }
-      auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
-      if (mute_state_manager_) {
-        std::erase_if(ids, [this](kind::Snowflake id) {
-          return mute_state_manager_->is_channel_muted(id);
-        });
-      }
-      return read_state_manager_->guild_unread_channels(ids);
-    }
-    return 0;
+    return cached.unread_channels;
   case MentionCountRole:
-    if (read_state_manager_) {
-      if (mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id)) {
-        return 0;
-      }
-      auto ids = channel_ids_for_guild(static_cast<size_t>(index.row()));
-      if (mute_state_manager_) {
-        std::erase_if(ids, [this](kind::Snowflake id) {
-          return mute_state_manager_->is_channel_muted(id);
-        });
-      }
-      return read_state_manager_->guild_mention_count(ids);
-    }
-    return 0;
+    return cached.mention_count;
   default:
     return {};
   }
@@ -77,6 +50,8 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
 void GuildModel::set_guilds(const std::vector<kind::Guild>& guilds) {
   beginResetModel();
   guilds_ = guilds;
+  cache_.resize(guilds_.size());
+  recompute_all_caches();
   endResetModel();
 }
 
@@ -98,6 +73,7 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
     connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
             this, &GuildModel::on_mention_changed);
   }
+  recompute_all_caches();
 }
 
 void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
@@ -108,13 +84,51 @@ void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
   if (mute_state_manager_) {
     connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
             this, [this](kind::Snowflake /*id*/) {
-      // Mute state changed: refresh all guild rows since guild-level mute
-      // affects the entire row and channel-level mute affects aggregation
+      recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
-                         {UnreadCountRole, MentionCountRole});
+                         {MutedRole, UnreadCountRole, MentionCountRole});
       }
     });
+  }
+  recompute_all_caches();
+}
+
+void GuildModel::recompute_guild_cache(int row) {
+  if (row < 0 || row >= static_cast<int>(guilds_.size())) {
+    return;
+  }
+  auto idx = static_cast<size_t>(row);
+  auto& cached = cache_[idx];
+  const auto& guild = guilds_[idx];
+
+  cached.muted = mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id);
+
+  if (!read_state_manager_ || cached.muted) {
+    cached.unread_channels = 0;
+    cached.mention_count = 0;
+    return;
+  }
+
+  int unreads = 0;
+  int mentions = 0;
+  for (const auto& chan : guild.channels) {
+    if (mute_state_manager_ && mute_state_manager_->is_channel_muted(chan.id)) {
+      continue;
+    }
+    if (read_state_manager_->has_unreads(chan.id)) {
+      ++unreads;
+    }
+    mentions += read_state_manager_->mention_count(chan.id);
+  }
+  cached.unread_channels = unreads;
+  cached.mention_count = mentions;
+}
+
+void GuildModel::recompute_all_caches() {
+  cache_.resize(guilds_.size());
+  for (int row = 0; row < static_cast<int>(guilds_.size()); ++row) {
+    recompute_guild_cache(row);
   }
 }
 
@@ -122,16 +136,16 @@ std::vector<kind::Snowflake> GuildModel::channel_ids_for_guild(size_t guild_inde
   const auto& guild = guilds_[guild_index];
   std::vector<kind::Snowflake> ids;
   ids.reserve(guild.channels.size());
-  for (const auto& ch : guild.channels) {
-    ids.push_back(ch.id);
+  for (const auto& chan : guild.channels) {
+    ids.push_back(chan.id);
   }
   return ids;
 }
 
 int GuildModel::row_for_guild_with_channel(kind::Snowflake channel_id) const {
   for (int i = 0; i < static_cast<int>(guilds_.size()); ++i) {
-    for (const auto& ch : guilds_[static_cast<size_t>(i)].channels) {
-      if (ch.id == channel_id) {
+    for (const auto& chan : guilds_[static_cast<size_t>(i)].channels) {
+      if (chan.id == channel_id) {
         return i;
       }
     }
@@ -142,6 +156,7 @@ int GuildModel::row_for_guild_with_channel(kind::Snowflake channel_id) const {
 void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
   int row = row_for_guild_with_channel(channel_id);
   if (row >= 0) {
+    recompute_guild_cache(row);
     auto idx = index(row);
     emit dataChanged(idx, idx, {UnreadCountRole});
   }
@@ -150,6 +165,7 @@ void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
 void GuildModel::on_mention_changed(kind::Snowflake channel_id) {
   int row = row_for_guild_with_channel(channel_id);
   if (row >= 0) {
+    recompute_guild_cache(row);
     auto idx = index(row);
     emit dataChanged(idx, idx, {MentionCountRole});
   }
