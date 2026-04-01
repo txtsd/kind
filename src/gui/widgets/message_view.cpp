@@ -4,11 +4,14 @@
 #include "delegates/message_delegate.hpp"
 #include "models/message_model.hpp"
 #include "models/sticker_item.hpp"
+#include "read_state_manager.hpp"
+#include "renderers/divider_renderer.hpp"
 #include "widgets/jump_pill.hpp"
 #include "workers/render_worker.hpp"
 
 #include "logging.hpp"
 
+#include <QDateTime>
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QTimer>
@@ -73,6 +76,17 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     scroll_to_bottom();
   });
 
+  // Debounced ACK timer: fires 500ms after the user stops scrolling
+  ack_timer_ = new QTimer(this);
+  ack_timer_->setSingleShot(true);
+  ack_timer_->setInterval(500);
+  connect(ack_timer_, &QTimer::timeout, this, [this]() {
+    if (pending_ack_message_id_ != 0 && current_channel_id_ != 0) {
+      emit ack_requested(current_channel_id_, pending_ack_message_id_);
+      pending_ack_message_id_ = 0;
+    }
+  });
+
   // Forward delegate interaction signals as view signals
   connect(delegate_, &MessageDelegate::link_clicked, this, &MessageView::link_clicked);
   connect(delegate_, &MessageDelegate::reaction_toggled, this, &MessageView::reaction_toggled);
@@ -111,6 +125,8 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       unread_count_ = 0;
       jump_pill_->set_count(0);
     }
+
+    check_visible_messages();
 
     // When scrolled to the very top, request older messages
     if (value == 0 && model_->rowCount() > 0 && !fetching_history_) {
@@ -158,6 +174,33 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
       emit fetch_referenced_message(msg.channel_id, *msg.referenced_message_id);
     }
   }
+
+  // Insert "New since" divider above the first unread message
+  kind::Snowflake last_read = 0;
+  if (read_state_manager_ && current_channel_id_ != 0) {
+    last_read = read_state_manager_->state(current_channel_id_).last_read_id;
+  }
+  if (last_read > 0 && !messages.empty()) {
+    for (size_t i = 0; i < messages.size(); ++i) {
+      if (messages[i].id > last_read) {
+        // Format the divider text using the last-read message's timestamp
+        auto raw_ts = QString::fromStdString(messages[i].timestamp);
+        auto dt = QDateTime::fromString(raw_ts, Qt::ISODateWithMs);
+        if (!dt.isValid()) {
+          dt = QDateTime::fromString(raw_ts, Qt::ISODate);
+        }
+        QString time_text = dt.isValid()
+            ? dt.toLocalTime().toString("MMMM d, yyyy h:mm AP")
+            : raw_ts;
+        auto divider = std::make_shared<DividerRenderer>(
+            "New since " + time_text, width, view_font);
+        layouts[i].blocks.insert(layouts[i].blocks.begin(), divider);
+        layouts[i].height += divider->height(width);
+        break;
+      }
+    }
+  }
+
   return layouts;
 }
 
@@ -192,6 +235,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   QTimer::singleShot(0, this, [this]() {
     scrollToBottom();
     mutating_ = false;
+    check_visible_messages();
   });
 }
 
@@ -270,8 +314,57 @@ void MessageView::save_scroll_state() {
   if (auto_scroll_) {
     scroll_anchors_[current_channel_id_] = {0, true};
   } else {
-    scroll_anchors_[current_channel_id_] = {anchor_message_id(), false};
+    auto bottom_id = bottom_visible_message_id();
+    scroll_anchors_[current_channel_id_] = {bottom_id, false};
   }
+}
+
+kind::Snowflake MessageView::bottom_visible_message_id() const {
+  auto vp = viewport()->rect();
+  for (int y = vp.bottom(); y >= vp.top(); y -= 10) {
+    auto idx = indexAt(QPoint(0, y));
+    if (idx.isValid()) {
+      auto rect = visualRect(idx);
+      if (rect.top() >= vp.top() && rect.bottom() <= vp.bottom()) {
+        return idx.data(MessageModel::MessageIdRole).value<qulonglong>();
+      }
+    }
+  }
+  return anchor_message_id();
+}
+
+void MessageView::check_visible_messages() {
+  if (current_channel_id_ == 0 || !read_state_manager_) {
+    return;
+  }
+
+  auto last_read = read_state_manager_->state(current_channel_id_).last_read_id;
+
+  // Find the newest fully-visible message by scanning from viewport bottom up
+  kind::Snowflake newest_visible = 0;
+  auto vp = viewport()->rect();
+  for (int y = vp.bottom(); y >= vp.top(); y -= 10) {
+    auto idx = indexAt(QPoint(0, y));
+    if (idx.isValid()) {
+      auto rect = visualRect(idx);
+      if (rect.top() >= vp.top() && rect.bottom() <= vp.bottom()) {
+        auto msg_id = idx.data(MessageModel::MessageIdRole).value<qulonglong>();
+        if (msg_id > newest_visible) {
+          newest_visible = msg_id;
+        }
+        break;  // Bottom-most fully visible is what we want
+      }
+    }
+  }
+
+  if (newest_visible > last_read && newest_visible > pending_ack_message_id_) {
+    pending_ack_message_id_ = newest_visible;
+    ack_timer_->start();
+  }
+}
+
+void MessageView::set_read_state_manager(kind::ReadStateManager* manager) {
+  read_state_manager_ = manager;
 }
 
 void MessageView::scroll_to_bottom() {

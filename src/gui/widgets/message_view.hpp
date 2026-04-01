@@ -18,6 +18,7 @@ class QTimer;
 
 namespace kind {
 class ImageCache;
+class ReadStateManager;
 }
 
 namespace kind::gui {
@@ -35,6 +36,7 @@ public:
   MessageModel* message_model() const { return model_; }
 
   void set_image_cache(kind::ImageCache* cache);
+  void set_read_state_manager(kind::ReadStateManager* manager);
   void set_edited_indicator(kind::gui::EditedIndicator style);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
@@ -50,6 +52,7 @@ signals:
   void scroll_to_message_requested(kind::Snowflake message_id);
   void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
                       int button_index);
+  void ack_requested(kind::Snowflake channel_id, kind::Snowflake message_id);
 
 public slots:
   void set_messages(const QVector<kind::Message>& messages);
@@ -65,7 +68,7 @@ private:
   JumpPill* jump_pill_;
 
   struct ScrollAnchor {
-    kind::Snowflake message_id{0};
+    kind::Snowflake message_id{0};  // Bottom-most fully visible message
     bool at_bottom{true};
   };
 
@@ -76,10 +79,16 @@ private:
   kind::Snowflake current_channel_id_{0};
   QHash<kind::Snowflake, ScrollAnchor> scroll_anchors_;
 
+  // Debounced ACK state
+  QTimer* ack_timer_{nullptr};
+  kind::Snowflake pending_ack_message_id_{0};
+
   kind::Snowflake anchor_message_id() const;
+  kind::Snowflake bottom_visible_message_id() const;
   void save_scroll_state();
   void scroll_to_bottom();
   void position_jump_pill();
+  void check_visible_messages();
   std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
@@ -93,6 +102,7 @@ private:
   QTimer* highlight_timer_{nullptr};
 
   kind::ImageCache* image_cache_{nullptr};
+  kind::ReadStateManager* read_state_manager_{nullptr};
   // Maps image URL to set of message IDs waiting for that image
   std::unordered_map<std::string, std::vector<kind::Snowflake>> pending_images_;
   // Decoded pixmap cache: URL -> QPixmap (decoded once, reused on re-renders)

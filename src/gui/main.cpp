@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
   auto* channel_list = new kind::gui::ChannelList();
   auto* message_view = new kind::gui::MessageView();
   message_view->set_image_cache(client.image_cache());
+  message_view->set_read_state_manager(client.read_state_manager());
 
   // Guild display mode preference
   server_list->set_image_cache(client.image_cache());
@@ -418,6 +419,12 @@ int main(int argc, char* argv[]) {
                        emoji_str = QUrl::toPercentEncoding(emoji_name).toStdString();
                      }
                      client.toggle_reaction(channel_id, message_id, emoji_str, add);
+                   });
+
+  // Wire ACK requests to the client
+  QObject::connect(message_view, &kind::gui::MessageView::ack_requested,
+                   [&client](kind::Snowflake channel_id, kind::Snowflake message_id) {
+                     client.ack_message(channel_id, message_id);
                    });
 
   // TODO: wire button_clicked to client.send_interaction when implemented
