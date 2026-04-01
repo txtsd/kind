@@ -158,9 +158,10 @@ void DatabaseManager::create_schema() {
 
   exec(
       "CREATE TABLE IF NOT EXISTS mute_state ("
-      "  id    INTEGER PRIMARY KEY,"
+      "  id    INTEGER NOT NULL,"
       "  type  INTEGER NOT NULL,"
-      "  muted INTEGER NOT NULL DEFAULT 0"
+      "  muted INTEGER NOT NULL DEFAULT 0,"
+      "  PRIMARY KEY (id, type)"
       ")");
 
   exec("INSERT OR IGNORE INTO schema_version (version) VALUES (2)");

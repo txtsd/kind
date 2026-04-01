@@ -60,13 +60,7 @@ int main(int argc, char* argv[]) {
   bool has_account = client.try_load_last_account();
   kind::gui::App app(client);
 
-  // Load cached data from disk
-  QVector<kind::Guild> cached_guild_vec;
-  if (has_account) {
-    client.load_cache();
-    auto cached_guilds = client.guilds();
-    cached_guild_vec = QVector<kind::Guild>(cached_guilds.begin(), cached_guilds.end());
-  }
+  // Load cached data from disk (async — DB reads on worker thread)
 
   // Widgets
   auto* server_list = new kind::gui::ServerList();
@@ -116,10 +110,7 @@ int main(int argc, char* argv[]) {
 
   auto* message_input = new kind::gui::MessageInput();
 
-  // Populate server list from disk cache immediately
-  if (!cached_guild_vec.isEmpty()) {
-    server_list->set_guilds(cached_guild_vec);
-  }
+  // Cache load deferred to after selection actions are defined
 
   // Message area: view + input stacked vertically
   auto* message_area = new QWidget();
@@ -604,23 +595,33 @@ int main(int argc, char* argv[]) {
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
-  // Show the window immediately with cached data
-  {
-    auto cached_user = client.current_user();
-    if (cached_user) {
-      status_bar->set_user(QString::fromStdString(cached_user->username));
-    }
-
-    auto last = client.last_selection();
-    if (last.guild_id != 0) {
-      select_guild_action(last.guild_id);
-      if (last.channel_id != 0) {
-        select_channel_action(last.channel_id);
-      }
-    }
-  }
-
+  // Show the window immediately — empty, data arrives asynchronously
   main_window.show();
+
+  // Kick off async cache load (DB reads on worker thread)
+  if (has_account) {
+    client.load_cache([&client, server_list, &select_guild_action, &select_channel_action,
+                       &current_guild_id, status_bar]() {
+      auto cached_guilds = client.guilds();
+      if (!cached_guilds.empty()) {
+        QVector<kind::Guild> qvec(cached_guilds.begin(), cached_guilds.end());
+        server_list->set_guilds(qvec);
+      }
+      auto cached_user = client.current_user();
+      if (cached_user) {
+        status_bar->set_user(QString::fromStdString(cached_user->username));
+      }
+      if (current_guild_id == 0) {
+        auto last = client.last_selection();
+        if (last.guild_id != 0) {
+          select_guild_action(last.guild_id);
+          if (last.channel_id != 0) {
+            select_channel_action(last.channel_id);
+          }
+        }
+      }
+    });
+  }
 
   // Restore guild/channel on login success (handles fresh data from READY)
   QObject::connect(&app, &kind::gui::App::login_success,

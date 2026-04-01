@@ -500,7 +500,7 @@ void DatabaseWriteWorker::write_mute_state_bulk(
   del.exec("DELETE FROM mute_state");
 
   QSqlQuery q(db);
-  q.prepare("INSERT INTO mute_state (id, type, muted) "
+  q.prepare("INSERT OR REPLACE INTO mute_state (id, type, muted) "
             "VALUES (:id, :type, :muted)");
   for (const auto& [id, type, muted] : entries) {
     q.bindValue(":id", static_cast<qint64>(id));

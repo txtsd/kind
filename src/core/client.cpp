@@ -22,6 +22,7 @@
 #include <QJsonObject>
 #include <QProtobufSerializer>
 #include <QTimer>
+#include <QtConcurrent>
 #include "logging.hpp"
 #include <algorithm>
 #include <charconv>
@@ -961,52 +962,94 @@ void Client::init_account_db(Snowflake user_id) {
   log::cache()->info("Account database initialized for user {} at {}", user_id, db_path.string());
 }
 
-void Client::load_cache() {
+void Client::load_cache(std::function<void()> on_complete) {
   if (!db_reader_) {
+    if (on_complete) on_complete();
     return;
   }
 
-  auto user = db_reader_->current_user();
-  if (user) {
-    store_->set_current_user(*user);
-  }
+  // All DB reads happen on a worker thread. Results are delivered back
+  // to the main thread via the ReadStateManager (a QObject) as context.
+  auto* reader = db_reader_.get();
+  auto* store = store_.get();
+  auto* rsm = read_state_manager_.get();
+  auto* msm = mute_state_manager_.get();
 
-  auto all_guilds = db_reader_->guilds();
-  for (auto& guild : all_guilds) {
-    guild.roles = db_reader_->roles(guild.id);
-    store_->upsert_guild(guild);
-  }
+  struct CacheData {
+    std::optional<User> user;
+    std::vector<Guild> guilds;
+    std::vector<Snowflake> guild_order;
+    std::unordered_map<Snowflake, std::vector<Channel>> guild_channels;
+    std::unordered_map<Snowflake, std::vector<Snowflake>> guild_member_roles;
+    std::vector<std::pair<Snowflake, ReadState>> read_states;
+    std::vector<std::tuple<Snowflake, int, bool>> mute_states;
+  };
 
-  auto order = db_reader_->guild_order();
-  if (!order.empty()) {
-    store_->set_guild_order(order);
-  }
+  auto future = QtConcurrent::run([reader]() -> std::shared_ptr<CacheData> {
+    auto data = std::make_shared<CacheData>();
 
-  for (const auto& guild : all_guilds) {
-    auto channels = db_reader_->channels(guild.id);
-    for (auto& ch : channels) {
-      ch.permission_overwrites = db_reader_->permission_overwrites(ch.id);
-      store_->upsert_channel(ch);
+    data->user = reader->current_user();
+    data->guilds = reader->guilds();
+    for (auto& guild : data->guilds) {
+      guild.roles = reader->roles(guild.id);
     }
-    auto role_ids = db_reader_->member_roles(guild.id);
-    if (!role_ids.empty()) {
-      store_->set_member_roles(guild.id, role_ids);
+    data->guild_order = reader->guild_order();
+
+    for (const auto& guild : data->guilds) {
+      auto channels = reader->channels(guild.id);
+      for (auto& ch : channels) {
+        ch.permission_overwrites = reader->permission_overwrites(ch.id);
+      }
+      data->guild_channels[guild.id] = std::move(channels);
+
+      auto role_ids = reader->member_roles(guild.id);
+      if (!role_ids.empty()) {
+        data->guild_member_roles[guild.id] = std::move(role_ids);
+      }
     }
-  }
 
-  // Load read states from database
-  auto read_states = db_reader_->read_states();
-  if (!read_states.empty()) {
-    read_state_manager_->load_read_states(read_states);
-  }
+    data->read_states = reader->read_states();
+    data->mute_states = reader->mute_states();
+    return data;
+  });
 
-  // Load mute states from database
-  auto mute_states = db_reader_->mute_states();
-  if (!mute_states.empty()) {
-    mute_state_manager_->load_from_db(mute_states);
-  }
+  auto* watcher = new QFutureWatcher<std::shared_ptr<CacheData>>(rsm);
+  QObject::connect(watcher, &QFutureWatcher<std::shared_ptr<CacheData>>::finished,
+                   rsm, [watcher, store, rsm, msm, on_complete = std::move(on_complete)]() {
+    watcher->deleteLater();
+    auto data = watcher->result();
 
-  log::cache()->info("Loaded cache from database");
+    if (data->user) {
+      store->set_current_user(*data->user);
+    }
+    for (auto& guild : data->guilds) {
+      store->upsert_guild(guild);
+    }
+    if (!data->guild_order.empty()) {
+      store->set_guild_order(data->guild_order);
+    }
+    for (const auto& [guild_id, channels] : data->guild_channels) {
+      for (const auto& ch : channels) {
+        store->upsert_channel(ch);
+      }
+    }
+    for (const auto& [guild_id, role_ids] : data->guild_member_roles) {
+      store->set_member_roles(guild_id, role_ids);
+    }
+    if (!data->read_states.empty()) {
+      rsm->load_read_states(data->read_states);
+    }
+    if (!data->mute_states.empty()) {
+      msm->load_from_db(data->mute_states);
+    }
+
+    log::cache()->info("Loaded cache from database");
+
+    if (on_complete) {
+      on_complete();
+    }
+  });
+  watcher->setFuture(future);
 }
 
 void Client::save_cache() {

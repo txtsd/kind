@@ -16,6 +16,7 @@
 #include "read_state_manager.hpp"
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -86,7 +87,7 @@ public:
   // Account-scoped persistence
   void init_account_db(Snowflake user_id);
   bool try_load_last_account();  // Returns true if a last account was found and DB opened
-  void load_cache();
+  void load_cache(std::function<void()> on_complete = {});
   void save_cache();
   void save_last_selection(Snowflake guild_id, Snowflake channel_id);
   void save_guild_channel(Snowflake guild_id, Snowflake channel_id);
