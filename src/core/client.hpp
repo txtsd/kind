@@ -12,6 +12,8 @@
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
 
+#include "read_state_manager.hpp"
+
 #include <atomic>
 #include <memory>
 #include <optional>
@@ -111,6 +113,9 @@ public:
   // Returns the image cache for async image loading.
   ImageCache* image_cache() const { return image_cache_.get(); }
 
+  // Returns the read state manager for unread/mention tracking.
+  ReadStateManager* read_state_manager() const { return read_state_manager_.get(); }
+
 private:
   void wire_bridges();
 
@@ -121,6 +126,7 @@ private:
   std::unique_ptr<AuthManager> auth_;
   std::unique_ptr<DataStore> store_;
   std::unique_ptr<ImageCache> image_cache_;
+  std::unique_ptr<ReadStateManager> read_state_manager_;
 
   // Internal observer bridges
   class AuthBridge;

@@ -40,6 +40,8 @@ public slots:
   void delete_guild(kind::Snowflake id);
   void delete_channel(kind::Snowflake id);
   void mark_message_deleted(kind::Snowflake channel_id, kind::Snowflake message_id);
+  void write_read_state(kind::Snowflake channel_id, kind::Snowflake last_read_id,
+                        int mention_count);
   void write_app_state(QString key, QString value);
   void close_db();
   void flush();
@@ -83,6 +85,8 @@ signals:
   void guild_delete_requested(kind::Snowflake id);
   void channel_delete_requested(kind::Snowflake id);
   void message_delete_requested(kind::Snowflake channel_id, kind::Snowflake message_id);
+  void read_state_write_requested(kind::Snowflake channel_id,
+                                  kind::Snowflake last_read_id, int mention_count);
   void app_state_write_requested(QString key, QString value);
   void flush_requested();
 

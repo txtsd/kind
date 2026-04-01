@@ -444,6 +444,23 @@ void DatabaseWriteWorker::mark_message_deleted(kind::Snowflake channel_id,
   q.exec();
 }
 
+void DatabaseWriteWorker::write_read_state(kind::Snowflake channel_id,
+                                           kind::Snowflake last_read_id,
+                                           int mention_count) {
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.prepare("INSERT OR REPLACE INTO read_state (channel_id, last_read_id, mention_count) "
+            "VALUES (:cid, :lrid, :mc)");
+  q.bindValue(":cid", static_cast<qint64>(channel_id));
+  q.bindValue(":lrid", static_cast<qint64>(last_read_id));
+  q.bindValue(":mc", mention_count);
+  if (!q.exec()) {
+    log::cache()->warn("Writer: failed to write read_state for channel {}: {}",
+                       channel_id, q.lastError().text().toStdString());
+  }
+}
+
 void DatabaseWriteWorker::write_app_state(QString key, QString value) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
@@ -488,6 +505,8 @@ DatabaseWriter::DatabaseWriter(const std::string& db_path, QObject* parent)
           &DatabaseWriteWorker::delete_channel);
   connect(this, &DatabaseWriter::message_delete_requested, worker_,
           &DatabaseWriteWorker::mark_message_deleted);
+  connect(this, &DatabaseWriter::read_state_write_requested, worker_,
+          &DatabaseWriteWorker::write_read_state);
   connect(this, &DatabaseWriter::app_state_write_requested, worker_,
           &DatabaseWriteWorker::write_app_state);
   connect(this, &DatabaseWriter::flush_requested, worker_, &DatabaseWriteWorker::flush);

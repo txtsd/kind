@@ -259,6 +259,40 @@ private:
       }
     }
 
+    // Parse read_state entries from READY payload
+    {
+      auto read_state_obj = obj["read_state"].toObject();
+      auto entries = read_state_obj["entries"].toArray();
+      if (entries.isEmpty()) {
+        // Some payloads may have read_state as a direct array
+        entries = obj["read_state"].toArray();
+      }
+      if (!entries.isEmpty()) {
+        std::vector<std::pair<Snowflake, ReadState>> states;
+        states.reserve(entries.size());
+        for (const auto& val : entries) {
+          auto entry = val.toObject();
+          auto channel_id = static_cast<Snowflake>(entry["id"].toString().toULongLong());
+          if (channel_id == 0) continue;
+          ReadState rs;
+          rs.last_read_id = static_cast<Snowflake>(entry["last_message_id"].toString().toULongLong());
+          rs.mention_count = entry["mention_count"].toInt(0);
+          states.emplace_back(channel_id, rs);
+        }
+        if (!states.empty()) {
+          client_.read_state_manager_->load_read_states(states);
+          // Persist to database
+          if (client_.db_writer_) {
+            for (const auto& [cid, rs] : states) {
+              emit client_.db_writer_->read_state_write_requested(
+                  cid, rs.last_read_id, rs.mention_count);
+            }
+          }
+          log::client()->debug("Loaded {} read_state entries from READY", states.size());
+        }
+      }
+    }
+
     client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
   }
 
@@ -271,6 +305,29 @@ private:
     if (client_.db_writer_) {
       emit client_.db_writer_->message_write_requested(*msg);
     }
+
+    // Track unread state for channels that are not currently active
+    if (msg->channel_id != client_.active_channel_id_.load()) {
+      client_.read_state_manager_->increment_unread(msg->channel_id);
+
+      // Check if this message mentions the current user
+      auto current = client_.store_->current_user();
+      if (current) {
+        bool mentioned = msg->mention_everyone;
+        if (!mentioned) {
+          for (const auto& m : msg->mentions) {
+            if (m.id == current->id) {
+              mentioned = true;
+              break;
+            }
+          }
+        }
+        if (mentioned) {
+          client_.read_state_manager_->increment_mention(msg->channel_id);
+        }
+      }
+    }
+
     client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_create(*msg); });
   }
 
@@ -460,6 +517,7 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
 
   store_ = std::make_unique<DataStore>(max_messages);
   image_cache_ = std::make_unique<ImageCache>(platform_paths().cache_dir / "images");
+  read_state_manager_ = std::make_unique<ReadStateManager>();
 
   // DB is NOT created here — it's deferred to init_account_db() after login
   // so the path can be scoped by user ID.
@@ -476,7 +534,8 @@ Client::Client(ConfigManager& config, ClientDeps deps)
       rest_(std::move(deps.rest)),
       gateway_(std::move(deps.gateway)),
       auth_(std::move(deps.auth)),
-      store_(std::move(deps.store)) {
+      store_(std::move(deps.store)),
+      read_state_manager_(std::make_unique<ReadStateManager>()) {
   wire_bridges();
 }
 
@@ -863,6 +922,12 @@ void Client::load_cache() {
     if (!role_ids.empty()) {
       store_->set_member_roles(guild.id, role_ids);
     }
+  }
+
+  // Load read states from database
+  auto read_states = db_reader_->read_states();
+  if (!read_states.empty()) {
+    read_state_manager_->load_read_states(read_states);
   }
 
   log::cache()->info("Loaded cache from database");

@@ -1,4 +1,5 @@
 #include "cache/database_reader.hpp"
+#include "read_state_manager.hpp"
 
 #include "logging.hpp"
 
@@ -349,6 +350,21 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
   }
 
   std::ranges::reverse(result);
+  return result;
+}
+
+std::vector<std::pair<Snowflake, ReadState>> DatabaseReader::read_states() const {
+  std::vector<std::pair<Snowflake, ReadState>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT channel_id, last_read_id, mention_count FROM read_state");
+  while (q.next()) {
+    auto channel_id = static_cast<Snowflake>(q.value(0).toLongLong());
+    ReadState rs;
+    rs.last_read_id = static_cast<Snowflake>(q.value(1).toLongLong());
+    rs.mention_count = q.value(2).toInt();
+    result.emplace_back(channel_id, rs);
+  }
   return result;
 }
 
