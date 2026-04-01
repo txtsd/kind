@@ -56,15 +56,17 @@ int main(int argc, char* argv[]) {
 
   kind::ConfigManager config;
   kind::Client client(config);
-  // Try to open the last active account's database for cached display
-  if (client.try_load_last_account()) {
-    client.load_cache();
-  }
+  // Open the last active account's database (schema only, no data loading)
+  bool has_account = client.try_load_last_account();
   kind::gui::App app(client);
 
-  // Display cached guilds immediately before Discord connects
-  auto cached_guilds = client.guilds();
-  QVector<kind::Guild> cached_guild_vec(cached_guilds.begin(), cached_guilds.end());
+  // Load cached data from disk
+  QVector<kind::Guild> cached_guild_vec;
+  if (has_account) {
+    client.load_cache();
+    auto cached_guilds = client.guilds();
+    cached_guild_vec = QVector<kind::Guild>(cached_guilds.begin(), cached_guilds.end());
+  }
 
   // Widgets
   auto* server_list = new kind::gui::ServerList();
@@ -602,55 +604,64 @@ int main(int argc, char* argv[]) {
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
-  // Load saved token once from keychain
-  auto saved_token = client.saved_token();
+  // Show the window immediately with cached data
+  {
+    auto cached_user = client.current_user();
+    if (cached_user) {
+      status_bar->set_user(QString::fromStdString(cached_user->username));
+    }
 
-  // Populate login dialog with saved token if available
-  if (saved_token) {
-    login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
-  }
-
-  // Pass --no-autologin to force show the login dialog
-  bool force_dialog = qapp.arguments().contains("--no-autologin");
-
-  // If auto-login is enabled and we have a saved token, try it
-  if (!force_dialog && saved_token && login_dialog.auto_login_enabled() && client.try_saved_login(saved_token)) {
-    QEventLoop wait;
-    bool login_ok = false;
-    QObject::connect(&app, &kind::gui::App::login_success, &wait, [&]() {
-      login_ok = true;
-      wait.quit();
-    });
-    QObject::connect(&app, &kind::gui::App::login_failure, &wait, [&]() { wait.quit(); });
-    wait.exec();
-
-    if (!login_ok) {
-      // Auto-login failed, show dialog
-      if (login_dialog.exec() != QDialog::Accepted) {
-        return 0;
+    auto last = client.last_selection();
+    if (last.guild_id != 0) {
+      select_guild_action(last.guild_id);
+      if (last.channel_id != 0) {
+        select_channel_action(last.channel_id);
       }
-    }
-  } else {
-    if (login_dialog.exec() != QDialog::Accepted) {
-      return 0;
-    }
-  }
-
-  // Set cached username on status bar
-  auto cached_user = client.current_user();
-  if (cached_user) {
-    status_bar->set_user(QString::fromStdString(cached_user->username));
-  }
-
-  // Restore last selected guild and channel
-  auto last = client.last_selection();
-  if (last.guild_id != 0) {
-    select_guild_action(last.guild_id);
-    if (last.channel_id != 0) {
-      select_channel_action(last.channel_id);
     }
   }
 
   main_window.show();
+
+  // Restore guild/channel on login success (handles fresh data from READY)
+  QObject::connect(&app, &kind::gui::App::login_success,
+                   [&client, &select_guild_action, &select_channel_action,
+                    &current_guild_id, &current_channel_id]
+                   (const kind::User&) {
+    // Only restore if nothing is currently selected (first login)
+    if (current_guild_id == 0) {
+      auto last = client.last_selection();
+      if (last.guild_id != 0) {
+        select_guild_action(last.guild_id);
+        if (last.channel_id != 0) {
+          select_channel_action(last.channel_id);
+        }
+      }
+    }
+  });
+
+  // Load saved token and attempt auto-login (non-blocking)
+  auto saved_token = client.saved_token();
+  bool force_dialog = qapp.arguments().contains("--no-autologin");
+
+  if (!force_dialog && saved_token && login_dialog.auto_login_enabled()) {
+    login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
+
+    // Try auto-login; if it fails, show dialog
+    QObject::connect(&app, &kind::gui::App::login_failure,
+                     &login_dialog, [&login_dialog](const QString&) {
+      login_dialog.show();
+    });
+
+    client.try_saved_login(saved_token);
+  } else {
+    if (saved_token) {
+      login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
+    }
+    login_dialog.show();
+  }
+
+  // If login dialog is rejected (closed without logging in), quit
+  QObject::connect(&login_dialog, &QDialog::rejected, &qapp, &QApplication::quit);
+
   return qapp.exec();
 }
