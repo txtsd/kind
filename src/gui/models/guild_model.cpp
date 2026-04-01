@@ -36,6 +36,11 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
         .arg(guild.id)
         .arg(QString::fromStdString(guild.icon_hash));
   }
+  case MutedRole:
+    if (mute_state_manager_) {
+      return mute_state_manager_->is_guild_muted(guild.id);
+    }
+    return false;
   case UnreadCountRole:
     if (read_state_manager_) {
       if (mute_state_manager_ && mute_state_manager_->is_guild_muted(guild.id)) {

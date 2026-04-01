@@ -24,6 +24,7 @@ public:
     LockedRole,
     CollapsedRole,
     IsCategoryRole,
+    MutedRole,
     UnreadCountRole,
     MentionCountRole,
   };

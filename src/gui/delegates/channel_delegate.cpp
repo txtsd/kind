@@ -88,6 +88,7 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   painter->save();
 
   bool locked = index.data(ChannelModel::LockedRole).toBool();
+  bool muted = index.data(ChannelModel::MutedRole).toBool();
   int unread_count = index.data(ChannelModel::UnreadCountRole).toInt();
   int mention_count = index.data(ChannelModel::MentionCountRole).toInt();
   bool has_unreads = unread_count > 0;
@@ -177,8 +178,19 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   int text_x = option.rect.left() + left_offset + channel_indent_ + horizontal_padding_;
   int available_width = option.rect.width() - left_offset - channel_indent_ - 2 * horizontal_padding_ - badge_space;
 
-  QString elided = fm.elidedText(display_text, Qt::ElideRight, available_width);
+  // Reserve space for muted icon
+  static const QString mute_icon = QString::fromUtf8("\xF0\x9F\x94\x87"); // 🔇
+  int mute_icon_width = muted ? fm.horizontalAdvance(mute_icon) + 4 : 0;
+
+  QString elided = fm.elidedText(display_text, Qt::ElideRight, available_width - mute_icon_width);
   painter->drawText(text_x, text_y, elided);
+
+  // Draw muted icon after channel name
+  if (muted) {
+    int icon_x = text_x + fm.horizontalAdvance(elided) + 4;
+    painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
+    painter->drawText(icon_x, text_y, mute_icon);
+  }
 
   // Draw badges (dual layout: mention on right, unread to its left)
   if (!locked) {

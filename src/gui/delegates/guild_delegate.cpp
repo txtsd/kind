@@ -72,6 +72,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   painter->save();
 
   bool selected = option.state & QStyle::State_Selected;
+  bool muted = index.data(GuildModel::MutedRole).toBool();
   int unread_count = index.data(GuildModel::UnreadCountRole).toInt();
   int mention_count = index.data(GuildModel::MentionCountRole).toInt();
   bool has_unreads = unread_count > 0;
@@ -129,8 +130,14 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     int text_x = option.rect.left() + left_offset + left_padding_;
     int available_width = option.rect.width() - left_offset - left_padding_ - vertical_padding_;
 
-    QString elided = fm.elidedText(name, Qt::ElideRight, available_width);
+    static const QString mute_icon = QString::fromUtf8("\xF0\x9F\x94\x87");
+    int mute_w = muted ? fm.horizontalAdvance(mute_icon) + 4 : 0;
+    QString elided = fm.elidedText(name, Qt::ElideRight, available_width - mute_w);
     painter->drawText(text_x, text_y, elided);
+    if (muted) {
+      painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
+      painter->drawText(text_x + fm.horizontalAdvance(elided) + 4, text_y, mute_icon);
+    }
 
   } else if (guild_display_ == "icon_text") {
     int icon_x = option.rect.left() + left_offset + left_padding_;
@@ -164,8 +171,14 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     }
 
     int text_y = option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
-    QString elided = fm.elidedText(name, Qt::ElideRight, available_width);
+    static const QString mute_icon2 = QString::fromUtf8("\xF0\x9F\x94\x87");
+    int mute_w2 = muted ? fm.horizontalAdvance(mute_icon2) + 4 : 0;
+    QString elided = fm.elidedText(name, Qt::ElideRight, available_width - mute_w2);
     painter->drawText(text_x, text_y, elided);
+    if (muted) {
+      painter->setPen(option.palette.color(QPalette::Disabled, QPalette::Text));
+      painter->drawText(text_x + fm.horizontalAdvance(elided) + 4, text_y, mute_icon2);
+    }
 
   } else if (guild_display_ == "icon") {
     int icon_x = option.rect.left() + left_offset + (option.rect.width() - left_offset - icon_only_size_) / 2;

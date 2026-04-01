@@ -18,6 +18,7 @@ public:
     GuildIdRole = Qt::UserRole + 1,
     IconHashRole,
     GuildIconUrlRole,
+    MutedRole,
     UnreadCountRole,
     MentionCountRole,
   };

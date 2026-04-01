@@ -48,6 +48,11 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
     return (channel.type == 4) && collapsed_.count(channel.id);
   case IsCategoryRole:
     return channel.type == 4;
+  case MutedRole:
+    if (mute_state_manager_) {
+      return mute_state_manager_->is_effectively_muted(channel.id, channel.guild_id);
+    }
+    return false;
   case UnreadCountRole:
     if (read_state_manager_) {
       if (mute_state_manager_ &&
