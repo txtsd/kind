@@ -3,13 +3,14 @@
 #include "cache/image_cache.hpp"
 
 #include <QImage>
+#include <QScrollBar>
 
 namespace kind::gui {
 
 ServerList::ServerList(QWidget* parent)
     : QListView(parent), model_(new GuildModel(this)), delegate_(new GuildDelegate(this)) {
-  setMinimumWidth(60);
   setIconSize(QSize(40, 40));
+  setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   setModel(model_);
   setItemDelegate(delegate_);
   setMouseTracking(true);
@@ -43,6 +44,7 @@ void ServerList::set_guild_display(const std::string& mode) {
   // Force full relayout and repaint
   scheduleDelayedItemsLayout();
   viewport()->update();
+  update_width();
 }
 
 void ServerList::set_guilds(const QVector<kind::Guild>& guilds) {
@@ -53,6 +55,7 @@ void ServerList::set_guilds(const QVector<kind::Guild>& guilds) {
   if (guild_display_ != "text" && image_cache_) {
     fetch_guild_icons();
   }
+  update_width();
 }
 
 void ServerList::on_selection_changed(const QModelIndex& current, const QModelIndex& /*previous*/) {
@@ -99,6 +102,27 @@ void ServerList::on_image_ready(const QString& url, const QPixmap& pixmap) {
   pixmap_cache_[url_str] = pixmap;
   delegate_->set_pixmap(url_str, pixmap);
   viewport()->update();
+}
+
+void ServerList::update_width() {
+  int max_width = 0;
+  QStyleOptionViewItem opt;
+  opt.initFrom(viewport());
+
+  for (int row = 0; row < model_->rowCount(); ++row) {
+    auto idx = model_->index(row);
+    auto hint = delegate_->sizeHint(opt, idx);
+    if (hint.width() > max_width) {
+      max_width = hint.width();
+    }
+  }
+
+  // Add scrollbar width and frame margins
+  int scrollbar_w = verticalScrollBar()->isVisible() ? verticalScrollBar()->width() : 0;
+  int frame_w = 2 * frameWidth();
+  int total = max_width + scrollbar_w + frame_w + 4;
+
+  setFixedWidth(std::max(total, 60));
 }
 
 } // namespace kind::gui

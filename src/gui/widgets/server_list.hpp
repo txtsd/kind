@@ -39,6 +39,7 @@ private:
   void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
   void fetch_guild_icons();
   void on_image_ready(const QString& url, const QPixmap& pixmap);
+  void update_width();
 
   GuildModel* model_;
   GuildDelegate* delegate_;

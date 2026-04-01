@@ -158,15 +158,27 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   painter->restore();
 }
 
-QSize GuildDelegate::sizeHint(const QStyleOptionViewItem& /*option*/,
-                              const QModelIndex& /*index*/) const {
+QSize GuildDelegate::sizeHint(const QStyleOptionViewItem& option,
+                              const QModelIndex& index) const {
   if (guild_display_ == "icon") {
-    return QSize(0, icon_only_item_height_);
+    int width = left_padding_ + icon_only_size_ + left_padding_;
+    return QSize(width, icon_only_item_height_);
   }
+
+  QString name = index.data(Qt::DisplayRole).toString();
+  QFont bold_font = option.font;
+  bold_font.setBold(true);
+  QFontMetrics fm(bold_font);
+  int text_width = fm.horizontalAdvance(name);
+
   if (guild_display_ == "icon_text") {
-    return QSize(0, icon_text_item_height_);
+    int width = left_padding_ + icon_text_size_ + icon_text_gap_ + text_width + left_padding_;
+    return QSize(width, icon_text_item_height_);
   }
-  return QSize(0, text_item_height_);
+
+  // Text mode
+  int width = left_padding_ + text_width + left_padding_;
+  return QSize(width, text_item_height_);
 }
 
 } // namespace kind::gui
