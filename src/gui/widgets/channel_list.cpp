@@ -1,5 +1,7 @@
 #include "channel_list.hpp"
 
+#include "logging.hpp"
+
 namespace kind::gui {
 
 ChannelList::ChannelList(QWidget* parent)
@@ -40,6 +42,7 @@ void ChannelList::on_selection_changed(const QModelIndex& current, const QModelI
   }
 
   auto channel_id = model_->channel_id_at(current.row());
+  kind::log::gui()->trace("channel selected: id={}", channel_id);
   emit channel_selected(channel_id);
 }
 

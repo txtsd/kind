@@ -2,6 +2,7 @@
 
 #include "cache/image_cache.hpp"
 #include "delegates/message_delegate.hpp"
+#include "logging.hpp"
 #include "models/message_model.hpp"
 #include "models/sticker_item.hpp"
 #include "read_state_manager.hpp"
@@ -121,6 +122,8 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
       return;
     }
     auto_scroll_ = (value >= verticalScrollBar()->maximum() - 5);
+    kind::log::gui()->trace("scroll: value={}, max={}, auto_scroll={}", value,
+                      verticalScrollBar()->maximum(), auto_scroll_);
 
     if (auto_scroll_) {
       unread_count_ = 0;
@@ -133,9 +136,11 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     if (value == 0 && model_->rowCount() > 0 && !fetching_history_) {
       auto oldest = model_->oldest_message_id();
       if (oldest.has_value()) {
+        kind::log::gui()->debug("scroll_to_top: requesting history before {}", oldest.value());
         fetching_history_ = true;
         position_loading_pill();
         loading_pill_->fade_in();
+        kind::log::gui()->debug("loading_pill: fade_in");
         emit load_more_requested(oldest.value());
       }
     }
@@ -208,10 +213,12 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
+  kind::log::gui()->debug("switch_channel: channel={}, {} messages", channel_id, messages.size());
   unread_count_ = 0;
   jump_pill_->set_count(0);
   fetching_history_ = false;
   loading_pill_->hide_immediately();
+  kind::log::gui()->debug("loading_pill: hide_immediately");
   pending_images_.clear();
 
   save_scroll_state();
@@ -244,6 +251,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 }
 
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
+  kind::log::gui()->debug("set_messages: {} messages", messages.size());
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   auto layouts = compute_layouts_sync(vec);
   model_->set_messages(vec, std::move(layouts));
@@ -255,10 +263,14 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
 void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
   fetching_history_ = false;
   loading_pill_->fade_out();
+  kind::log::gui()->debug("loading_pill: fade_out");
 
   if (messages.isEmpty()) {
+    kind::log::gui()->debug("prepend_messages: no messages (end of history?)");
     return;
   }
+
+  kind::log::gui()->debug("prepend_messages: {} messages for current channel", messages.size());
 
   auto anchor_id = anchor_message_id();
   mutating_ = true;
@@ -277,6 +289,7 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
 }
 
 void MessageView::add_message(const kind::Message& msg) {
+  kind::log::gui()->debug("add_message: id={}, auto_scroll={}", msg.id, auto_scroll_);
   model_->append_message(msg);
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
@@ -287,6 +300,7 @@ void MessageView::add_message(const kind::Message& msg) {
   if (!auto_scroll_) {
     unread_count_++;
     jump_pill_->set_count(unread_count_);
+    kind::log::gui()->trace("jump_pill: count={}", unread_count_);
     position_jump_pill();
   }
 }
@@ -364,6 +378,7 @@ void MessageView::check_visible_messages() {
 
   if (newest_visible > last_read && newest_visible > pending_ack_message_id_) {
     pending_ack_message_id_ = newest_visible;
+    kind::log::gui()->trace("ack_schedule: channel={}, msg={}", current_channel_id_, newest_visible);
     ack_timer_->start();
   }
 }
@@ -403,6 +418,7 @@ void MessageView::updateGeometries() {
 
 void MessageView::set_image_cache(kind::ImageCache* cache) {
   image_cache_ = cache;
+  kind::log::gui()->debug("image cache connected");
   if (!cache) {
     return;
   }
@@ -415,6 +431,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
             }
             auto message_ids = std::move(it->second);
             pending_images_.erase(it);
+            kind::log::gui()->trace("image_ready: {}, updating {} messages", std_url, message_ids.size());
 
             // Decode once, cache the pixmap
             QPixmap pixmap;
@@ -466,6 +483,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
 
             // Adjust scroll position to compensate for height changes above viewport
             if (scroll_delta != 0 && !auto_scroll_) {
+              kind::log::gui()->trace("scroll_compensation: delta={}", scroll_delta);
               verticalScrollBar()->setValue(verticalScrollBar()->value() + scroll_delta);
             }
           });
@@ -610,6 +628,7 @@ void MessageView::request_images(const kind::Message& msg) {
 void MessageView::scroll_to_message(kind::Snowflake message_id) {
   auto row = model_->row_for_id(message_id);
   if (row) {
+    kind::log::gui()->debug("scroll_to_message: id={}, row={}", message_id, *row);
     auto_scroll_ = false;
     scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtCenter);
 

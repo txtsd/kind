@@ -1,5 +1,6 @@
 #include "models/channel_model.hpp"
 
+#include "logging.hpp"
 #include "permissions.hpp"
 
 #include <algorithm>
@@ -97,6 +98,7 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
 void ChannelModel::set_channels(const std::vector<kind::Channel>& channels,
                                 const std::unordered_map<kind::Snowflake, uint64_t>& permissions,
                                 bool hide_locked) {
+  kind::log::gui()->debug("set_channels: {} channels (hide_locked={})", channels.size(), hide_locked);
   permissions_ = permissions;
   hide_locked_ = hide_locked;
 
@@ -184,6 +186,7 @@ void ChannelModel::rebuild_visible() {
 }
 
 void ChannelModel::toggle_collapsed(kind::Snowflake category_id) {
+  kind::log::gui()->debug("toggle_collapsed: category {}", category_id);
   if (collapsed_.count(category_id)) {
     collapsed_.erase(category_id);
   } else {
@@ -193,6 +196,7 @@ void ChannelModel::toggle_collapsed(kind::Snowflake category_id) {
 }
 
 void ChannelModel::collapse_all() {
+  kind::log::gui()->debug("collapse_all");
   for (const auto& ch : all_channels_) {
     if (ch.type == 4) {
       collapsed_.insert(ch.id);
@@ -202,6 +206,7 @@ void ChannelModel::collapse_all() {
 }
 
 void ChannelModel::expand_all() {
+  kind::log::gui()->debug("expand_all");
   collapsed_.clear();
   rebuild_visible();
 }
@@ -222,6 +227,7 @@ void ChannelModel::set_read_state_manager(kind::ReadStateManager* mgr) {
     disconnect(read_state_manager_, nullptr, this, nullptr);
   }
   read_state_manager_ = mgr;
+  kind::log::gui()->debug("read state manager connected");
   if (read_state_manager_) {
     connect(read_state_manager_, &kind::ReadStateManager::unread_changed,
             this, &ChannelModel::on_unread_changed);
@@ -229,6 +235,7 @@ void ChannelModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, &ChannelModel::on_mention_changed);
     connect(read_state_manager_, &kind::ReadStateManager::bulk_loaded,
             this, [this]() {
+      kind::log::gui()->debug("bulk_loaded: refreshing {} channels", channels_.size());
       if (!channels_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
                          {UnreadCountRole, UnreadTextRole, MentionCountRole});
@@ -251,6 +258,7 @@ void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
     disconnect(mute_state_manager_, nullptr, this, nullptr);
   }
   mute_state_manager_ = mgr;
+  kind::log::gui()->debug("mute state manager connected");
   if (mute_state_manager_) {
     connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
             this, [this](kind::Snowflake id) {
@@ -262,6 +270,7 @@ void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
     });
     connect(mute_state_manager_, &kind::MuteStateManager::bulk_loaded,
             this, [this]() {
+      kind::log::gui()->debug("bulk_loaded: refreshing {} channels", channels_.size());
       if (!channels_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
                          {MutedRole, UnreadCountRole, UnreadTextRole, MentionCountRole});
@@ -272,6 +281,7 @@ void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
 
 void ChannelModel::on_unread_changed(kind::Snowflake channel_id) {
   int row = row_for_channel(channel_id);
+  kind::log::gui()->debug("unread_changed: channel {}, row={}", channel_id, row);
   if (row >= 0) {
     auto idx = index(row);
     emit dataChanged(idx, idx, {UnreadCountRole, UnreadTextRole});
@@ -280,6 +290,7 @@ void ChannelModel::on_unread_changed(kind::Snowflake channel_id) {
 
 void ChannelModel::on_mention_changed(kind::Snowflake channel_id) {
   int row = row_for_channel(channel_id);
+  kind::log::gui()->debug("mention_changed: channel {}, row={}", channel_id, row);
   if (row >= 0) {
     auto idx = index(row);
     emit dataChanged(idx, idx, {MentionCountRole});

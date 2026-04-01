@@ -1,5 +1,7 @@
 #include "models/message_model.hpp"
 
+#include "logging.hpp"
+
 #include <QDateTime>
 #include <algorithm>
 
@@ -63,6 +65,7 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
 }
 
 void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
+  kind::log::gui()->debug("set_messages: {} messages", messages.size());
   beginResetModel();
   messages_ = messages;
   std::sort(messages_.begin(), messages_.end(),
@@ -73,6 +76,7 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
 }
 
 void MessageModel::set_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts) {
+  kind::log::gui()->debug("set_messages: {} messages", messages.size());
   beginResetModel();
   messages_ = messages;
   std::sort(messages_.begin(), messages_.end(),
@@ -83,6 +87,7 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages, std:
 }
 
 void MessageModel::append_message(const kind::Message& msg) {
+  kind::log::gui()->debug("append_message: id={}", msg.id);
   // Guard against duplicates
   for (const auto& existing : messages_) {
     if (existing.id == msg.id) {
@@ -111,6 +116,7 @@ void MessageModel::append_message(const kind::Message& msg) {
 }
 
 void MessageModel::update_message(const kind::Message& msg) {
+  kind::log::gui()->debug("update_message: id={}", msg.id);
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
     if (messages_[static_cast<size_t>(i)].id == msg.id) {
       messages_[static_cast<size_t>(i)] = msg;
@@ -127,6 +133,7 @@ void MessageModel::update_message(const kind::Message& msg) {
 }
 
 void MessageModel::mark_deleted(kind::Snowflake message_id) {
+  kind::log::gui()->debug("mark_deleted: id={}", message_id);
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
     if (messages_[static_cast<size_t>(i)].id == message_id) {
       messages_[static_cast<size_t>(i)].deleted = true;
@@ -148,6 +155,7 @@ std::optional<kind::Snowflake> MessageModel::oldest_message_id() const {
 }
 
 void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) {
+  kind::log::gui()->debug("prepend_messages: {} messages", messages.size());
   if (messages.empty()) {
     return;
   }
@@ -158,6 +166,7 @@ void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) 
 }
 
 void MessageModel::prepend_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts) {
+  kind::log::gui()->debug("prepend_messages: {} messages", messages.size());
   if (messages.empty()) {
     return;
   }
@@ -177,6 +186,7 @@ std::optional<int> MessageModel::row_for_id(kind::Snowflake id) const {
 }
 
 void MessageModel::on_layout_ready(kind::Snowflake message_id, kind::gui::RenderedMessage layout) {
+  kind::log::gui()->debug("layout_ready: id={}", message_id);
   auto row = row_for_id(message_id);
   if (!row) {
     return;

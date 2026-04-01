@@ -1,5 +1,7 @@
 #include "models/guild_model.hpp"
 
+#include "logging.hpp"
+
 namespace kind::gui {
 
 GuildModel::GuildModel(QObject* parent) : QAbstractListModel(parent) {}
@@ -50,6 +52,7 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
 }
 
 void GuildModel::set_guilds(const std::vector<kind::Guild>& guilds) {
+  kind::log::gui()->debug("set_guilds: {} guilds", guilds.size());
   beginResetModel();
   guilds_ = guilds;
   cache_.resize(guilds_.size());
@@ -69,6 +72,7 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
     disconnect(read_state_manager_, nullptr, this, nullptr);
   }
   read_state_manager_ = mgr;
+  kind::log::gui()->debug("read state manager {}", mgr ? "connected" : "disconnected");
   if (read_state_manager_) {
     connect(read_state_manager_, &kind::ReadStateManager::unread_changed,
             this, &GuildModel::on_unread_changed);
@@ -76,6 +80,7 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, &GuildModel::on_mention_changed);
     connect(read_state_manager_, &kind::ReadStateManager::bulk_loaded,
             this, [this]() {
+      kind::log::gui()->debug("bulk_loaded: recomputing {} guild caches", guilds_.size());
       recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
@@ -91,6 +96,7 @@ void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
     disconnect(mute_state_manager_, nullptr, this, nullptr);
   }
   mute_state_manager_ = mgr;
+  kind::log::gui()->debug("mute state manager {}", mgr ? "connected" : "disconnected");
   if (mute_state_manager_) {
     connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
             this, [this](kind::Snowflake /*id*/) {
@@ -126,6 +132,8 @@ void GuildModel::recompute_guild_cache(int row) {
     cached.unread_channels = 0;
     cached.mention_count = 0;
     cached.unread_text = QString();
+    kind::log::gui()->debug("guild \"{}\"(id={}): unread_channels={}, mentions={}, text=\"\"",
+                            guild.name, guild.id, 0, 0);
     return;
   }
 
@@ -163,9 +171,14 @@ void GuildModel::recompute_guild_cache(int row) {
   } else {
     cached.unread_text = QString();
   }
+
+  kind::log::gui()->debug("guild \"{}\"(id={}): unread_channels={}, mentions={}, text=\"{}\"",
+                          guild.name, guild.id, cached.unread_channels, cached.mention_count,
+                          cached.unread_text.toStdString());
 }
 
 void GuildModel::recompute_all_caches() {
+  kind::log::gui()->debug("recomputing all {} guild caches", guilds_.size());
   cache_.resize(guilds_.size());
   for (int row = 0; row < static_cast<int>(guilds_.size()); ++row) {
     recompute_guild_cache(row);
@@ -195,6 +208,7 @@ int GuildModel::row_for_guild_with_channel(kind::Snowflake channel_id) const {
 
 void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
   int row = row_for_guild_with_channel(channel_id);
+  kind::log::gui()->debug("unread_changed: channel {}, guild row={}", channel_id, row);
   if (row >= 0) {
     recompute_guild_cache(row);
     auto idx = index(row);
@@ -204,6 +218,7 @@ void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
 
 void GuildModel::on_mention_changed(kind::Snowflake channel_id) {
   int row = row_for_guild_with_channel(channel_id);
+  kind::log::gui()->debug("mention_changed: channel {}, guild row={}", channel_id, row);
   if (row >= 0) {
     recompute_guild_cache(row);
     auto idx = index(row);

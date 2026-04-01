@@ -1,6 +1,7 @@
 #include "server_list.hpp"
 
 #include "cache/image_cache.hpp"
+#include "logging.hpp"
 
 #include <QImage>
 #include <QScrollBar>
@@ -63,6 +64,7 @@ void ServerList::set_guilds(const QVector<kind::Guild>& guilds) {
 void ServerList::on_selection_changed(const QModelIndex& current, const QModelIndex& /*previous*/) {
   if (current.isValid()) {
     auto guild_id = model_->guild_id_at(current.row());
+    kind::log::gui()->trace("guild selected: id={}", guild_id);
     emit guild_selected(guild_id);
   }
 }
