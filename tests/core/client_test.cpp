@@ -13,6 +13,10 @@
 #include "rest/rest_error.hpp"
 #include "store/data_store.hpp"
 
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QThread>
+
 #include <cstddef>
 #include <filesystem>
 #include <gmock/gmock.h>
@@ -84,6 +88,17 @@ public:
 
 static const std::string valid_user_json =
     R"({"id":"123456789","username":"testuser","discriminator":"1234","avatar":"abc123","bot":false})";
+
+// Spin the Qt event loop, processing events and giving worker threads
+// time to deliver results back via queued connections.
+static void process_async_events(int timeout_ms = 500) {
+  QElapsedTimer timer;
+  timer.start();
+  while (timer.elapsed() < timeout_ms) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    QThread::msleep(1);
+  }
+}
 
 // ============================================================
 // Fixture
@@ -273,6 +288,7 @@ TEST_F(ClientTest, GatewayReadyPopulatesGuilds) {
   })";
 
   fire_gateway_event("READY", ready_json);
+  process_async_events();
 
   auto guilds = client_->guilds();
   ASSERT_EQ(guilds.size(), 2u);
@@ -516,6 +532,7 @@ TEST_F(ClientTest, RegisterManyObservers) {
     "guilds": [{"id": "1", "name": "G", "icon": "", "owner_id": "1", "channels": []}]
   })";
   fire_gateway_event("READY", ready_json);
+  process_async_events();
 
   for (auto& obs : observers) {
     client_->remove_gateway_observer(&obs);

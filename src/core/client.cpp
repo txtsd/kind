@@ -22,6 +22,7 @@
 #include <QJsonObject>
 #include <QProtobufSerializer>
 #include <QTimer>
+#include <QFutureWatcher>
 #include <QtConcurrent>
 #include "logging.hpp"
 #include <algorithm>
@@ -29,6 +30,8 @@
 #include <fstream>
 #include <set>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace kind {
 
@@ -129,145 +132,75 @@ public:
   }
 
 private:
-  void handle_ready(const std::string& data_json) {
-    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
-    if (doc.isNull()) {
-      log::client()->warn("Failed to parse READY JSON: document is null");
-      return;
-    }
-    if (!doc.isObject()) {
-      log::client()->warn("Failed to parse READY JSON: expected object");
-      return;
-    }
-    auto obj = doc.object();
-
+  // Parsed READY payload data, extracted on a worker thread.
+  struct ReadyData {
     std::vector<Guild> guilds;
-    auto guilds_array = obj["guilds"].toArray();
-    for (const auto& val : guilds_array) {
-      auto guild_obj = val.toObject();
-      if (guild_obj["unavailable"].toBool(false)) {
-        continue;
-      }
-      auto guild = json_parse::parse_guild(guild_obj);
-      if (guild) {
-        client_.store_->upsert_guild(*guild);
-        if (client_.db_writer_) {
-          emit client_.db_writer_->guild_write_requested(*guild);
-          emit client_.db_writer_->roles_write_requested(guild->id, guild->roles);
-          for (const auto& ch : guild->channels) {
-            emit client_.db_writer_->channel_write_requested(ch);
-            if (!ch.permission_overwrites.empty()) {
-              emit client_.db_writer_->overwrites_write_requested(ch.id, ch.permission_overwrites);
-            }
-          }
-        }
-        guilds.push_back(std::move(*guild));
-      }
-    }
+    std::unordered_map<Snowflake, std::vector<Snowflake>> member_roles;
+    QByteArray settings_proto; // raw protobuf bytes for guild ordering
+    std::vector<std::pair<Snowflake, ReadState>> read_states;
+    std::vector<GuildMuteSettings> mute_settings;
+  };
 
-    // Reconcile: remove guilds that are no longer in READY
-    {
-      std::unordered_set<Snowflake> fresh_ids;
-      for (const auto& guild : guilds) {
-        fresh_ids.insert(guild.id);
+  void handle_ready(const std::string& data_json) {
+    // Copy the JSON payload into a shared buffer so the worker thread
+    // owns its own data and the gateway can reuse its receive buffer.
+    auto shared_json = std::make_shared<std::string>(data_json);
+
+    auto future = QtConcurrent::run([shared_json]() -> std::shared_ptr<ReadyData> {
+      auto doc = QJsonDocument::fromJson(
+          QByteArray::fromRawData(shared_json->data(), shared_json->size()));
+      if (doc.isNull() || !doc.isObject()) {
+        log::client()->warn("Failed to parse READY JSON on worker thread");
+        return nullptr;
       }
-      auto old_guilds = client_.store_->guilds();
-      for (const auto& old : old_guilds) {
-        if (fresh_ids.find(old.id) == fresh_ids.end()) {
-          client_.store_->remove_guild(old.id);
-          if (client_.db_writer_) {
-            emit client_.db_writer_->guild_delete_requested(old.id);
-          }
+      auto obj = doc.object();
+
+      auto data = std::make_shared<ReadyData>();
+
+      // Parse guilds
+      auto guilds_array = obj["guilds"].toArray();
+      data->guilds.reserve(guilds_array.size());
+      for (const auto& val : guilds_array) {
+        auto guild_obj = val.toObject();
+        if (guild_obj["unavailable"].toBool(false)) {
+          continue;
+        }
+        auto guild = json_parse::parse_guild(guild_obj);
+        if (guild) {
+          data->guilds.push_back(std::move(*guild));
         }
       }
-    }
 
-    // Parse current user's roles per guild from merged_members (user tokens).
-    // merged_members indices correspond to guilds_array, not the filtered
-    // guilds vector (which skips unavailable guilds).
-    auto merged_members = obj["merged_members"].toArray();
-    for (int i = 0; i < merged_members.size() && i < guilds_array.size(); ++i) {
-      auto guild_obj = guilds_array[i].toObject();
-      if (guild_obj["unavailable"].toBool(false)) {
-        continue;
-      }
-      auto guild_id = static_cast<Snowflake>(guild_obj["id"].toString().toULongLong());
-
-      auto member_array = merged_members[i].toArray();
-      if (member_array.isEmpty()) {
-        continue;
-      }
-      auto member_obj = member_array[0].toObject();
-      auto roles_array = member_obj["roles"].toArray();
-      std::vector<Snowflake> role_ids;
-      role_ids.reserve(roles_array.size());
-      for (const auto& val : roles_array) {
-        role_ids.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
-      }
-      if (client_.db_writer_) {
-        emit client_.db_writer_->member_roles_write_requested(guild_id, role_ids);
-      }
-      client_.store_->set_member_roles(guild_id, std::move(role_ids));
-    }
-
-    // Decode guild ordering from user_settings_proto (user tokens only)
-    auto settings_proto_b64 = obj["user_settings_proto"].toString();
-    if (!settings_proto_b64.isEmpty()) {
-      auto proto_bytes = QByteArray::fromBase64(settings_proto_b64.toUtf8());
-      kind::proto::PreloadedUserSettings settings;
-      QProtobufSerializer serializer;
-      if (serializer.deserialize(&settings, proto_bytes)) {
-        if (settings.hasGuildFolders()) {
-          auto& gf = settings.guildFolders();
-
-          std::vector<Snowflake> folder_ids;
-          std::set<Snowflake> in_folder;
-          for (const auto& folder : gf.folders()) {
-            for (auto gid : folder.guildIds()) {
-              auto id = static_cast<Snowflake>(gid);
-              folder_ids.push_back(id);
-              in_folder.insert(id);
-            }
-          }
-
-          std::vector<Snowflake> unsorted;
-          for (const auto& g : guilds) {
-            if (in_folder.find(g.id) == in_folder.end()) {
-              unsorted.push_back(g.id);
-            }
-          }
-          std::reverse(unsorted.begin(), unsorted.end());
-
-          std::vector<Snowflake> ordered_ids;
-          ordered_ids.reserve(unsorted.size() + folder_ids.size());
-          ordered_ids.insert(ordered_ids.end(), unsorted.begin(), unsorted.end());
-          ordered_ids.insert(ordered_ids.end(), folder_ids.begin(), folder_ids.end());
-
-          if (!ordered_ids.empty()) {
-            client_.store_->set_guild_order(ordered_ids);
-            if (client_.db_writer_) {
-              emit client_.db_writer_->guild_order_write_requested(ordered_ids);
-            }
-            guilds = client_.store_->guilds();
-          }
+      // Parse merged_members for current user's role IDs per guild.
+      // merged_members indices correspond to guilds_array (including
+      // unavailable entries), not the filtered guilds vector.
+      auto merged_members = obj["merged_members"].toArray();
+      for (int i = 0; i < merged_members.size() && i < guilds_array.size(); ++i) {
+        auto guild_obj = guilds_array[i].toObject();
+        if (guild_obj["unavailable"].toBool(false)) {
+          continue;
         }
-      } else {
-        log::client()->warn("Failed to decode user_settings_proto: {}",
-                     serializer.lastErrorString().toStdString());
+        auto guild_id = static_cast<Snowflake>(guild_obj["id"].toString().toULongLong());
+
+        auto member_array = merged_members[i].toArray();
+        if (member_array.isEmpty()) {
+          continue;
+        }
+        auto member_obj = member_array[0].toObject();
+        auto roles_array = member_obj["roles"].toArray();
+        std::vector<Snowflake> role_ids;
+        role_ids.reserve(roles_array.size());
+        for (const auto& rv : roles_array) {
+          role_ids.push_back(static_cast<Snowflake>(rv.toString().toULongLong()));
+        }
+        data->member_roles[guild_id] = std::move(role_ids);
       }
-    }
 
-    // Notify observers immediately so the UI can render guilds
-    client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
-
-    // Defer heavy read_state and mute_state parsing to the next event loop pass
-    // so the UI renders instantly after READY
-    auto shared_doc = std::make_shared<QJsonDocument>(std::move(doc));
-    auto* rsm = client_.read_state_manager_.get();
-    auto* msm = client_.mute_state_manager_.get();
-    auto* dbw = client_.db_writer_.get();
-    QTimer::singleShot(0, rsm, [shared_doc, rsm, msm, dbw]() {
-      auto obj = shared_doc->object();
+      // Extract raw protobuf bytes for guild ordering (decoded on main thread)
+      auto settings_proto_b64 = obj["user_settings_proto"].toString();
+      if (!settings_proto_b64.isEmpty()) {
+        data->settings_proto = QByteArray::fromBase64(settings_proto_b64.toUtf8());
+      }
 
       // Parse read_state entries
       {
@@ -276,27 +209,14 @@ private:
         if (entries.isEmpty()) {
           entries = obj["read_state"].toArray();
         }
-        if (!entries.isEmpty()) {
-          std::vector<std::pair<Snowflake, ReadState>> states;
-          states.reserve(entries.size());
-          for (const auto& val : entries) {
-            auto entry = val.toObject();
-            auto channel_id = static_cast<Snowflake>(entry["id"].toString().toULongLong());
-            if (channel_id == 0) continue;
-            ReadState rs;
-            rs.last_read_id = static_cast<Snowflake>(entry["last_message_id"].toString().toULongLong());
-            rs.mention_count = entry["mention_count"].toInt(0);
-            states.emplace_back(channel_id, rs);
-          }
-          if (!states.empty()) {
-            rsm->load_read_states(states);
-            if (dbw) {
-              for (const auto& [cid, rs] : states) {
-                emit dbw->read_state_write_requested(
-                    cid, rs.last_read_id, rs.mention_count);
-              }
-            }
-          }
+        for (const auto& val : entries) {
+          auto entry = val.toObject();
+          auto channel_id = static_cast<Snowflake>(entry["id"].toString().toULongLong());
+          if (channel_id == 0) continue;
+          ReadState rs;
+          rs.last_read_id = static_cast<Snowflake>(entry["last_message_id"].toString().toULongLong());
+          rs.mention_count = entry["mention_count"].toInt(0);
+          data->read_states.emplace_back(channel_id, rs);
         }
       }
 
@@ -307,48 +227,167 @@ private:
         if (entries.isEmpty()) {
           entries = obj["user_guild_settings"].toArray();
         }
-        if (!entries.isEmpty()) {
-          std::vector<GuildMuteSettings> mute_settings;
-          mute_settings.reserve(entries.size());
-          for (const auto& val : entries) {
-            auto entry = val.toObject();
-            GuildMuteSettings gs;
-            gs.guild_id = static_cast<Snowflake>(entry["guild_id"].toString().toULongLong());
-            gs.muted = entry["muted"].toBool(false);
+        for (const auto& val : entries) {
+          auto entry = val.toObject();
+          GuildMuteSettings gs;
+          gs.guild_id = static_cast<Snowflake>(entry["guild_id"].toString().toULongLong());
+          gs.muted = entry["muted"].toBool(false);
 
-            auto overrides = entry["channel_overrides"].toArray();
-            gs.channel_overrides.reserve(overrides.size());
-            for (const auto& ov : overrides) {
-              auto ov_obj = ov.toObject();
-              GuildMuteSettings::ChannelOverride co;
-              co.channel_id = static_cast<Snowflake>(ov_obj["channel_id"].toString().toULongLong());
-              co.muted = ov_obj["muted"].toBool(false);
-              gs.channel_overrides.push_back(co);
-            }
-            mute_settings.push_back(std::move(gs));
+          auto overrides = entry["channel_overrides"].toArray();
+          gs.channel_overrides.reserve(overrides.size());
+          for (const auto& ov : overrides) {
+            auto ov_obj = ov.toObject();
+            GuildMuteSettings::ChannelOverride co;
+            co.channel_id = static_cast<Snowflake>(ov_obj["channel_id"].toString().toULongLong());
+            co.muted = ov_obj["muted"].toBool(false);
+            gs.channel_overrides.push_back(co);
           }
-          msm->load_guild_settings(mute_settings);
+          data->mute_settings.push_back(std::move(gs));
+        }
+      }
 
-          // Persist mute state to disk
-          if (dbw) {
-            std::vector<std::tuple<Snowflake, int, bool>> db_entries;
-            for (const auto& gs : mute_settings) {
-              if (gs.guild_id != 0) {
-                db_entries.emplace_back(gs.guild_id, 0, gs.muted);
-              }
-              for (const auto& co : gs.channel_overrides) {
-                if (co.channel_id != 0) {
-                  db_entries.emplace_back(co.channel_id, 1, co.muted);
-                }
-              }
-            }
-            if (!db_entries.empty()) {
-              emit dbw->mute_state_bulk_write_requested(std::move(db_entries));
+      return data;
+    });
+
+    // Deliver results back to the main thread via QFutureWatcher,
+    // using read_state_manager_ as the QObject context (same pattern
+    // as load_cache).
+    auto* rsm = client_.read_state_manager_.get();
+    auto* watcher = new QFutureWatcher<std::shared_ptr<ReadyData>>(rsm);
+    auto* store = client_.store_.get();
+    auto* msm = client_.mute_state_manager_.get();
+    auto* dbw = client_.db_writer_.get();
+    auto& observers = client_.gateway_observers_;
+
+    QObject::connect(watcher, &QFutureWatcher<std::shared_ptr<ReadyData>>::finished,
+                     rsm, [watcher, store, rsm, msm, dbw, &observers]() {
+      watcher->deleteLater();
+      auto data = watcher->result();
+      if (!data) {
+        return;
+      }
+
+      // Upsert guilds into the store and emit DB write signals
+      for (const auto& guild : data->guilds) {
+        store->upsert_guild(guild);
+        if (dbw) {
+          emit dbw->guild_write_requested(guild);
+          emit dbw->roles_write_requested(guild.id, guild.roles);
+          for (const auto& ch : guild.channels) {
+            emit dbw->channel_write_requested(ch);
+            if (!ch.permission_overwrites.empty()) {
+              emit dbw->overwrites_write_requested(ch.id, ch.permission_overwrites);
             }
           }
         }
       }
+
+      // Reconcile: remove guilds no longer present in READY
+      {
+        std::unordered_set<Snowflake> fresh_ids;
+        for (const auto& guild : data->guilds) {
+          fresh_ids.insert(guild.id);
+        }
+        auto old_guilds = store->guilds();
+        for (const auto& old : old_guilds) {
+          if (fresh_ids.find(old.id) == fresh_ids.end()) {
+            store->remove_guild(old.id);
+            if (dbw) {
+              emit dbw->guild_delete_requested(old.id);
+            }
+          }
+        }
+      }
+
+      // Apply member roles
+      for (auto& [guild_id, role_ids] : data->member_roles) {
+        if (dbw) {
+          emit dbw->member_roles_write_requested(guild_id, role_ids);
+        }
+        store->set_member_roles(guild_id, std::move(role_ids));
+      }
+
+      // Decode guild ordering from protobuf (fast, stays on main thread)
+      if (!data->settings_proto.isEmpty()) {
+        kind::proto::PreloadedUserSettings settings;
+        QProtobufSerializer serializer;
+        if (serializer.deserialize(&settings, data->settings_proto)) {
+          if (settings.hasGuildFolders()) {
+            auto& gf = settings.guildFolders();
+
+            std::vector<Snowflake> folder_ids;
+            std::set<Snowflake> in_folder;
+            for (const auto& folder : gf.folders()) {
+              for (auto gid : folder.guildIds()) {
+                auto id = static_cast<Snowflake>(gid);
+                folder_ids.push_back(id);
+                in_folder.insert(id);
+              }
+            }
+
+            std::vector<Snowflake> unsorted;
+            for (const auto& g : data->guilds) {
+              if (in_folder.find(g.id) == in_folder.end()) {
+                unsorted.push_back(g.id);
+              }
+            }
+            std::reverse(unsorted.begin(), unsorted.end());
+
+            std::vector<Snowflake> ordered_ids;
+            ordered_ids.reserve(unsorted.size() + folder_ids.size());
+            ordered_ids.insert(ordered_ids.end(), unsorted.begin(), unsorted.end());
+            ordered_ids.insert(ordered_ids.end(), folder_ids.begin(), folder_ids.end());
+
+            if (!ordered_ids.empty()) {
+              store->set_guild_order(ordered_ids);
+              if (dbw) {
+                emit dbw->guild_order_write_requested(ordered_ids);
+              }
+            }
+          }
+        } else {
+          log::client()->warn("Failed to decode user_settings_proto: {}",
+                       serializer.lastErrorString().toStdString());
+        }
+      }
+
+      // Notify observers with the final guild list (respecting ordering)
+      auto guilds = store->guilds();
+      observers.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
+
+      // Load read states
+      if (!data->read_states.empty()) {
+        rsm->load_read_states(data->read_states);
+        if (dbw) {
+          for (const auto& [cid, rs] : data->read_states) {
+            emit dbw->read_state_write_requested(cid, rs.last_read_id, rs.mention_count);
+          }
+        }
+      }
+
+      // Load mute states
+      if (!data->mute_settings.empty()) {
+        msm->load_guild_settings(data->mute_settings);
+        if (dbw) {
+          std::vector<std::tuple<Snowflake, int, bool>> db_entries;
+          for (const auto& gs : data->mute_settings) {
+            if (gs.guild_id != 0) {
+              db_entries.emplace_back(gs.guild_id, 0, gs.muted);
+            }
+            for (const auto& co : gs.channel_overrides) {
+              if (co.channel_id != 0) {
+                db_entries.emplace_back(co.channel_id, 1, co.muted);
+              }
+            }
+          }
+          if (!db_entries.empty()) {
+            emit dbw->mute_state_bulk_write_requested(std::move(db_entries));
+          }
+        }
+      }
     });
+
+    watcher->setFuture(future);
   }
 
   void handle_message_create(const std::string& data_json) {
