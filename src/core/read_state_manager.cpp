@@ -13,6 +13,77 @@ void ReadStateManager::load_read_states(
   emit bulk_loaded();
 }
 
+void ReadStateManager::reconcile_ready(
+    const std::vector<std::pair<Snowflake, ReadState>>& ready_states,
+    const std::unordered_map<Snowflake, Snowflake>& channel_last_message_ids) {
+
+  // Build map of READY read states
+  std::unordered_map<Snowflake, ReadState> ready_map;
+  for (const auto& [cid, rs] : ready_states) {
+    ready_map[cid] = rs;
+  }
+
+  // Reconcile cached states against READY data
+  for (auto& [channel_id, cached] : states_) {
+    auto ready_it = ready_map.find(channel_id);
+    auto lmid_it = channel_last_message_ids.find(channel_id);
+
+    if (ready_it == ready_map.end() || lmid_it == channel_last_message_ids.end()) {
+      continue; // No READY data, keep cached
+    }
+
+    Snowflake ready_last_read = ready_it->second.last_read_id;
+    Snowflake ready_last_message = lmid_it->second;
+    Snowflake cached_last_read = cached.last_read_id;
+
+    // Update last_read_id and mention_count from READY (authoritative)
+    cached.last_read_id = ready_last_read;
+    cached.mention_count = ready_it->second.mention_count;
+
+    if (ready_last_read >= ready_last_message) {
+      // Fully caught up
+      cached.unread_count = 0;
+      cached.qualifier = UnreadQualifier::Exact;
+    } else if (ready_last_message == cached.last_message_id) {
+      // No new messages, count is exact
+      cached.qualifier = UnreadQualifier::Exact;
+    } else if (ready_last_read == cached_last_read) {
+      // New messages arrived but user hasn't read anything new
+      cached.qualifier = UnreadQualifier::AtLeast;
+    } else {
+      // User read on another client but still has unreads
+      cached.unread_count = 0;
+      cached.qualifier = UnreadQualifier::Unknown;
+    }
+
+    cached.last_message_id = ready_last_message;
+  }
+
+  // Handle channels in READY but not in our cache
+  for (const auto& [channel_id, ready_rs] : ready_map) {
+    if (states_.find(channel_id) == states_.end()) {
+      auto lmid_it = channel_last_message_ids.find(channel_id);
+      Snowflake lmid = (lmid_it != channel_last_message_ids.end()) ? lmid_it->second : 0;
+
+      ReadState rs;
+      rs.last_read_id = ready_rs.last_read_id;
+      rs.mention_count = ready_rs.mention_count;
+      rs.last_message_id = lmid;
+      if (lmid > ready_rs.last_read_id) {
+        rs.qualifier = UnreadQualifier::Unknown;
+      }
+      states_[channel_id] = rs;
+    }
+  }
+
+  emit bulk_loaded();
+}
+
+UnreadQualifier ReadStateManager::qualifier(Snowflake channel_id) const {
+  auto it = states_.find(channel_id);
+  return (it != states_.end()) ? it->second.qualifier : UnreadQualifier::Exact;
+}
+
 ReadState ReadStateManager::state(Snowflake channel_id) const {
   auto it = states_.find(channel_id);
   if (it != states_.end()) {
@@ -33,7 +104,8 @@ int ReadStateManager::mention_count(Snowflake channel_id) const {
 
 bool ReadStateManager::has_unreads(Snowflake channel_id) const {
   auto it = states_.find(channel_id);
-  return (it != states_.end()) && (it->second.unread_count > 0);
+  if (it == states_.end()) return false;
+  return it->second.unread_count > 0 || it->second.qualifier == UnreadQualifier::Unknown;
 }
 
 int ReadStateManager::guild_unread_channels(
@@ -56,6 +128,16 @@ int ReadStateManager::guild_mention_count(
   return total;
 }
 
+UnreadQualifier ReadStateManager::guild_qualifier(const std::vector<Snowflake>& channel_ids) const {
+  UnreadQualifier worst = UnreadQualifier::Exact;
+  for (auto id : channel_ids) {
+    auto q = qualifier(id);
+    if (q == UnreadQualifier::Unknown) return UnreadQualifier::Unknown;
+    if (q == UnreadQualifier::AtLeast) worst = UnreadQualifier::AtLeast;
+  }
+  return worst;
+}
+
 void ReadStateManager::mark_read(Snowflake channel_id, Snowflake message_id) {
   auto& s = states_[channel_id];
   // Only advance forward, never backwards
@@ -63,6 +145,7 @@ void ReadStateManager::mark_read(Snowflake channel_id, Snowflake message_id) {
     s.last_read_id = message_id;
   }
   s.unread_count = 0;
+  s.qualifier = UnreadQualifier::Exact;
   bool had_mentions = s.mention_count > 0;
   s.mention_count = 0;
   emit unread_changed(channel_id);
@@ -71,9 +154,15 @@ void ReadStateManager::mark_read(Snowflake channel_id, Snowflake message_id) {
   }
 }
 
-void ReadStateManager::increment_unread(Snowflake channel_id) {
-  states_[channel_id].unread_count++;
+void ReadStateManager::increment_unread(Snowflake channel_id, Snowflake message_id) {
+  auto& s = states_[channel_id];
+  s.unread_count++;
+  s.qualifier = UnreadQualifier::Exact;
+  if (message_id > s.last_message_id) {
+    s.last_message_id = message_id;
+  }
   emit unread_changed(channel_id);
+  emit persist_requested(channel_id, s);
 }
 
 void ReadStateManager::increment_mention(Snowflake channel_id, int count) {

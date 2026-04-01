@@ -138,6 +138,7 @@ private:
     std::unordered_map<Snowflake, std::vector<Snowflake>> member_roles;
     QByteArray settings_proto; // raw protobuf bytes for guild ordering
     std::vector<std::pair<Snowflake, ReadState>> read_states;
+    std::unordered_map<Snowflake, Snowflake> channel_last_message_ids;
     std::vector<GuildMuteSettings> mute_settings;
   };
 
@@ -165,6 +166,17 @@ private:
         if (guild_obj["unavailable"].toBool(false)) {
           continue;
         }
+        // Extract last_message_id from each channel before parse_guild
+        auto guild_channels = guild_obj["channels"].toArray();
+        for (const auto& ch_val : guild_channels) {
+          auto ch_obj = ch_val.toObject();
+          auto ch_id = static_cast<Snowflake>(ch_obj["id"].toString().toULongLong());
+          auto lmid = static_cast<Snowflake>(ch_obj["last_message_id"].toString().toULongLong());
+          if (ch_id != 0 && lmid != 0) {
+            data->channel_last_message_ids[ch_id] = lmid;
+          }
+        }
+
         auto guild = json_parse::parse_guild(guild_obj);
         if (guild) {
           data->guilds.push_back(std::move(*guild));
@@ -355,12 +367,14 @@ private:
       auto guilds = store->guilds();
       observers.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
 
-      // Load read states
+      // Reconcile read states against cached data and READY payload
       if (!data->read_states.empty()) {
-        rsm->load_read_states(data->read_states);
+        rsm->reconcile_ready(data->read_states, data->channel_last_message_ids);
         if (dbw) {
-          for (const auto& [cid, rs] : data->read_states) {
-            emit dbw->read_state_write_requested(cid, rs.last_read_id, rs.mention_count);
+          for (const auto& [cid, rs] : rsm->all_states()) {
+            emit dbw->read_state_write_requested(
+                cid, rs.last_read_id, rs.mention_count,
+                rs.unread_count, rs.last_message_id);
           }
         }
       }
@@ -402,7 +416,7 @@ private:
 
     // Track unread state for channels that are not currently active
     if (msg->channel_id != client_.active_channel_id_.load()) {
-      client_.read_state_manager_->increment_unread(msg->channel_id);
+      client_.read_state_manager_->increment_unread(msg->channel_id, msg->id);
 
       // Check if this message mentions the current user
       auto current = client_.store_->current_user();
@@ -736,7 +750,9 @@ void Client::ack_message(Snowflake channel_id, Snowflake message_id) {
     }
     read_state_manager_->mark_read(channel_id, message_id);
     if (db_writer_) {
-      emit db_writer_->read_state_write_requested(channel_id, message_id, 0);
+      auto rs = read_state_manager_->state(channel_id);
+      emit db_writer_->read_state_write_requested(
+          channel_id, message_id, 0, 0, rs.last_message_id);
     }
   });
 }
@@ -997,6 +1013,16 @@ void Client::init_account_db(Snowflake user_id) {
       last_account << user_id << '\n';
     }
   }
+
+  // Persist read state changes (unread increments) to the database
+  QObject::connect(read_state_manager_.get(), &ReadStateManager::persist_requested,
+                   read_state_manager_.get(), [this](Snowflake channel_id, const ReadState& state) {
+    if (db_writer_) {
+      emit db_writer_->read_state_write_requested(
+          channel_id, state.last_read_id, state.mention_count,
+          state.unread_count, state.last_message_id);
+    }
+  });
 
   log::cache()->info("Account database initialized for user {} at {}", user_id, db_path.string());
 }
