@@ -44,7 +44,7 @@ static void init_sinks(const std::string& log_dir_path) {
     auto log_path = (std::filesystem::path(log_dir_path) / "kind.log").string();
 
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        log_path, 5 * 1024 * 1024, 10);
+        log_path, 25 * 1024 * 1024, 10);
     file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
     file_sink->set_level(spdlog::level::trace);
     sinks().push_back(file_sink);
