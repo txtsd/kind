@@ -86,6 +86,7 @@ std::optional<Guild> parse_guild(const QJsonObject& obj) {
   for (const auto& val : channels_array) {
     auto channel = parse_channel(val.toObject());
     if (channel) {
+      channel->guild_id = guild.id;
       guild.channels.push_back(std::move(*channel));
     }
   }
