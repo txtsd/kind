@@ -10,6 +10,7 @@ void ReadStateManager::load_read_states(
   for (const auto& [channel_id, state] : states) {
     states_[channel_id] = state;
   }
+  emit bulk_loaded();
 }
 
 ReadState ReadStateManager::state(Snowflake channel_id) const {

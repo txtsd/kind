@@ -43,6 +43,7 @@ public:
 signals:
   void unread_changed(kind::Snowflake channel_id);
   void mention_changed(kind::Snowflake channel_id);
+  void bulk_loaded();
 
 private:
   std::unordered_map<Snowflake, ReadState> states_;

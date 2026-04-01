@@ -43,6 +43,7 @@ public:
 
 signals:
   void mute_changed(kind::Snowflake id);
+  void bulk_loaded();
 
 private:
   std::unordered_set<Snowflake> muted_guilds_;

@@ -72,6 +72,14 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, &GuildModel::on_unread_changed);
     connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
             this, &GuildModel::on_mention_changed);
+    connect(read_state_manager_, &kind::ReadStateManager::bulk_loaded,
+            this, [this]() {
+      recompute_all_caches();
+      if (!guilds_.empty()) {
+        emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
+                         {UnreadCountRole, MentionCountRole});
+      }
+    });
   }
   recompute_all_caches();
 }
@@ -84,6 +92,14 @@ void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
   if (mute_state_manager_) {
     connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
             this, [this](kind::Snowflake /*id*/) {
+      recompute_all_caches();
+      if (!guilds_.empty()) {
+        emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
+                         {MutedRole, UnreadCountRole, MentionCountRole});
+      }
+    });
+    connect(mute_state_manager_, &kind::MuteStateManager::bulk_loaded,
+            this, [this]() {
       recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),

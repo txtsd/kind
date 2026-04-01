@@ -18,6 +18,7 @@ void MuteStateManager::load_guild_settings(const std::vector<GuildMuteSettings>&
       }
     }
   }
+  emit bulk_loaded();
 }
 
 void MuteStateManager::load_from_db(
@@ -33,6 +34,7 @@ void MuteStateManager::load_from_db(
       muted_channels_.insert(id);
     }
   }
+  emit bulk_loaded();
 }
 
 bool MuteStateManager::is_guild_muted(Snowflake guild_id) const {

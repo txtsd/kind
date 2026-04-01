@@ -209,6 +209,13 @@ void ChannelModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, &ChannelModel::on_unread_changed);
     connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
             this, &ChannelModel::on_mention_changed);
+    connect(read_state_manager_, &kind::ReadStateManager::bulk_loaded,
+            this, [this]() {
+      if (!channels_.empty()) {
+        emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
+                         {UnreadCountRole, MentionCountRole});
+      }
+    });
   }
 }
 
@@ -229,11 +236,17 @@ void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
   if (mute_state_manager_) {
     connect(mute_state_manager_, &kind::MuteStateManager::mute_changed,
             this, [this](kind::Snowflake id) {
-      // Mute state changed: refresh unread/mention roles for affected channel(s)
       int row = row_for_channel(id);
       if (row >= 0) {
         auto idx = index(row);
-        emit dataChanged(idx, idx, {UnreadCountRole, MentionCountRole});
+        emit dataChanged(idx, idx, {MutedRole, UnreadCountRole, MentionCountRole});
+      }
+    });
+    connect(mute_state_manager_, &kind::MuteStateManager::bulk_loaded,
+            this, [this]() {
+      if (!channels_.empty()) {
+        emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
+                         {MutedRole, UnreadCountRole, MentionCountRole});
       }
     });
   }
