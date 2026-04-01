@@ -36,12 +36,15 @@ std::optional<CachedImage> ImageCache::get(const std::string& url) const {
     lru_order_.erase(it->second.lru_it);
     lru_order_.push_front(url);
     it->second.lru_it = lru_order_.begin();
+    log::cache()->debug("image memory hit: {}", url);
     return it->second.image;
   }
   return std::nullopt;
 }
 
 void ImageCache::request(const std::string& url) {
+  log::cache()->debug("image request: {} (queue={})", url, download_queue_.size());
+
   // Already in memory: emit asynchronously
   auto cached = get(url);
   if (cached) {
@@ -72,6 +75,7 @@ void ImageCache::request(const std::string& url) {
     auto result = watcher->result();
 
     if (result) {
+      log::cache()->debug("image disk hit: {}", url);
       in_flight_.erase(url);
       add_to_memory(url, *result);
       emit image_ready(QString::fromStdString(url), *result);
@@ -134,6 +138,7 @@ void ImageCache::save_to_disk(const std::string& url, const CachedImage& image) 
   }
 
   file.write(image.data);
+  log::cache()->debug("image saved to disk: {}", url);
 }
 
 void ImageCache::add_to_memory(const std::string& url, const CachedImage& image) const {
@@ -169,6 +174,7 @@ void ImageCache::process_queue() {
 
 void ImageCache::start_download(const std::string& url) {
   ++active_downloads_;
+  log::cache()->debug("image downloading: {} (active={}/{})", url, active_downloads_, max_concurrent_);
 
   QNetworkRequest req(QUrl(QString::fromStdString(url)));
   auto* reply = network_->get(req);
@@ -181,6 +187,7 @@ void ImageCache::start_download(const std::string& url) {
     if (reply->error() != QNetworkReply::NoError) {
       log::cache()->warn("Image download failed for {}: {}",
                          url, reply->errorString().toStdString());
+      log::cache()->debug("image download failed: {}: {}", url, reply->errorString().toStdString());
       process_queue();
       return;
     }
@@ -198,7 +205,9 @@ void ImageCache::start_download(const std::string& url) {
                           .toString()
                           .toStdString();
 
+    log::cache()->debug("image downloaded: {} ({}KB)", url, data.size() / 1024);
     add_to_memory(url, image);
+    log::cache()->debug("image ready: {}", url);
     emit image_ready(QString::fromStdString(url), image);
 
     QtConcurrent::run([this, url, image]() {

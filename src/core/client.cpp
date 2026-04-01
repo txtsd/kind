@@ -72,6 +72,7 @@ public:
     if (gateway_url.empty()) {
       gateway_url = "wss://gateway.discord.gg/";
     }
+    log::client()->debug("connect: starting gateway connection (token length={})", token.size());
     client_.gateway_->connect(gateway_url, token);
 
     client_.auth_observers_.notify([&user](AuthObserver* obs) { obs->on_login_success(user); });
@@ -148,6 +149,7 @@ private:
     auto shared_json = std::make_shared<std::string>(data_json);
 
     auto future = QtConcurrent::run([shared_json]() -> std::shared_ptr<ReadyData> {
+      log::client()->debug("READY: parsing on worker thread");
       auto doc = QJsonDocument::fromJson(
           QByteArray::fromRawData(shared_json->data(), shared_json->size()));
       if (doc.isNull() || !doc.isObject()) {
@@ -258,6 +260,9 @@ private:
         }
       }
 
+      log::client()->debug("READY: parsed {} guilds, {} read_states, {} mute_settings, {} channel_last_message_ids",
+                           data->guilds.size(), data->read_states.size(),
+                           data->mute_settings.size(), data->channel_last_message_ids.size());
       return data;
     });
 
@@ -294,6 +299,8 @@ private:
         }
       }
 
+      log::client()->debug("READY: upserted {} guilds into store", data->guilds.size());
+
       // Reconcile: remove guilds no longer present in READY
       {
         std::unordered_set<Snowflake> fresh_ids;
@@ -318,6 +325,8 @@ private:
         }
         store->set_member_roles(guild_id, std::move(role_ids));
       }
+
+      log::client()->debug("READY: set member roles for {} guilds", data->member_roles.size());
 
       // Decode guild ordering from protobuf (fast, stays on main thread)
       if (!data->settings_proto.isEmpty()) {
@@ -352,6 +361,7 @@ private:
 
             if (!ordered_ids.empty()) {
               store->set_guild_order(ordered_ids);
+              log::client()->debug("READY: applied guild ordering ({} guilds)", ordered_ids.size());
               if (dbw) {
                 emit dbw->guild_order_write_requested(ordered_ids);
               }
@@ -365,11 +375,15 @@ private:
 
       // Notify observers with the final guild list (respecting ordering)
       auto guilds = store->guilds();
+      log::client()->debug("READY: notifying observers with {} guilds", guilds.size());
       observers.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
 
       // Reconcile read states against cached data and READY payload
       if (!data->read_states.empty()) {
+        log::client()->debug("READY: reconciling {} read_states against {} channel_last_message_ids",
+                             data->read_states.size(), data->channel_last_message_ids.size());
         rsm->reconcile_ready(data->read_states, data->channel_last_message_ids);
+        log::client()->debug("READY: persisting {} reconciled read_states", rsm->all_states().size());
         if (dbw) {
           for (const auto& [cid, rs] : rsm->all_states()) {
             emit dbw->read_state_write_requested(
@@ -382,6 +396,7 @@ private:
       // Load mute states
       if (!data->mute_settings.empty()) {
         msm->load_guild_settings(data->mute_settings);
+        log::client()->debug("READY: loaded {} mute_settings", data->mute_settings.size());
         if (dbw) {
           std::vector<std::tuple<Snowflake, int, bool>> db_entries;
           for (const auto& gs : data->mute_settings) {
@@ -409,6 +424,7 @@ private:
     if (!msg) {
       return;
     }
+    log::client()->debug("MESSAGE_CREATE: channel={}, id={}, author={}", msg->channel_id, msg->id, msg->author.username);
     client_.store_->add_message(*msg);
     if (client_.db_writer_) {
       emit client_.db_writer_->message_write_requested(*msg);
@@ -416,6 +432,7 @@ private:
 
     // Track unread state for channels that are not currently active
     if (msg->channel_id != client_.active_channel_id_.load()) {
+      log::client()->debug("MESSAGE_CREATE: channel {} not active, incrementing unread", msg->channel_id);
       client_.read_state_manager_->increment_unread(msg->channel_id, msg->id);
 
       // Check if this message mentions the current user
@@ -431,6 +448,7 @@ private:
           }
         }
         if (mentioned) {
+          log::client()->debug("MESSAGE_CREATE: mention detected in channel {}", msg->channel_id);
           client_.read_state_manager_->increment_mention(msg->channel_id);
         }
       }
@@ -444,6 +462,7 @@ private:
     if (!msg) {
       return;
     }
+    log::client()->debug("MESSAGE_UPDATE: channel={}, id={}", msg->channel_id, msg->id);
     client_.store_->update_message(*msg);
     if (client_.db_writer_) {
       emit client_.db_writer_->message_write_requested(*msg);
@@ -460,6 +479,7 @@ private:
     auto obj = doc.object();
     auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
     auto message_id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+    log::client()->debug("MESSAGE_DELETE: channel={}, id={}", channel_id, message_id);
     client_.store_->remove_message(channel_id, message_id);
     if (client_.db_writer_) {
       emit client_.db_writer_->message_delete_requested(channel_id, message_id);
@@ -478,6 +498,7 @@ private:
     if (!guild) {
       return;
     }
+    log::client()->debug("GUILD_CREATE: id={}", guild->id);
     client_.store_->upsert_guild(*guild);
     if (client_.db_writer_) {
       emit client_.db_writer_->guild_write_requested(*guild);
@@ -502,6 +523,7 @@ private:
     if (!channel) {
       return;
     }
+    log::client()->debug("CHANNEL_UPDATE: id={}, guild={}", channel->id, channel->guild_id);
     client_.store_->upsert_channel(*channel);
     if (client_.db_writer_) {
       emit client_.db_writer_->channel_write_requested(*channel);
@@ -527,6 +549,7 @@ private:
     if (!emoji_obj["id"].isNull()) {
       emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
     }
+    log::client()->debug("REACTION_ADD: channel={}, message={}, emoji={}", channel_id, message_id, emoji_name);
     auto current = client_.store_->current_user();
     bool is_me = current && current->id == user_id;
     auto updated = client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, 1, is_me);
@@ -550,6 +573,7 @@ private:
     if (!emoji_obj["id"].isNull()) {
       emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
     }
+    log::client()->debug("REACTION_REMOVE: channel={}, message={}, emoji={}", channel_id, message_id, emoji_name);
     auto current = client_.store_->current_user();
     bool is_me = current && current->id == user_id;
     auto updated = client_.store_->update_reaction(channel_id, message_id, emoji_name, emoji_id, -1, is_me);
@@ -701,6 +725,7 @@ bool Client::try_saved_login(std::optional<TokenStore::StoredToken> saved) {
   if (!saved) {
     return false;
   }
+  log::client()->debug("auto_login: attempting with stored token");
   auth_->login_with_token(saved->token, saved->token_type);
   return true;
 }
@@ -742,12 +767,14 @@ void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
 }
 
 void Client::ack_message(Snowflake channel_id, Snowflake message_id) {
+  log::client()->debug("ack_message: channel={}, message={}", channel_id, message_id);
   auto path = endpoints::channel_messages(channel_id) + "/" + std::to_string(message_id) + "/ack";
   rest_->post(path, R"({"token":null})", [this, channel_id, message_id](RestClient::Response response) {
     if (!response) {
-      log::client()->debug("Failed to ACK message {} in channel {}: {}", message_id, channel_id, response.error().message);
+      log::client()->debug("ack_message: failed for channel={}, message={}: {}", channel_id, message_id, response.error().message);
       return;
     }
+    log::client()->debug("ack_message: success for channel={}", channel_id);
     read_state_manager_->mark_read(channel_id, message_id);
     if (db_writer_) {
       auto rs = read_state_manager_->state(channel_id);
@@ -1033,6 +1060,8 @@ void Client::load_cache(std::function<void()> on_complete) {
     return;
   }
 
+  log::client()->debug("load_cache: starting async DB read");
+
   // All DB reads happen on a worker thread. Results are delivered back
   // to the main thread via the ReadStateManager (a QObject) as context.
   auto* reader = db_reader_.get();
@@ -1078,6 +1107,10 @@ void Client::load_cache(std::function<void()> on_complete) {
 
     data->read_states = reader.read_states();
     data->mute_states = reader.mute_states();
+    log::client()->debug("load_cache worker: read {} guilds, {} channels across {} guilds, {} read_states, {} mute_states",
+                         data->guilds.size(), data->guild_channels.size(),
+                         data->guild_channels.size(), data->read_states.size(),
+                         data->mute_states.size());
     return data;
   });
 
@@ -1089,30 +1122,38 @@ void Client::load_cache(std::function<void()> on_complete) {
 
     if (data->user) {
       store->set_current_user(*data->user);
+      log::client()->debug("load_cache: set current user: {}", data->user->username);
     }
     for (auto& guild : data->guilds) {
       store->upsert_guild(guild);
     }
+    log::client()->debug("load_cache: upserted {} guilds", data->guilds.size());
     if (!data->guild_order.empty()) {
       store->set_guild_order(data->guild_order);
     }
+    log::client()->debug("load_cache: set guild order ({} guilds)", data->guild_order.size());
     for (const auto& [guild_id, channels] : data->guild_channels) {
       for (const auto& ch : channels) {
         store->upsert_channel(ch);
       }
     }
+    log::client()->debug("load_cache: upserted channels for {} guilds", data->guild_channels.size());
     for (const auto& [guild_id, role_ids] : data->guild_member_roles) {
       store->set_member_roles(guild_id, role_ids);
     }
+    log::client()->debug("load_cache: set member roles for {} guilds", data->guild_member_roles.size());
     if (!data->read_states.empty()) {
       rsm->load_read_states(data->read_states);
     }
+    log::client()->debug("load_cache: loaded {} read states", data->read_states.size());
     if (!data->mute_states.empty()) {
       msm->load_from_db(data->mute_states);
     }
+    log::client()->debug("load_cache: loaded {} mute states", data->mute_states.size());
 
     log::cache()->info("Loaded cache from database");
 
+    log::client()->debug("load_cache: complete, calling on_complete");
     if (on_complete) {
       on_complete();
     }

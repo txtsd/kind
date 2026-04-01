@@ -1,5 +1,8 @@
 #include "rest/qt_rest_client.hpp"
 
+#include "logging.hpp"
+
+#include <QElapsedTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
@@ -52,6 +55,17 @@ QByteArray QtRestClient::build_super_properties() {
   return doc.toJson(QJsonDocument::Compact).toBase64();
 }
 
+const char* QtRestClient::method_str(HttpMethod m) {
+  switch (m) {
+  case HttpMethod::Get: return "GET";
+  case HttpMethod::Post: return "POST";
+  case HttpMethod::Put: return "PUT";
+  case HttpMethod::Patch: return "PATCH";
+  case HttpMethod::Delete: return "DELETE";
+  }
+  return "UNKNOWN";
+}
+
 void QtRestClient::get(std::string_view path, Callback cb) {
   send_request(HttpMethod::Get, path, {}, std::move(cb));
 }
@@ -89,6 +103,7 @@ void QtRestClient::enqueue_request(PendingRequest request) {
   // Per-route bucket check (from response headers)
   auto route_wait = rate_limiter_.check(request.path);
   if (route_wait.has_value()) {
+    log::rest()->debug("rate limited {} {}, delaying {}ms (route bucket)", method_str(request.method), request.path, route_wait->count());
     schedule_retry(std::move(request), *route_wait);
     return;
   }
@@ -96,6 +111,7 @@ void QtRestClient::enqueue_request(PendingRequest request) {
   // Preemptive token bucket (prevents bursting before buckets are known)
   auto token_wait = rate_limiter_.acquire();
   if (token_wait.has_value()) {
+    log::rest()->debug("rate limited {} {}, delaying {}ms (token bucket)", method_str(request.method), request.path, token_wait->count());
     schedule_retry(std::move(request), *token_wait);
     return;
   }
@@ -106,6 +122,12 @@ void QtRestClient::enqueue_request(PendingRequest request) {
 void QtRestClient::execute_request(PendingRequest request) {
   auto label = label_for_path(request.path);
   emit request_started(label);
+
+  if (request.body.empty()) {
+    log::rest()->debug("-> {} {}", method_str(request.method), request.path);
+  } else {
+    log::rest()->debug("-> {} {} (body={} bytes)", method_str(request.method), request.path, request.body.size());
+  }
 
   bool has_body = (request.method == HttpMethod::Post || request.method == HttpMethod::Put ||
                    request.method == HttpMethod::Patch);
@@ -133,6 +155,7 @@ void QtRestClient::execute_request(PendingRequest request) {
   }
 
   if (!reply) {
+    log::rest()->debug("!! {} {} failed: could not create network request", method_str(request.method), request.path);
     emit request_finished(label);
     if (request.callback) {
       request.callback(std::unexpected(RestError{0, "Failed to create network request", ""}));
@@ -140,16 +163,21 @@ void QtRestClient::execute_request(PendingRequest request) {
     return;
   }
 
+  auto timer = std::make_shared<QElapsedTimer>();
+  timer->start();
+
   connect(reply, &QNetworkReply::finished, this,
-          [this, reply, req = std::move(request)]() mutable { handle_response(reply, std::move(req)); });
+          [this, reply, req = std::move(request), timer]() mutable { handle_response(reply, std::move(req), timer->elapsed()); });
 }
 
-void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request) {
+void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request, qint64 elapsed_ms) {
   emit request_finished(label_for_path(request.path));
   reply->deleteLater();
 
   int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
   QByteArray response_body = reply->readAll();
+
+  log::rest()->debug("<- {} {} {} ({}ms)", method_str(request.method), request.path, status, elapsed_ms);
 
   update_rate_limits(reply, request.path);
 
@@ -170,6 +198,8 @@ void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request)
     if (is_global) {
       rate_limiter_.set_global_limit(duration);
     }
+
+    log::rest()->debug("!! {} {} rate limited, retry after {}ms{}", method_str(request.method), request.path, retry_after_ms, is_global ? " (global)" : "");
 
     schedule_retry(std::move(request), duration);
     return;
@@ -198,6 +228,8 @@ void QtRestClient::handle_response(QNetworkReply* reply, PendingRequest request)
     }
   }
 
+  log::rest()->debug("!! {} {} failed: {} (status={}, code={})", method_str(request.method), request.path, error_message, status, error_code);
+
   if (request.callback) {
     request.callback(std::unexpected(RestError{status, std::move(error_message), std::move(error_code)}));
   }
@@ -217,6 +249,7 @@ void QtRestClient::update_rate_limits(QNetworkReply* reply, const std::string& r
 }
 
 void QtRestClient::schedule_retry(PendingRequest request, std::chrono::milliseconds delay) {
+  log::rest()->debug("retrying {} {} in {}ms", method_str(request.method), request.path, delay.count());
   QTimer::singleShot(delay, this, [this, req = std::move(request)]() mutable { enqueue_request(std::move(req)); });
 }
 

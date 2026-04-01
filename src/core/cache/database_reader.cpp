@@ -48,6 +48,7 @@ std::vector<Guild> DatabaseReader::guilds() const {
     guild.owner_id = static_cast<Snowflake>(q.value(3).toLongLong());
     result.push_back(std::move(guild));
   }
+  log::cache()->debug("DB read: {} guilds", result.size());
   return result;
 }
 
@@ -59,6 +60,7 @@ std::vector<Snowflake> DatabaseReader::guild_order() const {
   while (q.next()) {
     result.push_back(static_cast<Snowflake>(q.value(0).toLongLong()));
   }
+  log::cache()->debug("DB read: guild order ({} entries)", result.size());
   return result;
 }
 
@@ -82,6 +84,7 @@ std::vector<Channel> DatabaseReader::channels(Snowflake guild_id) const {
     }
     result.push_back(std::move(ch));
   }
+  log::cache()->debug("DB read: {} channels for guild {}", result.size(), guild_id);
   return result;
 }
 
@@ -100,6 +103,7 @@ std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
     role.position = q.value(3).toInt();
     result.push_back(std::move(role));
   }
+  log::cache()->debug("DB read: {} roles for guild {}", result.size(), guild_id);
   return result;
 }
 
@@ -120,6 +124,7 @@ std::vector<PermissionOverwrite> DatabaseReader::permission_overwrites(
     ow.deny = static_cast<uint64_t>(q.value(3).toLongLong());
     result.push_back(ow);
   }
+  log::cache()->debug("DB read: {} overwrites for channel {}", result.size(), channel_id);
   return result;
 }
 
@@ -139,6 +144,7 @@ std::vector<Snowflake> DatabaseReader::member_roles(Snowflake guild_id) const {
       }
     }
   }
+  log::cache()->debug("DB read: {} member roles for guild {}", result.size(), guild_id);
   return result;
 }
 
@@ -149,6 +155,7 @@ std::optional<User> DatabaseReader::current_user() const {
   sq.prepare("SELECT value FROM app_state WHERE key = 'current_user_id'");
   sq.exec();
   if (!sq.next()) {
+    log::cache()->debug("DB read: no current user");
     return std::nullopt;
   }
 
@@ -159,6 +166,7 @@ std::optional<User> DatabaseReader::current_user() const {
   q.bindValue(":id", static_cast<qint64>(user_id));
   q.exec();
   if (!q.next()) {
+    log::cache()->debug("DB read: no current user");
     return std::nullopt;
   }
 
@@ -168,6 +176,7 @@ std::optional<User> DatabaseReader::current_user() const {
   user.discriminator = q.value(2).toString().toStdString();
   user.avatar_hash = q.value(3).toString().toStdString();
   user.bot = q.value(4).toBool();
+  log::cache()->debug("DB read: current user {}", user.username);
   return user;
 }
 
@@ -350,6 +359,9 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
   }
 
   std::ranges::reverse(result);
+  log::cache()->debug("DB read: {} messages for channel {} (before={}, limit={})",
+                      result.size(), channel_id,
+                      before ? std::to_string(*before) : "none", limit);
   return result;
 }
 
@@ -368,6 +380,7 @@ std::vector<std::pair<Snowflake, ReadState>> DatabaseReader::read_states() const
     rs.last_message_id = static_cast<Snowflake>(q.value(4).toLongLong());
     result.emplace_back(channel_id, rs);
   }
+  log::cache()->debug("DB read: {} read states", result.size());
   return result;
 }
 
@@ -382,6 +395,7 @@ std::vector<std::tuple<Snowflake, int, bool>> DatabaseReader::mute_states() cons
     bool muted = q.value(2).toBool();
     result.emplace_back(id, type, muted);
   }
+  log::cache()->debug("DB read: {} mute states", result.size());
   return result;
 }
 
@@ -392,8 +406,11 @@ std::optional<std::string> DatabaseReader::app_state(const std::string& key) con
   q.bindValue(":key", QString::fromStdString(key));
   q.exec();
   if (q.next()) {
-    return q.value(0).toString().toStdString();
+    auto val = q.value(0).toString().toStdString();
+    log::cache()->debug("DB read: app_state[{}] = {}", key, val);
+    return val;
   }
+  log::cache()->debug("DB read: app_state[{}] not found", key);
   return std::nullopt;
 }
 

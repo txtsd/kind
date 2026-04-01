@@ -1,5 +1,7 @@
 #include "rest/rate_limiter.hpp"
 
+#include "logging.hpp"
+
 #include <algorithm>
 #include <limits>
 
@@ -22,6 +24,7 @@ std::optional<std::chrono::milliseconds> RateLimiter::check(const std::string& r
   // Check global limit first
   if (global_reset_at_ > now) {
     auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(global_reset_at_ - now);
+    log::rest()->debug("rate_limit: global limit hit, waiting {}ms", wait.count());
     return wait;
   }
 
@@ -39,6 +42,7 @@ std::optional<std::chrono::milliseconds> RateLimiter::check(const std::string& r
   const auto& state = bucket_it->second;
   if (state.remaining == 0 && state.reset_at > now) {
     auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(state.reset_at - now);
+    log::rest()->debug("rate_limit: route {}: delayed {}ms (0 remaining)", route, wait.count());
     return wait;
   }
 
@@ -80,10 +84,15 @@ void RateLimiter::update(const std::string& route, const std::string& bucket, in
   state.bucket_id = bucket;
   state.remaining = remaining;
   state.reset_at = reset_at;
+
+  if (remaining <= 2) {
+    log::rest()->debug("rate_limit: route {}: {} remaining, resets in {:.1f}s", route, remaining, clamped_ms / 1000.0);
+  }
 }
 
 void RateLimiter::set_global_limit(std::chrono::milliseconds duration) {
   std::lock_guard lock(mutex_);
+  log::rest()->debug("rate_limit: global limit set for {}ms", duration.count());
   global_reset_at_ = std::chrono::steady_clock::now() + duration;
 }
 
