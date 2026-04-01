@@ -106,7 +106,7 @@ TEST(ReadStateTest, ReconcileReadElsewhereSetsUnknown) {
   std::unordered_map<Snowflake, Snowflake> lmids = {{100, 80}};
   std::vector<std::pair<Snowflake, ReadState>> ready = {{100, {55, 0, 0, 0}}};
   mgr.reconcile_ready(ready, lmids);
-  EXPECT_EQ(mgr.unread_count(100), 0);
+  EXPECT_EQ(mgr.unread_count(100), 1); // sentinel so has_unreads works from cache
   EXPECT_EQ(mgr.qualifier(100), UnreadQualifier::Unknown);
 }
 
@@ -203,7 +203,7 @@ TEST(ReadStateTest, MultipleChannelReconciliation) {
   EXPECT_EQ(mgr.unread_count(100), 3);
 
   EXPECT_EQ(mgr.qualifier(200), UnreadQualifier::Unknown);
-  EXPECT_EQ(mgr.unread_count(200), 0);
+  EXPECT_EQ(mgr.unread_count(200), 1); // sentinel
 
   EXPECT_EQ(mgr.qualifier(300), UnreadQualifier::Exact);
   EXPECT_EQ(mgr.unread_count(300), 0);
@@ -260,9 +260,9 @@ TEST(ReadStateTest, ReconcileThenImmediateMessageCreate) {
   std::vector<std::pair<Snowflake, ReadState>> ready = {{100, {55, 0, 0, 0}}};
   mgr.reconcile_ready(ready, lmids);
   EXPECT_EQ(mgr.qualifier(100), UnreadQualifier::Unknown);
-  EXPECT_EQ(mgr.unread_count(100), 0);
+  EXPECT_EQ(mgr.unread_count(100), 1); // sentinel
   mgr.increment_unread(100, 90);
   EXPECT_EQ(mgr.qualifier(100), UnreadQualifier::Exact);
-  EXPECT_EQ(mgr.unread_count(100), 1);
+  EXPECT_EQ(mgr.unread_count(100), 2); // sentinel 1 + new message 1
   EXPECT_EQ(mgr.state(100).last_message_id, 90);
 }

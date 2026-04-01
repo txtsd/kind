@@ -69,8 +69,10 @@ void ReadStateManager::reconcile_ready(
           channel_id, cached_unread, cached.last_message_id, cached_last_read,
           ready_last_message, ready_last_read);
     } else {
-      // User read on another client but still has unreads
-      cached.unread_count = 0;
+      // User read on another client but still has unreads.
+      // Set unread_count to 1 so has_unreads() works from cache
+      // (qualifier is not persisted, defaults to Exact on load).
+      cached.unread_count = 1;
       cached.qualifier = UnreadQualifier::Unknown;
       log::client()->debug(
           "ReadState: channel {}: cached(unread={}, last_msg={}, last_read={}) "
@@ -93,6 +95,7 @@ void ReadStateManager::reconcile_ready(
       rs.mention_count = ready_rs.mention_count;
       rs.last_message_id = lmid;
       if (lmid > ready_rs.last_read_id) {
+        rs.unread_count = 1;
         rs.qualifier = UnreadQualifier::Unknown;
       }
       log::client()->debug(
