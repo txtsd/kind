@@ -21,6 +21,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProtobufSerializer>
+#include <QTimer>
 #include "logging.hpp"
 #include <algorithm>
 #include <charconv>
@@ -218,7 +219,6 @@ private:
         if (settings.hasGuildFolders()) {
           auto& gf = settings.guildFolders();
 
-          // Build ordered list from folders
           std::vector<Snowflake> folder_ids;
           std::set<Snowflake> in_folder;
           for (const auto& folder : gf.folders()) {
@@ -229,8 +229,6 @@ private:
             }
           }
 
-          // Guilds not in any folder go at the top, newest first.
-          // READY array has them oldest-first, so we reverse.
           std::vector<Snowflake> unsorted;
           for (const auto& g : guilds) {
             if (in_folder.find(g.id) == in_folder.end()) {
@@ -239,7 +237,6 @@ private:
           }
           std::reverse(unsorted.begin(), unsorted.end());
 
-          // Final order: unsorted guilds first, then folder order
           std::vector<Snowflake> ordered_ids;
           ordered_ids.reserve(unsorted.size() + folder_ids.size());
           ordered_ids.insert(ordered_ids.end(), unsorted.begin(), unsorted.end());
@@ -259,77 +256,80 @@ private:
       }
     }
 
-    // Parse read_state entries from READY payload
-    {
-      auto read_state_obj = obj["read_state"].toObject();
-      auto entries = read_state_obj["entries"].toArray();
-      if (entries.isEmpty()) {
-        // Some payloads may have read_state as a direct array
-        entries = obj["read_state"].toArray();
-      }
-      if (!entries.isEmpty()) {
-        std::vector<std::pair<Snowflake, ReadState>> states;
-        states.reserve(entries.size());
-        for (const auto& val : entries) {
-          auto entry = val.toObject();
-          auto channel_id = static_cast<Snowflake>(entry["id"].toString().toULongLong());
-          if (channel_id == 0) continue;
-          ReadState rs;
-          rs.last_read_id = static_cast<Snowflake>(entry["last_message_id"].toString().toULongLong());
-          rs.mention_count = entry["mention_count"].toInt(0);
-          states.emplace_back(channel_id, rs);
+    // Notify observers immediately so the UI can render guilds
+    client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
+
+    // Defer heavy read_state and mute_state parsing to the next event loop pass
+    // so the UI renders instantly after READY
+    auto shared_doc = std::make_shared<QJsonDocument>(std::move(doc));
+    auto* rsm = client_.read_state_manager_.get();
+    auto* msm = client_.mute_state_manager_.get();
+    auto* dbw = client_.db_writer_.get();
+    QTimer::singleShot(0, rsm, [shared_doc, rsm, msm, dbw]() {
+      auto obj = shared_doc->object();
+
+      // Parse read_state entries
+      {
+        auto read_state_obj = obj["read_state"].toObject();
+        auto entries = read_state_obj["entries"].toArray();
+        if (entries.isEmpty()) {
+          entries = obj["read_state"].toArray();
         }
-        if (!states.empty()) {
-          client_.read_state_manager_->load_read_states(states);
-          // Persist to database
-          if (client_.db_writer_) {
-            for (const auto& [cid, rs] : states) {
-              emit client_.db_writer_->read_state_write_requested(
-                  cid, rs.last_read_id, rs.mention_count);
+        if (!entries.isEmpty()) {
+          std::vector<std::pair<Snowflake, ReadState>> states;
+          states.reserve(entries.size());
+          for (const auto& val : entries) {
+            auto entry = val.toObject();
+            auto channel_id = static_cast<Snowflake>(entry["id"].toString().toULongLong());
+            if (channel_id == 0) continue;
+            ReadState rs;
+            rs.last_read_id = static_cast<Snowflake>(entry["last_message_id"].toString().toULongLong());
+            rs.mention_count = entry["mention_count"].toInt(0);
+            states.emplace_back(channel_id, rs);
+          }
+          if (!states.empty()) {
+            rsm->load_read_states(states);
+            if (dbw) {
+              for (const auto& [cid, rs] : states) {
+                emit dbw->read_state_write_requested(
+                    cid, rs.last_read_id, rs.mention_count);
+              }
             }
           }
-          log::client()->debug("Loaded {} read_state entries from READY", states.size());
         }
       }
-    }
 
-    // Parse user_guild_settings for mute state
-    {
-      auto settings_obj = obj["user_guild_settings"].toObject();
-      auto entries = settings_obj["entries"].toArray();
-      if (entries.isEmpty()) {
-        // Some payloads may have user_guild_settings as a direct array
-        entries = obj["user_guild_settings"].toArray();
-      }
-      if (!entries.isEmpty()) {
-        std::vector<GuildMuteSettings> mute_settings;
-        mute_settings.reserve(entries.size());
-        for (const auto& val : entries) {
-          auto entry = val.toObject();
-          GuildMuteSettings gs;
-          gs.guild_id = static_cast<Snowflake>(entry["guild_id"].toString().toULongLong());
-          gs.muted = entry["muted"].toBool(false);
+      // Parse user_guild_settings for mute state
+      {
+        auto settings_obj = obj["user_guild_settings"].toObject();
+        auto entries = settings_obj["entries"].toArray();
+        if (entries.isEmpty()) {
+          entries = obj["user_guild_settings"].toArray();
+        }
+        if (!entries.isEmpty()) {
+          std::vector<GuildMuteSettings> mute_settings;
+          mute_settings.reserve(entries.size());
+          for (const auto& val : entries) {
+            auto entry = val.toObject();
+            GuildMuteSettings gs;
+            gs.guild_id = static_cast<Snowflake>(entry["guild_id"].toString().toULongLong());
+            gs.muted = entry["muted"].toBool(false);
 
-          auto overrides = entry["channel_overrides"].toArray();
-          gs.channel_overrides.reserve(overrides.size());
-          for (const auto& ov : overrides) {
-            auto ov_obj = ov.toObject();
-            GuildMuteSettings::ChannelOverride co;
-            co.channel_id = static_cast<Snowflake>(ov_obj["channel_id"].toString().toULongLong());
-            co.muted = ov_obj["muted"].toBool(false);
-            gs.channel_overrides.push_back(co);
+            auto overrides = entry["channel_overrides"].toArray();
+            gs.channel_overrides.reserve(overrides.size());
+            for (const auto& ov : overrides) {
+              auto ov_obj = ov.toObject();
+              GuildMuteSettings::ChannelOverride co;
+              co.channel_id = static_cast<Snowflake>(ov_obj["channel_id"].toString().toULongLong());
+              co.muted = ov_obj["muted"].toBool(false);
+              gs.channel_overrides.push_back(co);
+            }
+            mute_settings.push_back(std::move(gs));
           }
-
-          log::client()->debug("Guild settings entry: guild_id={}, muted={}, overrides={}",
-                               gs.guild_id, gs.muted, gs.channel_overrides.size());
-          mute_settings.push_back(std::move(gs));
+          msm->load_guild_settings(mute_settings);
         }
-        client_.mute_state_manager_->load_guild_settings(mute_settings);
-        log::client()->debug("Loaded {} user_guild_settings entries from READY", mute_settings.size());
       }
-    }
-
-    client_.gateway_observers_.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
+    });
   }
 
   void handle_message_create(const std::string& data_json) {
