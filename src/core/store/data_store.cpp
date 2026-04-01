@@ -1,5 +1,6 @@
 #include "store/data_store.hpp"
 
+#include "logging.hpp"
 #include <algorithm>
 #include <unordered_set>
 
@@ -210,6 +211,45 @@ void DataStore::upsert_guild(Guild guild) {
   observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
+void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
+  log::store()->debug("bulk_upsert_guilds: upserting {} guilds", guilds.size());
+  std::vector<Guild> guild_snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    for (auto& guild : guilds) {
+      Snowflake guild_id = guild.id;
+      if (!guild.channels.empty()) {
+        guild_channels_[guild_id] = std::move(guild.channels);
+      }
+      guilds_[guild_id] = std::move(guild);
+    }
+    if (!observers_.empty()) {
+      guild_snapshot.reserve(guilds_.size());
+      if (!guild_order_.empty()) {
+        std::unordered_set<Snowflake> seen;
+        for (auto id : guild_order_) {
+          auto it = guilds_.find(id);
+          if (it != guilds_.end()) {
+            guild_snapshot.push_back(it->second);
+            seen.insert(id);
+          }
+        }
+        for (const auto& [id, g] : guilds_) {
+          if (seen.find(id) == seen.end()) {
+            guild_snapshot.push_back(g);
+          }
+        }
+      } else {
+        for (const auto& [id, g] : guilds_) {
+          guild_snapshot.push_back(g);
+        }
+      }
+    }
+  }
+  log::store()->debug("bulk_upsert_guilds: notifying observers with {} guilds", guild_snapshot.size());
+  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
+}
+
 void DataStore::remove_guild(Snowflake id) {
   std::vector<Guild> guild_snapshot;
   {
@@ -265,6 +305,22 @@ void DataStore::upsert_channel(Channel channel) {
       channel_snapshot = channels;
     }
   }
+  observers_.notify(
+      [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
+}
+
+void DataStore::bulk_upsert_channels(Snowflake guild_id, std::vector<Channel> channels) {
+  log::store()->debug("bulk_upsert_channels: upserting {} channels for guild {}", channels.size(), guild_id);
+  std::vector<Channel> channel_snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    guild_channels_[guild_id] = std::move(channels);
+    if (!observers_.empty()) {
+      channel_snapshot = guild_channels_[guild_id];
+    }
+  }
+  log::store()->debug("bulk_upsert_channels: notifying observers with {} channels for guild {}",
+                      channel_snapshot.size(), guild_id);
   observers_.notify(
       [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
 }

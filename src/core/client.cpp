@@ -284,10 +284,9 @@ private:
         return;
       }
 
-      // Upsert guilds into the store and emit DB write signals
-      for (const auto& guild : data->guilds) {
-        store->upsert_guild(guild);
-        if (dbw) {
+      // Emit DB write signals for each guild (before bulk upsert moves the data)
+      if (dbw) {
+        for (const auto& guild : data->guilds) {
           emit dbw->guild_write_requested(guild);
           emit dbw->roles_write_requested(guild.id, guild.roles);
           for (const auto& ch : guild.channels) {
@@ -299,14 +298,20 @@ private:
         }
       }
 
-      log::client()->debug("READY: upserted {} guilds into store", data->guilds.size());
+      // Collect fresh guild IDs before bulk upsert moves the data
+      std::unordered_set<Snowflake> fresh_ids;
+      fresh_ids.reserve(data->guilds.size());
+      for (const auto& guild : data->guilds) {
+        fresh_ids.insert(guild.id);
+      }
+
+      // Bulk upsert into store (fires observer once instead of per guild)
+      auto guilds_count = data->guilds.size();
+      store->bulk_upsert_guilds(std::move(data->guilds));
+      log::client()->debug("READY: upserted {} guilds into store", guilds_count);
 
       // Reconcile: remove guilds no longer present in READY
       {
-        std::unordered_set<Snowflake> fresh_ids;
-        for (const auto& guild : data->guilds) {
-          fresh_ids.insert(guild.id);
-        }
         auto old_guilds = store->guilds();
         for (const auto& old : old_guilds) {
           if (fresh_ids.find(old.id) == fresh_ids.end()) {
@@ -347,9 +352,9 @@ private:
             }
 
             std::vector<Snowflake> unsorted;
-            for (const auto& g : data->guilds) {
-              if (in_folder.find(g.id) == in_folder.end()) {
-                unsorted.push_back(g.id);
+            for (auto id : fresh_ids) {
+              if (in_folder.find(id) == in_folder.end()) {
+                unsorted.push_back(id);
               }
             }
             std::reverse(unsorted.begin(), unsorted.end());
@@ -373,12 +378,8 @@ private:
         }
       }
 
-      // Notify observers with the final guild list (respecting ordering)
-      auto guilds = store->guilds();
-      log::client()->debug("READY: notifying observers with {} guilds", guilds.size());
-      observers.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
-
       // Reconcile read states against cached data and READY payload
+      // (done before observer notification so recompute_all_caches has correct data)
       if (!data->read_states.empty()) {
         log::client()->debug("READY: reconciling {} read_states against {} channel_last_message_ids",
                              data->read_states.size(), data->channel_last_message_ids.size());
@@ -393,7 +394,7 @@ private:
         }
       }
 
-      // Load mute states
+      // Load mute states (before observer notification for same reason)
       if (!data->mute_settings.empty()) {
         msm->load_guild_settings(data->mute_settings);
         log::client()->debug("READY: loaded {} mute_settings", data->mute_settings.size());
@@ -414,6 +415,13 @@ private:
           }
         }
       }
+
+      // Notify observers with the final guild list (respecting ordering)
+      // Read state and mute state are already populated, so recompute_all_caches
+      // will have correct data on the first pass.
+      auto guilds = store->guilds();
+      log::client()->debug("READY: notifying observers with {} guilds", guilds.size());
+      observers.notify([&guilds](GatewayObserver* obs) { obs->on_ready(guilds); });
     });
 
     watcher->setFuture(future);
@@ -1124,18 +1132,15 @@ void Client::load_cache(std::function<void()> on_complete) {
       store->set_current_user(*data->user);
       log::client()->debug("load_cache: set current user: {}", data->user->username);
     }
-    for (auto& guild : data->guilds) {
-      store->upsert_guild(guild);
-    }
-    log::client()->debug("load_cache: upserted {} guilds", data->guilds.size());
+    auto guilds_count = data->guilds.size();
+    store->bulk_upsert_guilds(std::move(data->guilds));
+    log::client()->debug("load_cache: upserted {} guilds", guilds_count);
     if (!data->guild_order.empty()) {
       store->set_guild_order(data->guild_order);
     }
     log::client()->debug("load_cache: set guild order ({} guilds)", data->guild_order.size());
-    for (const auto& [guild_id, channels] : data->guild_channels) {
-      for (const auto& ch : channels) {
-        store->upsert_channel(ch);
-      }
+    for (auto& [guild_id, channels] : data->guild_channels) {
+      store->bulk_upsert_channels(guild_id, std::move(channels));
     }
     log::client()->debug("load_cache: upserted channels for {} guilds", data->guild_channels.size());
     for (const auto& [guild_id, role_ids] : data->guild_member_roles) {

@@ -41,8 +41,10 @@ public:
   // Mutations (called by gateway event handlers)
   void set_current_user(User user);
   void upsert_guild(Guild guild);
+  void bulk_upsert_guilds(std::vector<Guild> guilds);
   void remove_guild(Snowflake id);
   void upsert_channel(Channel channel);
+  void bulk_upsert_channels(Snowflake guild_id, std::vector<Channel> channels);
   void remove_channel(Snowflake id);
   void add_message(Message msg);
   void update_message(Message msg);
