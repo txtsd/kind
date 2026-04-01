@@ -81,18 +81,11 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 
   int left_offset = show_dot_ ? dot_column_width_ : 0;
 
-  // Background: mention highlight, glow, selection, hover, or base
-  // Track if we used a full opaque selection for text color decisions
+  // Background layers: base first, then selection, then glow/mention overlay
   bool opaque_selection = false;
-  if (has_mentions && mention_highlight_) {
-    auto highlight_color = QColor(237, 66, 69);
-    highlight_color.setAlpha(30);
-    painter->fillRect(option.rect, highlight_color);
-  } else if (has_unreads && show_glow_) {
-    auto glow_color = option.palette.highlight().color();
-    glow_color.setAlpha(30);
-    painter->fillRect(option.rect, glow_color);
-  } else if (selected) {
+
+  // Base layer
+  if (selected) {
     painter->fillRect(option.rect, option.palette.highlight());
     opaque_selection = true;
   } else if (option.state & QStyle::State_MouseOver) {
@@ -101,6 +94,17 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     painter->fillRect(option.rect, hover_color);
   } else {
     painter->fillRect(option.rect, option.palette.base());
+  }
+
+  // Overlay glow/mention highlight on top of whatever base was drawn
+  if (has_mentions && mention_highlight_) {
+    auto highlight_color = QColor(237, 66, 69);
+    highlight_color.setAlpha(selected ? 50 : 30);
+    painter->fillRect(option.rect, highlight_color);
+  } else if (has_unreads && show_glow_) {
+    auto glow_color = option.palette.highlight().color();
+    glow_color.setAlpha(selected ? 50 : 30);
+    painter->fillRect(option.rect, glow_color);
   }
 
   // Dot indicator on the left

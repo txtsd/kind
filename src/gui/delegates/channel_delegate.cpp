@@ -97,19 +97,14 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
 
   int left_offset = show_dot_ ? dot_column_width_ : 0;
 
-  // Background: mention highlight, glow, selection, hover, or base
+  // Background layers: base first, then selection, then glow/mention overlay
   bool opaque_selection = false;
-  if (has_mentions && mention_highlight_) {
-    auto highlight_color = QColor(237, 66, 69); // Discord red
-    highlight_color.setAlpha(30);
-    painter->fillRect(option.rect, highlight_color);
-  } else if (has_unreads && show_glow_ && !locked) {
-    auto glow_color = option.palette.highlight().color();
-    glow_color.setAlpha(30);
-    painter->fillRect(option.rect, glow_color);
-  } else if (locked) {
+  bool selected = option.state & QStyle::State_Selected;
+
+  // Base layer
+  if (locked) {
     painter->fillRect(option.rect, option.palette.base());
-  } else if (option.state & QStyle::State_Selected) {
+  } else if (selected) {
     painter->fillRect(option.rect, option.palette.highlight());
     opaque_selection = true;
   } else if (option.state & QStyle::State_MouseOver) {
@@ -118,6 +113,17 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
     painter->fillRect(option.rect, hover_color);
   } else {
     painter->fillRect(option.rect, option.palette.base());
+  }
+
+  // Overlay glow/mention highlight on top
+  if (has_mentions && mention_highlight_ && !locked) {
+    auto highlight_color = QColor(237, 66, 69);
+    highlight_color.setAlpha(selected ? 50 : 30);
+    painter->fillRect(option.rect, highlight_color);
+  } else if (has_unreads && show_glow_ && !locked) {
+    auto glow_color = option.palette.highlight().color();
+    glow_color.setAlpha(selected ? 50 : 30);
+    painter->fillRect(option.rect, glow_color);
   }
 
   // Dot indicator on the left
