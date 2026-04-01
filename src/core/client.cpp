@@ -631,6 +631,20 @@ void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
   }
 }
 
+void Client::ack_message(Snowflake channel_id, Snowflake message_id) {
+  auto path = endpoints::channel_messages(channel_id) + "/" + std::to_string(message_id) + "/ack";
+  rest_->post(path, R"({"token":null})", [this, channel_id, message_id](RestClient::Response response) {
+    if (!response) {
+      log::client()->debug("Failed to ACK message {} in channel {}: {}", message_id, channel_id, response.error().message);
+      return;
+    }
+    read_state_manager_->mark_read(channel_id, message_id);
+    if (db_writer_) {
+      emit db_writer_->read_state_write_requested(channel_id, message_id, 0);
+    }
+  });
+}
+
 void Client::send_message(Snowflake channel_id, std::string_view content) {
   QJsonObject body;
   body["content"] = QString::fromUtf8(content.data(), static_cast<int>(content.size()));
