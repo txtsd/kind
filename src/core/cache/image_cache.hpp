@@ -11,6 +11,7 @@ class QNetworkAccessManager;
 #include <filesystem>
 #include <list>
 #include <optional>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -62,8 +63,15 @@ private:
   std::filesystem::path disk_cache_dir_;
   int64_t max_disk_bytes_;
 
+  void process_queue();
+  void start_download(const std::string& url);
+
+  static constexpr int max_concurrent_ = 6;
+
   QNetworkAccessManager* network_;
   std::unordered_set<std::string> in_flight_;
+  int active_downloads_{0};
+  std::queue<std::string> download_queue_;
 };
 
 } // namespace kind

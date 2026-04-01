@@ -78,40 +78,9 @@ void ImageCache::request(const std::string& url) {
       return;
     }
 
-    // Not on disk: download from network
-    QNetworkRequest req(QUrl(QString::fromStdString(url)));
-    auto* reply = network_->get(req);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
-      reply->deleteLater();
-      in_flight_.erase(url);
-
-      if (reply->error() != QNetworkReply::NoError) {
-        log::cache()->warn("Image download failed for {}: {}",
-                           url, reply->errorString().toStdString());
-        return;
-      }
-
-      QByteArray data = reply->readAll();
-      if (data.isEmpty()) {
-        log::cache()->warn("Empty response for image {}", url);
-        return;
-      }
-
-      CachedImage image;
-      image.data = data;
-      image.mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
-                            .toString()
-                            .toStdString();
-
-      add_to_memory(url, image);
-      emit image_ready(QString::fromStdString(url), image);
-
-      // Save to disk on worker thread
-      QtConcurrent::run([this, url, image]() {
-        save_to_disk(url, image);
-      });
-    });
+    // Not on disk: queue for network download
+    download_queue_.push(url);
+    process_queue();
   });
 
   watcher->setFuture(future);
@@ -188,6 +157,56 @@ void ImageCache::evict_memory_if_needed() const {
     memory_cache_.erase(oldest_url);
     lru_order_.pop_back();
   }
+}
+
+void ImageCache::process_queue() {
+  while (active_downloads_ < max_concurrent_ && !download_queue_.empty()) {
+    auto url = std::move(download_queue_.front());
+    download_queue_.pop();
+    start_download(url);
+  }
+}
+
+void ImageCache::start_download(const std::string& url) {
+  ++active_downloads_;
+
+  QNetworkRequest req(QUrl(QString::fromStdString(url)));
+  auto* reply = network_->get(req);
+
+  connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
+    reply->deleteLater();
+    --active_downloads_;
+    in_flight_.erase(url);
+
+    if (reply->error() != QNetworkReply::NoError) {
+      log::cache()->warn("Image download failed for {}: {}",
+                         url, reply->errorString().toStdString());
+      process_queue();
+      return;
+    }
+
+    QByteArray data = reply->readAll();
+    if (data.isEmpty()) {
+      log::cache()->warn("Empty response for image {}", url);
+      process_queue();
+      return;
+    }
+
+    CachedImage image;
+    image.data = data;
+    image.mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
+                          .toString()
+                          .toStdString();
+
+    add_to_memory(url, image);
+    emit image_ready(QString::fromStdString(url), image);
+
+    QtConcurrent::run([this, url, image]() {
+      save_to_disk(url, image);
+    });
+
+    process_queue();
+  });
 }
 
 } // namespace kind
