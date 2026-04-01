@@ -82,6 +82,8 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   int left_offset = show_dot_ ? dot_column_width_ : 0;
 
   // Background: mention highlight, glow, selection, hover, or base
+  // Track if we used a full opaque selection for text color decisions
+  bool opaque_selection = false;
   if (has_mentions && mention_highlight_) {
     auto highlight_color = QColor(237, 66, 69);
     highlight_color.setAlpha(30);
@@ -92,6 +94,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     painter->fillRect(option.rect, glow_color);
   } else if (selected) {
     painter->fillRect(option.rect, option.palette.highlight());
+    opaque_selection = true;
   } else if (option.state & QStyle::State_MouseOver) {
     auto hover_color = option.palette.highlight().color();
     hover_color.setAlpha(40);
@@ -121,7 +124,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     QFontMetrics fm(bold_font);
 
     painter->setFont(bold_font);
-    if (selected) {
+    if (opaque_selection) {
       painter->setPen(option.palette.color(QPalette::Normal, QPalette::HighlightedText));
     } else {
       painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
@@ -148,7 +151,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
       painter->drawPixmap(icon_rect, it->second);
       painter->setClipping(false);
     } else {
-      draw_initials(painter, icon_rect, name, selected, option);
+      draw_initials(painter, icon_rect, name, opaque_selection, option);
     }
 
     int text_x = icon_x + icon_text_size_ + icon_text_gap_;
@@ -159,7 +162,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     QFontMetrics fm(bold_font);
     painter->setFont(bold_font);
 
-    if (selected) {
+    if (opaque_selection) {
       painter->setPen(option.palette.color(QPalette::Normal, QPalette::HighlightedText));
     } else {
       painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
@@ -183,7 +186,7 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
       painter->drawPixmap(icon_rect, it->second);
       painter->setClipping(false);
     } else {
-      draw_initials(painter, icon_rect, name, selected, option);
+      draw_initials(painter, icon_rect, name, opaque_selection, option);
     }
   }
 
