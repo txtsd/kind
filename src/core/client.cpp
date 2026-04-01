@@ -889,19 +889,22 @@ void Client::select_guild(Snowflake guild_id) {
     }
 
     auto arr = doc.array();
+    std::vector<Channel> channels;
+    channels.reserve(arr.size());
     for (const auto& val : arr) {
       auto channel = json_parse::parse_channel(val.toObject());
       if (channel) {
         channel->guild_id = guild_id;
-        store_->upsert_channel(*channel);
         if (db_writer_) {
           emit db_writer_->channel_write_requested(*channel);
           if (!channel->permission_overwrites.empty()) {
             emit db_writer_->overwrites_write_requested(channel->id, channel->permission_overwrites);
           }
         }
+        channels.push_back(std::move(*channel));
       }
     }
+    store_->bulk_upsert_channels(guild_id, std::move(channels));
   });
 }
 
@@ -1132,6 +1135,19 @@ void Client::load_cache(std::function<void()> on_complete) {
       store->set_current_user(*data->user);
       log::client()->debug("load_cache: set current user: {}", data->user->username);
     }
+
+    // Load read states and mute states BEFORE upserting guilds so that
+    // when store observers fire and the guild model recomputes caches,
+    // the unread and mute data is already available.
+    if (!data->read_states.empty()) {
+      rsm->load_read_states(data->read_states);
+    }
+    log::client()->debug("load_cache: loaded {} read states", data->read_states.size());
+    if (!data->mute_states.empty()) {
+      msm->load_from_db(data->mute_states);
+    }
+    log::client()->debug("load_cache: loaded {} mute states", data->mute_states.size());
+
     auto guilds_count = data->guilds.size();
     store->bulk_upsert_guilds(std::move(data->guilds));
     log::client()->debug("load_cache: upserted {} guilds", guilds_count);
@@ -1147,14 +1163,6 @@ void Client::load_cache(std::function<void()> on_complete) {
       store->set_member_roles(guild_id, role_ids);
     }
     log::client()->debug("load_cache: set member roles for {} guilds", data->guild_member_roles.size());
-    if (!data->read_states.empty()) {
-      rsm->load_read_states(data->read_states);
-    }
-    log::client()->debug("load_cache: loaded {} read states", data->read_states.size());
-    if (!data->mute_states.empty()) {
-      msm->load_from_db(data->mute_states);
-    }
-    log::client()->debug("load_cache: loaded {} mute states", data->mute_states.size());
 
     log::cache()->info("Loaded cache from database");
 
