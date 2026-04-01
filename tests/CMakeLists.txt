@@ -24,6 +24,7 @@ add_executable(kind-tests
   gui/reaction_block_renderer_test.cpp
   gui/sticker_block_renderer_test.cpp
   gui/component_block_renderer_test.cpp
+  gui/loading_pill_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
@@ -33,6 +34,7 @@ add_executable(kind-tests
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reaction_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/sticker_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_block_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/widgets/loading_pill.cpp
 )
 
 set_target_properties(kind-tests PROPERTIES AUTOMOC ON)
@@ -48,6 +50,7 @@ target_link_libraries(kind-tests
     Qt6::Gui
     Qt6::Test
     Qt6::Sql
+    Qt6::Widgets
 )
 
 gtest_discover_tests(kind-tests
