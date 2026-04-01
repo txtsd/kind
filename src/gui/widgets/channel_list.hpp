@@ -18,6 +18,7 @@ public:
   explicit ChannelList(QWidget* parent = nullptr);
 
   ChannelModel* channel_model() const { return model_; }
+  ChannelDelegate* channel_delegate() const { return delegate_; }
 
 public slots:
   void set_channels(const QVector<kind::Channel>& channels,

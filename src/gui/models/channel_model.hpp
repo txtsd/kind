@@ -2,6 +2,7 @@
 
 #include "models/channel.hpp"
 #include "models/snowflake.hpp"
+#include "read_state_manager.hpp"
 
 #include <QAbstractListModel>
 #include <unordered_map>
@@ -22,6 +23,8 @@ public:
     LockedRole,
     CollapsedRole,
     IsCategoryRole,
+    UnreadCountRole,
+    MentionCountRole,
   };
 
   explicit ChannelModel(QObject* parent = nullptr);
@@ -38,8 +41,13 @@ public:
   void collapse_all();
   void expand_all();
 
+  void set_read_state_manager(kind::ReadStateManager* mgr);
+
 private:
   void rebuild_visible();
+  void on_unread_changed(kind::Snowflake channel_id);
+  void on_mention_changed(kind::Snowflake channel_id);
+  int row_for_channel(kind::Snowflake channel_id) const;
 
   // Full channel list (all channels including hidden children of collapsed categories)
   std::vector<kind::Channel> all_channels_;
@@ -48,6 +56,7 @@ private:
   std::unordered_map<kind::Snowflake, uint64_t> permissions_;
   std::unordered_set<kind::Snowflake> collapsed_;
   bool hide_locked_{false};
+  kind::ReadStateManager* read_state_manager_{nullptr};
 };
 
 } // namespace kind::gui

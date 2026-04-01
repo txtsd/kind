@@ -3,10 +3,22 @@
 #include "models/channel_model.hpp"
 
 #include <QPainter>
+#include <QPainterPath>
 
 namespace kind::gui {
 
 ChannelDelegate::ChannelDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
+
+void ChannelDelegate::set_unread_options(bool dot, bool badge, bool glow) {
+  show_dot_ = dot;
+  show_badge_ = badge;
+  show_glow_ = glow;
+}
+
+void ChannelDelegate::set_mention_options(bool badge_channel, bool highlight_channel) {
+  mention_badge_ = badge_channel;
+  mention_highlight_ = highlight_channel;
+}
 
 void ChannelDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
   int channel_type = index.data(ChannelModel::ChannelTypeRole).toInt();
@@ -63,8 +75,9 @@ void ChannelDelegate::paint_category(QPainter* painter, const QStyleOptionViewIt
   int text_area_top = option.rect.top() + category_top_margin_;
   int text_area_height = option.rect.height() - category_top_margin_;
   int text_y = text_area_top + (text_area_height - fm.height()) / 2 + fm.ascent();
-  int text_x = option.rect.left() + horizontal_padding_;
-  int available_width = option.rect.width() - 2 * horizontal_padding_;
+  int left_offset = show_dot_ ? dot_column_width_ : 0;
+  int text_x = option.rect.left() + left_offset + horizontal_padding_;
+  int available_width = option.rect.width() - left_offset - 2 * horizontal_padding_;
 
   QString elided = fm.elidedText(name, Qt::ElideRight, available_width);
   painter->drawText(text_x, text_y, elided);
@@ -77,9 +90,23 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   painter->save();
 
   bool locked = index.data(ChannelModel::LockedRole).toBool();
+  int unread_count = index.data(ChannelModel::UnreadCountRole).toInt();
+  int mention_count = index.data(ChannelModel::MentionCountRole).toInt();
+  bool has_unreads = unread_count > 0;
+  bool has_mentions = mention_count > 0;
 
-  // Background highlight for selected or hovered items (skip for locked channels)
-  if (locked) {
+  int left_offset = show_dot_ ? dot_column_width_ : 0;
+
+  // Background: mention highlight, glow, selection, hover, or base
+  if (has_mentions && mention_highlight_) {
+    auto highlight_color = QColor(237, 66, 69); // Discord red
+    highlight_color.setAlpha(30);
+    painter->fillRect(option.rect, highlight_color);
+  } else if (has_unreads && show_glow_ && !locked) {
+    auto glow_color = option.palette.highlight().color();
+    glow_color.setAlpha(30);
+    painter->fillRect(option.rect, glow_color);
+  } else if (locked) {
     painter->fillRect(option.rect, option.palette.base());
   } else if (option.state & QStyle::State_Selected) {
     painter->fillRect(option.rect, option.palette.highlight());
@@ -91,10 +118,25 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
     painter->fillRect(option.rect, option.palette.base());
   }
 
+  // Dot indicator on the left
+  if (show_dot_ && has_unreads && !locked) {
+    auto dot_color = option.palette.highlight().color();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setBrush(dot_color);
+    painter->setPen(Qt::NoPen);
+    int dot_cx = option.rect.left() + dot_column_width_ / 2;
+    int dot_cy = option.rect.top() + option.rect.height() / 2;
+    painter->drawEllipse(QPoint(dot_cx, dot_cy), dot_radius_, dot_radius_);
+    painter->setRenderHint(QPainter::Antialiasing, false);
+  }
+
   QString name = index.data(Qt::DisplayRole).toString();
   QString display_text = locked ? QStringLiteral("\U0001F512 ") + name : prefix + name;
 
   QFont channel_font = option.font;
+  if (has_unreads && !locked) {
+    channel_font.setBold(true);
+  }
   QFontMetrics fm(channel_font);
 
   painter->setFont(channel_font);
@@ -106,25 +148,83 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
   }
 
+  // Compute badge width to reserve space
+  int badge_space = 0;
+  if (!locked) {
+    if (has_mentions && mention_badge_) {
+      QString badge_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
+      QFontMetrics badge_fm(option.font);
+      int text_w = badge_fm.horizontalAdvance(badge_text);
+      badge_space = std::max(badge_height_, text_w + 2 * badge_hpad_) + badge_right_margin_;
+    } else if (has_unreads && show_badge_) {
+      QString badge_text = unread_count > 99 ? QStringLiteral("99+") : QString::number(unread_count);
+      QFontMetrics badge_fm(option.font);
+      int text_w = badge_fm.horizontalAdvance(badge_text);
+      badge_space = std::max(badge_height_, text_w + 2 * badge_hpad_) + badge_right_margin_;
+    }
+  }
+
   int text_y = option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
-  int text_x = option.rect.left() + channel_indent_ + horizontal_padding_;
-  int available_width = option.rect.width() - channel_indent_ - 2 * horizontal_padding_;
+  int text_x = option.rect.left() + left_offset + channel_indent_ + horizontal_padding_;
+  int available_width = option.rect.width() - left_offset - channel_indent_ - 2 * horizontal_padding_ - badge_space;
 
   QString elided = fm.elidedText(display_text, Qt::ElideRight, available_width);
   painter->drawText(text_x, text_y, elided);
+
+  // Draw badge
+  if (!locked) {
+    if (has_mentions && mention_badge_) {
+      paint_badge(painter, option.rect, mention_count,
+                  QColor(237, 66, 69), Qt::white);
+    } else if (has_unreads && show_badge_) {
+      paint_badge(painter, option.rect, unread_count,
+                  QColor(150, 150, 150), Qt::white);
+    }
+  }
+
+  painter->restore();
+}
+
+void ChannelDelegate::paint_badge(QPainter* painter, const QRect& item_rect, int count,
+                                  const QColor& bg, const QColor& fg) const {
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing);
+
+  QString text = count > 99 ? QStringLiteral("99+") : QString::number(count);
+  QFont badge_font = painter->font();
+  badge_font.setPixelSize(10);
+  badge_font.setBold(true);
+  QFontMetrics fm(badge_font);
+
+  int text_w = fm.horizontalAdvance(text);
+  int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
+  int pill_x = item_rect.right() - badge_right_margin_ - pill_w;
+  int pill_y = item_rect.top() + (item_rect.height() - badge_height_) / 2;
+  QRect pill_rect(pill_x, pill_y, pill_w, badge_height_);
+
+  QPainterPath path;
+  path.addRoundedRect(pill_rect, badge_height_ / 2.0, badge_height_ / 2.0);
+  painter->setPen(Qt::NoPen);
+  painter->setBrush(bg);
+  painter->drawPath(path);
+
+  painter->setFont(badge_font);
+  painter->setPen(fg);
+  painter->drawText(pill_rect, Qt::AlignCenter, text);
 
   painter->restore();
 }
 
 QSize ChannelDelegate::sizeHint(const QStyleOptionViewItem& /*option*/, const QModelIndex& index) const {
   int channel_type = index.data(ChannelModel::ChannelTypeRole).toInt();
+  int extra_width = show_dot_ ? dot_column_width_ : 0;
 
   if (channel_type == 4) {
     // Category: compact header height plus top margin
-    return QSize(0, category_height_ + category_top_margin_);
+    return QSize(extra_width, category_height_ + category_top_margin_);
   }
 
-  return QSize(0, channel_height_);
+  return QSize(extra_width, channel_height_);
 }
 
 } // namespace kind::gui

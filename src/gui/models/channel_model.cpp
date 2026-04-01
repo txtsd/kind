@@ -48,6 +48,16 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
     return (channel.type == 4) && collapsed_.count(channel.id);
   case IsCategoryRole:
     return channel.type == 4;
+  case UnreadCountRole:
+    if (read_state_manager_) {
+      return read_state_manager_->unread_count(channel.id);
+    }
+    return 0;
+  case MentionCountRole:
+    if (read_state_manager_) {
+      return read_state_manager_->mention_count(channel.id);
+    }
+    return 0;
   default:
     return {};
   }
@@ -174,6 +184,44 @@ kind::Snowflake ChannelModel::channel_id_at(int row) const {
     return 0;
   }
   return channels_[static_cast<size_t>(row)].id;
+}
+
+void ChannelModel::set_read_state_manager(kind::ReadStateManager* mgr) {
+  if (read_state_manager_) {
+    disconnect(read_state_manager_, nullptr, this, nullptr);
+  }
+  read_state_manager_ = mgr;
+  if (read_state_manager_) {
+    connect(read_state_manager_, &kind::ReadStateManager::unread_changed,
+            this, &ChannelModel::on_unread_changed);
+    connect(read_state_manager_, &kind::ReadStateManager::mention_changed,
+            this, &ChannelModel::on_mention_changed);
+  }
+}
+
+int ChannelModel::row_for_channel(kind::Snowflake channel_id) const {
+  for (int i = 0; i < static_cast<int>(channels_.size()); ++i) {
+    if (channels_[static_cast<size_t>(i)].id == channel_id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void ChannelModel::on_unread_changed(kind::Snowflake channel_id) {
+  int row = row_for_channel(channel_id);
+  if (row >= 0) {
+    auto idx = index(row);
+    emit dataChanged(idx, idx, {UnreadCountRole});
+  }
+}
+
+void ChannelModel::on_mention_changed(kind::Snowflake channel_id) {
+  int row = row_for_channel(channel_id);
+  if (row >= 0) {
+    auto idx = index(row);
+    emit dataChanged(idx, idx, {MentionCountRole});
+  }
 }
 
 } // namespace kind::gui
