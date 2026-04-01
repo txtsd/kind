@@ -94,23 +94,19 @@ int main(int argc, char* argv[]) {
 
   // Apply initial unread indicator options from config
   auto apply_unread_options = [&config, channel_list, server_list]() {
-    bool ch_dot = config.get_or<bool>("appearance.channel_unread_dot", true);
+    bool ch_bar = config.get_or<bool>("appearance.channel_unread_bar", true);
     bool ch_badge = config.get_or<bool>("appearance.channel_unread_badge", true);
-    bool ch_glow = config.get_or<bool>("appearance.channel_unread_glow", false);
-    channel_list->channel_delegate()->set_unread_options(ch_dot, ch_badge, ch_glow);
+    channel_list->channel_delegate()->set_unread_options(ch_bar, ch_badge);
 
     bool mention_badge_ch = config.get_or<bool>("appearance.mention_badge_channel", true);
-    bool mention_hl_ch = config.get_or<bool>("appearance.mention_highlight_channel", false);
-    channel_list->channel_delegate()->set_mention_options(mention_badge_ch, mention_hl_ch);
+    channel_list->channel_delegate()->set_mention_options(mention_badge_ch);
 
-    bool g_dot = config.get_or<bool>("appearance.guild_unread_dot", true);
+    bool g_bar = config.get_or<bool>("appearance.guild_unread_bar", true);
     bool g_badge = config.get_or<bool>("appearance.guild_unread_badge", true);
-    bool g_glow = config.get_or<bool>("appearance.guild_unread_glow", false);
-    server_list->guild_delegate()->set_unread_options(g_dot, g_badge, g_glow);
+    server_list->guild_delegate()->set_unread_options(g_bar, g_badge);
 
     bool mention_badge_g = config.get_or<bool>("appearance.mention_badge_guild", true);
-    bool mention_hl_g = config.get_or<bool>("appearance.mention_highlight_guild", false);
-    server_list->guild_delegate()->set_mention_options(mention_badge_g, mention_hl_g);
+    server_list->guild_delegate()->set_mention_options(mention_badge_g);
   };
   apply_unread_options();
 
