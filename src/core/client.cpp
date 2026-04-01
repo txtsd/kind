@@ -985,31 +985,34 @@ void Client::load_cache(std::function<void()> on_complete) {
     std::vector<std::tuple<Snowflake, int, bool>> mute_states;
   };
 
-  auto future = QtConcurrent::run([reader]() -> std::shared_ptr<CacheData> {
+  auto db_path = db_reader_->db_path();
+  auto future = QtConcurrent::run([db_path]() -> std::shared_ptr<CacheData> {
+    // Create a thread-local DB reader for this worker thread
+    DatabaseReader reader(db_path);
     auto data = std::make_shared<CacheData>();
 
-    data->user = reader->current_user();
-    data->guilds = reader->guilds();
+    data->user = reader.current_user();
+    data->guilds = reader.guilds();
     for (auto& guild : data->guilds) {
-      guild.roles = reader->roles(guild.id);
+      guild.roles = reader.roles(guild.id);
     }
-    data->guild_order = reader->guild_order();
+    data->guild_order = reader.guild_order();
 
     for (const auto& guild : data->guilds) {
-      auto channels = reader->channels(guild.id);
+      auto channels = reader.channels(guild.id);
       for (auto& ch : channels) {
-        ch.permission_overwrites = reader->permission_overwrites(ch.id);
+        ch.permission_overwrites = reader.permission_overwrites(ch.id);
       }
       data->guild_channels[guild.id] = std::move(channels);
 
-      auto role_ids = reader->member_roles(guild.id);
+      auto role_ids = reader.member_roles(guild.id);
       if (!role_ids.empty()) {
         data->guild_member_roles[guild.id] = std::move(role_ids);
       }
     }
 
-    data->read_states = reader->read_states();
-    data->mute_states = reader->mute_states();
+    data->read_states = reader.read_states();
+    data->mute_states = reader.mute_states();
     return data;
   });
 

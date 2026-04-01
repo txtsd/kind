@@ -40,6 +40,8 @@ public:
   std::vector<std::tuple<Snowflake, int, bool>> mute_states() const;
   std::optional<std::string> app_state(const std::string& key) const;
 
+  std::string db_path() const { return db_path_; }
+
 private:
   std::string db_path_;
   QString connection_name_;
