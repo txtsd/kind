@@ -89,9 +89,9 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
 
   bool locked = index.data(ChannelModel::LockedRole).toBool();
   bool muted = index.data(ChannelModel::MutedRole).toBool();
-  int unread_count = index.data(ChannelModel::UnreadCountRole).toInt();
+  QString unread_text = index.data(ChannelModel::UnreadTextRole).toString();
   int mention_count = index.data(ChannelModel::MentionCountRole).toInt();
-  bool has_unreads = unread_count > 0;
+  bool has_unreads = !unread_text.isEmpty();
   bool has_mentions = mention_count > 0;
 
   int left_offset = show_bar_ ? bar_column_width_ : 0;
@@ -153,21 +153,21 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   // Compute badge width to reserve space
   int badge_space = 0;
   if (!locked) {
-    auto compute_pill_width = [&](int count) {
-      QString badge_text = count > 99 ? QStringLiteral("99+") : QString::number(count);
+    auto compute_pill_width = [&](const QString& badge_text) {
       QFontMetrics badge_fm(option.font);
       int text_w = badge_fm.horizontalAdvance(badge_text);
       return std::max(badge_height_, text_w + 2 * badge_hpad_);
     };
 
     if (has_mentions && mention_badge_) {
-      badge_space += compute_pill_width(mention_count) + badge_right_margin_;
+      QString mention_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
+      badge_space += compute_pill_width(mention_text) + badge_right_margin_;
     }
     if (has_unreads && show_badge_) {
       if (badge_space > 0) {
         badge_space += 4; // gap between dual badges
       }
-      badge_space += compute_pill_width(unread_count);
+      badge_space += compute_pill_width(unread_text);
       if (!(has_mentions && mention_badge_)) {
         badge_space += badge_right_margin_;
       }
@@ -196,16 +196,16 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   if (!locked) {
     int badge_right = option.rect.right() - badge_right_margin_;
     if (has_mentions && mention_badge_) {
-      paint_badge(painter, badge_right, option.rect, mention_count,
+      QString mention_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
+      paint_badge(painter, badge_right, option.rect, mention_text,
                   QColor(237, 66, 69), Qt::white);
-      QString badge_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
       QFontMetrics badge_fm(option.font);
-      int text_w = badge_fm.horizontalAdvance(badge_text);
+      int text_w = badge_fm.horizontalAdvance(mention_text);
       int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
       badge_right -= pill_w + 4;
     }
     if (has_unreads && show_badge_) {
-      paint_badge(painter, badge_right, option.rect, unread_count,
+      paint_badge(painter, badge_right, option.rect, unread_text,
                   QColor(150, 150, 150), Qt::white);
     }
   }
@@ -213,12 +213,11 @@ void ChannelDelegate::paint_channel(QPainter* painter, const QStyleOptionViewIte
   painter->restore();
 }
 
-void ChannelDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect, int count,
-                                  const QColor& bg, const QColor& fg) const {
+void ChannelDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
+                                  const QString& text, const QColor& bg, const QColor& fg) const {
   painter->save();
   painter->setRenderHint(QPainter::Antialiasing);
 
-  QString text = count > 99 ? QStringLiteral("99+") : QString::number(count);
   QFont badge_font = painter->font();
   badge_font.setPixelSize(10);
   badge_font.setBold(true);

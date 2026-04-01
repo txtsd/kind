@@ -20,6 +20,7 @@ public:
     GuildIconUrlRole,
     MutedRole,
     UnreadCountRole,
+    UnreadTextRole,
     MentionCountRole,
   };
 
@@ -46,6 +47,7 @@ private:
     int unread_channels{0};
     int mention_count{0};
     bool muted{false};
+    QString unread_text;
   };
 
   std::vector<kind::Guild> guilds_;

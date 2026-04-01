@@ -62,6 +62,24 @@ QVariant ChannelModel::data(const QModelIndex& index, int role) const {
       return read_state_manager_->unread_count(channel.id);
     }
     return 0;
+  case UnreadTextRole: {
+    if (!read_state_manager_) return QString();
+    if (mute_state_manager_ &&
+        mute_state_manager_->is_effectively_muted(channel.id, channel.guild_id)) {
+      return QString();
+    }
+    int count = read_state_manager_->unread_count(channel.id);
+    auto qual = read_state_manager_->qualifier(channel.id);
+    if (count == 0 && qual == kind::UnreadQualifier::Unknown) {
+      return QStringLiteral("?");
+    }
+    if (count == 0) return QString();
+    QString text = count > 99 ? QStringLiteral("99+") : QString::number(count);
+    if (qual == kind::UnreadQualifier::AtLeast) {
+      text += QStringLiteral("+");
+    }
+    return text;
+  }
   case MentionCountRole:
     if (read_state_manager_) {
       if (mute_state_manager_ &&
@@ -213,7 +231,7 @@ void ChannelModel::set_read_state_manager(kind::ReadStateManager* mgr) {
             this, [this]() {
       if (!channels_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
-                         {UnreadCountRole, MentionCountRole});
+                         {UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
   }
@@ -239,14 +257,14 @@ void ChannelModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
       int row = row_for_channel(id);
       if (row >= 0) {
         auto idx = index(row);
-        emit dataChanged(idx, idx, {MutedRole, UnreadCountRole, MentionCountRole});
+        emit dataChanged(idx, idx, {MutedRole, UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
     connect(mute_state_manager_, &kind::MuteStateManager::bulk_loaded,
             this, [this]() {
       if (!channels_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(channels_.size()) - 1),
-                         {MutedRole, UnreadCountRole, MentionCountRole});
+                         {MutedRole, UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
   }
@@ -256,7 +274,7 @@ void ChannelModel::on_unread_changed(kind::Snowflake channel_id) {
   int row = row_for_channel(channel_id);
   if (row >= 0) {
     auto idx = index(row);
-    emit dataChanged(idx, idx, {UnreadCountRole});
+    emit dataChanged(idx, idx, {UnreadCountRole, UnreadTextRole});
   }
 }
 

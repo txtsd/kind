@@ -73,9 +73,9 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 
   bool selected = option.state & QStyle::State_Selected;
   bool muted = index.data(GuildModel::MutedRole).toBool();
-  int unread_count = index.data(GuildModel::UnreadCountRole).toInt();
+  QString unread_text = index.data(GuildModel::UnreadTextRole).toString();
   int mention_count = index.data(GuildModel::MentionCountRole).toInt();
-  bool has_unreads = unread_count > 0;
+  bool has_unreads = !unread_text.isEmpty();
   bool has_mentions = mention_count > 0;
 
   int left_offset = show_bar_ ? bar_column_width_ : 0;
@@ -201,28 +201,27 @@ void GuildDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   // Draw badges (dual layout: mention on right, unread to its left)
   int badge_right = option.rect.right() - badge_right_margin_;
   if (has_mentions && mention_badge_) {
-    paint_badge(painter, badge_right, option.rect, mention_count,
+    QString mention_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
+    paint_badge(painter, badge_right, option.rect, mention_text,
                 QColor(237, 66, 69), Qt::white);
-    QString badge_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
     QFontMetrics badge_fm(option.font);
-    int text_w = badge_fm.horizontalAdvance(badge_text);
+    int text_w = badge_fm.horizontalAdvance(mention_text);
     int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
     badge_right -= pill_w + 4;
   }
   if (has_unreads && show_badge_) {
-    paint_badge(painter, badge_right, option.rect, unread_count,
+    paint_badge(painter, badge_right, option.rect, unread_text,
                 QColor(150, 150, 150), Qt::white);
   }
 
   painter->restore();
 }
 
-void GuildDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect, int count,
-                                const QColor& bg, const QColor& fg) const {
+void GuildDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
+                                const QString& text, const QColor& bg, const QColor& fg) const {
   painter->save();
   painter->setRenderHint(QPainter::Antialiasing);
 
-  QString text = count > 99 ? QStringLiteral("99+") : QString::number(count);
   QFont badge_font = painter->font();
   badge_font.setPixelSize(11);
   badge_font.setBold(true);

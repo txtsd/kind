@@ -35,8 +35,8 @@ private:
   void paint_category(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const;
   void paint_channel(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index,
                      const QString& prefix) const;
-  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect, int count,
-                   const QColor& bg, const QColor& fg) const;
+  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
+                   const QString& text, const QColor& bg, const QColor& fg) const;
 };
 
 } // namespace kind::gui

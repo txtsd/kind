@@ -40,6 +40,8 @@ QVariant GuildModel::data(const QModelIndex& index, int role) const {
     return cached.muted;
   case UnreadCountRole:
     return cached.unread_channels;
+  case UnreadTextRole:
+    return cached.unread_text;
   case MentionCountRole:
     return cached.mention_count;
   default:
@@ -77,7 +79,7 @@ void GuildModel::set_read_state_manager(kind::ReadStateManager* mgr) {
       recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
-                         {UnreadCountRole, MentionCountRole});
+                         {UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
   }
@@ -95,7 +97,7 @@ void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
       recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
-                         {MutedRole, UnreadCountRole, MentionCountRole});
+                         {MutedRole, UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
     connect(mute_state_manager_, &kind::MuteStateManager::bulk_loaded,
@@ -103,7 +105,7 @@ void GuildModel::set_mute_state_manager(kind::MuteStateManager* mgr) {
       recompute_all_caches();
       if (!guilds_.empty()) {
         emit dataChanged(index(0), index(static_cast<int>(guilds_.size()) - 1),
-                         {MutedRole, UnreadCountRole, MentionCountRole});
+                         {MutedRole, UnreadCountRole, UnreadTextRole, MentionCountRole});
       }
     });
   }
@@ -123,11 +125,14 @@ void GuildModel::recompute_guild_cache(int row) {
   if (!read_state_manager_ || cached.muted) {
     cached.unread_channels = 0;
     cached.mention_count = 0;
+    cached.unread_text = QString();
     return;
   }
 
   int unreads = 0;
   int mentions = 0;
+  kind::UnreadQualifier worst = kind::UnreadQualifier::Exact;
+
   for (const auto& chan : guild.channels) {
     if (mute_state_manager_ && mute_state_manager_->is_channel_muted(chan.id)) {
       continue;
@@ -136,9 +141,28 @@ void GuildModel::recompute_guild_cache(int row) {
       ++unreads;
     }
     mentions += read_state_manager_->mention_count(chan.id);
+    auto q = read_state_manager_->qualifier(chan.id);
+    if (q == kind::UnreadQualifier::Unknown) {
+      worst = kind::UnreadQualifier::Unknown;
+    } else if (q == kind::UnreadQualifier::AtLeast && worst != kind::UnreadQualifier::Unknown) {
+      worst = kind::UnreadQualifier::AtLeast;
+    }
   }
+
   cached.unread_channels = unreads;
   cached.mention_count = mentions;
+
+  // Compute badge text
+  if (unreads == 0 && worst == kind::UnreadQualifier::Unknown) {
+    cached.unread_text = QStringLiteral("?");
+  } else if (unreads > 0) {
+    cached.unread_text = unreads > 99 ? QStringLiteral("99+") : QString::number(unreads);
+    if (worst == kind::UnreadQualifier::AtLeast || worst == kind::UnreadQualifier::Unknown) {
+      cached.unread_text += QStringLiteral("+");
+    }
+  } else {
+    cached.unread_text = QString();
+  }
 }
 
 void GuildModel::recompute_all_caches() {
@@ -174,7 +198,7 @@ void GuildModel::on_unread_changed(kind::Snowflake channel_id) {
   if (row >= 0) {
     recompute_guild_cache(row);
     auto idx = index(row);
-    emit dataChanged(idx, idx, {UnreadCountRole});
+    emit dataChanged(idx, idx, {UnreadCountRole, UnreadTextRole});
   }
 }
 

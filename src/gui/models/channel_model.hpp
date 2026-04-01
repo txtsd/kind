@@ -26,6 +26,7 @@ public:
     IsCategoryRole,
     MutedRole,
     UnreadCountRole,
+    UnreadTextRole,
     MentionCountRole,
   };
 

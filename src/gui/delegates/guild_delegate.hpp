@@ -47,8 +47,8 @@ private:
 
   void draw_initials(QPainter* painter, const QRect& rect, const QString& name, bool selected,
                      const QStyleOptionViewItem& option) const;
-  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect, int count,
-                   const QColor& bg, const QColor& fg) const;
+  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
+                   const QString& text, const QColor& bg, const QColor& fg) const;
 };
 
 } // namespace kind::gui
