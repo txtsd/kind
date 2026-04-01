@@ -36,6 +36,14 @@ std::vector<Guild> DataStore::guilds() const {
     }
   }
 
+  // Re-attach channel lists (channels are stored separately from guilds)
+  for (auto& guild : result) {
+    auto ch_it = guild_channels_.find(guild.id);
+    if (ch_it != guild_channels_.end()) {
+      guild.channels = ch_it->second;
+    }
+  }
+
   return result;
 }
 

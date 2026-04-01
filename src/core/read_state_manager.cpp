@@ -62,7 +62,12 @@ void ReadStateManager::mark_read(Snowflake channel_id, Snowflake message_id) {
     s.last_read_id = message_id;
   }
   s.unread_count = 0;
+  bool had_mentions = s.mention_count > 0;
+  s.mention_count = 0;
   emit unread_changed(channel_id);
+  if (had_mentions) {
+    emit mention_changed(channel_id);
+  }
 }
 
 void ReadStateManager::increment_unread(Snowflake channel_id) {
