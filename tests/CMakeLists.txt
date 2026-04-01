@@ -15,6 +15,7 @@ add_executable(kind-tests
   core/image_cache_test.cpp
   core/markdown_test.cpp
   core/message_parse_test.cpp
+  core/read_state_test.cpp
   gui/message_model_test.cpp
   gui/text_block_renderer_test.cpp
   gui/reply_block_renderer_test.cpp
