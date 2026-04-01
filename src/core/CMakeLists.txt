@@ -15,6 +15,7 @@ target_sources(kind-core PRIVATE
   auth/keychain_token_store.cpp
   config/platform_paths.cpp
   config/config_manager.cpp
+  mute_state_manager.cpp
   read_state_manager.cpp
   store/data_store.cpp
   text/markdown_parser.cpp
