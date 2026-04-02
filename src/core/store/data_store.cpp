@@ -204,21 +204,26 @@ void DataStore::bulk_upsert_private_channels(std::vector<Channel> channels) {
 }
 
 void DataStore::update_private_channel_last_message(Snowflake channel_id, Snowflake message_id) {
-  bool found = false;
+  bool updated = false;
+  std::vector<Channel> snapshot;
   {
     std::unique_lock lock(mutex_);
     for (auto& pc : private_channels_) {
       if (pc.id == channel_id) {
         if (message_id > pc.last_message_id) {
           pc.last_message_id = message_id;
+          updated = true;
         }
-        found = true;
         break;
       }
     }
+    if (updated && !suppress_observers_) {
+      snapshot = private_channels_;
+    }
   }
-  if (found) {
+  if (updated && !suppress_observers_) {
     log::store()->debug("update_private_channel_last_message: channel={}, msg={}", channel_id, message_id);
+    observers_.notify([&snapshot](StoreObserver* o) { o->on_private_channels_updated(snapshot); });
   }
 }
 
