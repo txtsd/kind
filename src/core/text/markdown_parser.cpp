@@ -191,6 +191,21 @@ void parse_inline(const std::string& content, size_t start, size_t end, uint8_t 
       continue;
     }
 
+    // Broadcast mentions: @everyone and @here
+    if (content[i] == '@') {
+      std::string_view remaining(content.data() + i, end - i);
+      if (remaining.starts_with("@everyone") || remaining.starts_with("@here")) {
+        flush_text(accum, style, blocks);
+        size_t len = remaining.starts_with("@everyone") ? 9 : 5;
+        TextSpan span;
+        span.text = std::string(content.data() + i, len);
+        span.style = style;
+        blocks.push_back(std::move(span));
+        i += len;
+        continue;
+      }
+    }
+
     // Masked links
     if (content[i] == '[') {
       flush_text(accum, style, blocks);

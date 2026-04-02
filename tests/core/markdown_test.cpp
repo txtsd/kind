@@ -197,6 +197,60 @@ TEST(MarkdownParser, AnimatedCustomEmoji) {
   EXPECT_TRUE(span.animated_emoji);
 }
 
+TEST(MarkdownParser, AtEveryoneStandalone) {
+  auto result = markdown::parse("@everyone");
+  ASSERT_EQ(result.blocks.size(), 1u);
+  auto span = first_span(result);
+  EXPECT_EQ(span.text, "@everyone");
+  EXPECT_EQ(span.style, TextSpan::Normal);
+  EXPECT_FALSE(span.mention_user_id.has_value());
+}
+
+TEST(MarkdownParser, AtHereStandalone) {
+  auto result = markdown::parse("@here");
+  ASSERT_EQ(result.blocks.size(), 1u);
+  auto span = first_span(result);
+  EXPECT_EQ(span.text, "@here");
+  EXPECT_EQ(span.style, TextSpan::Normal);
+}
+
+TEST(MarkdownParser, AtEveryoneWithSurroundingText) {
+  auto result = markdown::parse("hey @everyone check this");
+  ASSERT_EQ(result.blocks.size(), 3u);
+  auto span1 = std::get<TextSpan>(result.blocks[0]);
+  EXPECT_EQ(span1.text, "hey ");
+  auto span2 = std::get<TextSpan>(result.blocks[1]);
+  EXPECT_EQ(span2.text, "@everyone");
+  auto span3 = std::get<TextSpan>(result.blocks[2]);
+  EXPECT_EQ(span3.text, " check this");
+}
+
+TEST(MarkdownParser, AtHereWithSurroundingText) {
+  auto result = markdown::parse("hey @here!");
+  ASSERT_EQ(result.blocks.size(), 3u);
+  auto span1 = std::get<TextSpan>(result.blocks[0]);
+  EXPECT_EQ(span1.text, "hey ");
+  auto span2 = std::get<TextSpan>(result.blocks[1]);
+  EXPECT_EQ(span2.text, "@here");
+  auto span3 = std::get<TextSpan>(result.blocks[2]);
+  EXPECT_EQ(span3.text, "!");
+}
+
+TEST(MarkdownParser, AtEveryoneInBold) {
+  auto result = markdown::parse("**@everyone**");
+  ASSERT_EQ(result.blocks.size(), 1u);
+  auto span = first_span(result);
+  EXPECT_EQ(span.text, "@everyone");
+  EXPECT_TRUE(span.style & TextSpan::Bold);
+}
+
+TEST(MarkdownParser, AtSignAloneNotSpecial) {
+  auto result = markdown::parse("@somethingelse");
+  ASSERT_EQ(result.blocks.size(), 1u);
+  auto span = first_span(result);
+  EXPECT_EQ(span.text, "@somethingelse");
+}
+
 TEST(MarkdownParser, AutoLinkedUrl) {
   auto result = markdown::parse("visit https://example.com today");
   ASSERT_GE(result.blocks.size(), 3u);
