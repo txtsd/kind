@@ -12,6 +12,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   models/guild_model.cpp
   models/channel_model.hpp
   models/channel_model.cpp
+  models/dm_list_model.hpp
+  models/dm_list_model.cpp
   models/message_model.hpp
   models/message_model.cpp
   delegates/message_delegate.hpp
@@ -20,6 +22,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   delegates/guild_delegate.cpp
   delegates/channel_delegate.hpp
   delegates/channel_delegate.cpp
+  delegates/dm_delegate.hpp
+  delegates/dm_delegate.cpp
   widgets/server_list.hpp
   widgets/server_list.cpp
   widgets/channel_list.hpp
