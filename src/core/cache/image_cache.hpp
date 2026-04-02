@@ -12,7 +12,7 @@ class QNetworkAccessManager;
 #include <filesystem>
 #include <list>
 #include <optional>
-#include <queue>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -41,7 +41,16 @@ public:
 
   // Request an image. Downloads if not cached, then emits image_ready.
   // If already cached, emits image_ready asynchronously via a queued call.
+  // Queues at the back of the download queue (lower priority).
   void request(const std::string& url);
+
+  // Request an image with high priority (viewport-visible).
+  // Same behavior as request() but queues at the front of the download queue.
+  void request_priority(const std::string& url);
+
+  // If a URL is already queued for download, move it to the front.
+  // Useful when a previously queued image scrolls into the viewport.
+  void boost_priority(const std::string& url);
 
 signals:
   void image_ready(QString url, kind::CachedImage image);
@@ -73,7 +82,10 @@ private:
   QNetworkAccessManager* network_;
   std::unordered_set<std::string> in_flight_;
   int active_downloads_{0};
-  std::queue<std::string> download_queue_;
+  std::deque<std::string> download_queue_;
+
+  // Shared implementation for request() and request_priority().
+  void request_impl(const std::string& url, bool priority);
 };
 
 } // namespace kind

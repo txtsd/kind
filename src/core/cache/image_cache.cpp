@@ -2,6 +2,8 @@
 
 #include "logging.hpp"
 
+#include <algorithm>
+
 #include <QCryptographicHash>
 #include <QFile>
 #include <QImage>
@@ -43,7 +45,26 @@ std::optional<CachedImage> ImageCache::get(const std::string& url) const {
 }
 
 void ImageCache::request(const std::string& url) {
-  log::cache()->debug("image request: {} (queue={})", url, download_queue_.size());
+  request_impl(url, false);
+}
+
+void ImageCache::request_priority(const std::string& url) {
+  request_impl(url, true);
+}
+
+void ImageCache::boost_priority(const std::string& url) {
+  auto it = std::find(download_queue_.begin(), download_queue_.end(), url);
+  if (it != download_queue_.end()) {
+    log::cache()->debug("image boost priority: {} (moved to front from position {})",
+                        url, std::distance(download_queue_.begin(), it));
+    download_queue_.erase(it);
+    download_queue_.push_front(url);
+  }
+}
+
+void ImageCache::request_impl(const std::string& url, bool priority) {
+  log::cache()->debug("image request{}: {} (queue={})",
+                      priority ? " [priority]" : "", url, download_queue_.size());
 
   // Already in memory: emit asynchronously
   auto cached = get(url);
@@ -58,6 +79,10 @@ void ImageCache::request(const std::string& url) {
 
   // Already in-flight (disk load or network download)
   if (in_flight_.contains(url)) {
+    // If it is already queued but not yet downloading, boost it on priority request
+    if (priority) {
+      boost_priority(url);
+    }
     return;
   }
 
@@ -70,7 +95,7 @@ void ImageCache::request(const std::string& url) {
 
   auto* watcher = new QFutureWatcher<std::optional<CachedImage>>(this);
   connect(watcher, &QFutureWatcher<std::optional<CachedImage>>::finished,
-          this, [this, watcher, url]() {
+          this, [this, watcher, url, priority]() {
     watcher->deleteLater();
     auto result = watcher->result();
 
@@ -83,7 +108,13 @@ void ImageCache::request(const std::string& url) {
     }
 
     // Not on disk: queue for network download
-    download_queue_.push(url);
+    if (priority) {
+      download_queue_.push_front(url);
+      log::cache()->debug("image queued at front (priority): {}", url);
+    } else {
+      download_queue_.push_back(url);
+      log::cache()->debug("image queued at back: {}", url);
+    }
     process_queue();
   });
 
@@ -166,7 +197,7 @@ void ImageCache::evict_memory_if_needed() const {
 void ImageCache::process_queue() {
   while (active_downloads_ < max_concurrent_ && !download_queue_.empty()) {
     auto url = std::move(download_queue_.front());
-    download_queue_.pop();
+    download_queue_.pop_front();
     start_download(url);
   }
 }
