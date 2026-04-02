@@ -124,6 +124,73 @@ void DataStore::set_suppress_observers(bool suppress) {
   suppress_observers_ = suppress;
 }
 
+// --- Private channels (DMs) ---
+
+std::vector<Channel> DataStore::private_channels() const {
+  std::shared_lock lock(mutex_);
+  auto result = private_channels_;
+  // Sort by last_message_id descending (most recent first)
+  std::sort(result.begin(), result.end(),
+            [](const Channel& a, const Channel& b) { return a.last_message_id > b.last_message_id; });
+  return result;
+}
+
+void DataStore::upsert_private_channel(Channel channel) {
+  log::store()->debug("upsert_private_channel: id={}, type={}", channel.id, channel.type);
+  std::vector<Channel> snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    auto it = std::find_if(private_channels_.begin(), private_channels_.end(),
+                           [&channel](const Channel& c) { return c.id == channel.id; });
+    if (it != private_channels_.end()) {
+      *it = std::move(channel);
+    } else {
+      private_channels_.push_back(std::move(channel));
+    }
+    if (!suppress_observers_) {
+      snapshot = private_channels_;
+    }
+  }
+  if (!suppress_observers_) {
+    observers_.notify([&snapshot](StoreObserver* o) { o->on_private_channels_updated(snapshot); });
+  }
+}
+
+void DataStore::remove_private_channel(Snowflake id) {
+  log::store()->debug("remove_private_channel: id={}", id);
+  std::vector<Channel> snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    auto it = std::find_if(private_channels_.begin(), private_channels_.end(),
+                           [id](const Channel& c) { return c.id == id; });
+    if (it != private_channels_.end()) {
+      channel_messages_.erase(id);
+      private_channels_.erase(it);
+    }
+    if (!suppress_observers_) {
+      snapshot = private_channels_;
+    }
+  }
+  if (!suppress_observers_) {
+    observers_.notify([&snapshot](StoreObserver* o) { o->on_private_channels_updated(snapshot); });
+  }
+}
+
+void DataStore::bulk_upsert_private_channels(std::vector<Channel> channels) {
+  log::store()->debug("bulk_upsert_private_channels: {} channels", channels.size());
+  std::vector<Channel> snapshot;
+  {
+    std::unique_lock lock(mutex_);
+    private_channels_ = std::move(channels);
+    if (!suppress_observers_) {
+      snapshot = private_channels_;
+    }
+  }
+  if (!suppress_observers_) {
+    observers_.notify([&snapshot](StoreObserver* o) { o->on_private_channels_updated(snapshot); });
+  }
+}
+
 // --- Guild ordering ---
 
 std::vector<Guild> DataStore::build_guild_snapshot_locked() const {

@@ -15,6 +15,7 @@ public:
   virtual void on_channels_updated(Snowflake guild_id, const std::vector<Channel>& channels) = 0;
   virtual void on_messages_updated(Snowflake channel_id, const std::vector<Message>& messages) = 0;
   virtual void on_messages_prepended(Snowflake channel_id, const std::vector<Message>& new_messages) = 0;
+  virtual void on_private_channels_updated(const std::vector<Channel>& channels) = 0;
 };
 
 } // namespace kind

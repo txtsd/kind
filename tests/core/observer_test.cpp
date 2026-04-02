@@ -41,6 +41,7 @@ public:
   MOCK_METHOD(void, on_channels_updated, (kind::Snowflake, const std::vector<kind::Channel>&), (override));
   MOCK_METHOD(void, on_messages_updated, (kind::Snowflake, const std::vector<kind::Message>&), (override));
   MOCK_METHOD(void, on_messages_prepended, (kind::Snowflake, const std::vector<kind::Message>&), (override));
+  MOCK_METHOD(void, on_private_channels_updated, (const std::vector<kind::Channel>&), (override));
 };
 
 // =============================================================================

@@ -31,6 +31,12 @@ public:
   std::optional<User> user(Snowflake user_id) const;
   std::optional<User> current_user() const;
 
+  // Private channels (DMs)
+  std::vector<Channel> private_channels() const;
+  void upsert_private_channel(Channel channel);
+  void remove_private_channel(Snowflake id);
+  void bulk_upsert_private_channels(std::vector<Channel> channels);
+
   // Guild ordering (from user_settings_proto)
   void set_guild_order(const std::vector<Snowflake>& ordered_ids);
 
@@ -75,6 +81,7 @@ private:
   std::map<Snowflake, std::deque<Message>> channel_messages_;
   std::map<Snowflake, User> users_;
   std::vector<Snowflake> guild_order_;
+  std::vector<Channel> private_channels_;
   std::map<Snowflake, std::vector<Snowflake>> member_roles_;
   std::map<Snowflake, std::unordered_set<Snowflake>> pending_deletes_;
   bool suppress_observers_{false};
