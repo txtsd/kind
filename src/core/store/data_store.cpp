@@ -206,6 +206,13 @@ void DataStore::upsert_guild(Guild guild) {
           guild_snapshot.push_back(g);
         }
       }
+      // Re-attach channel lists (channels are stored separately)
+      for (auto& guild : guild_snapshot) {
+        auto ch_it = guild_channels_.find(guild.id);
+        if (ch_it != guild_channels_.end()) {
+          guild.channels = ch_it->second;
+        }
+      }
     }
   }
   observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
@@ -242,6 +249,13 @@ void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
       } else {
         for (const auto& [id, g] : guilds_) {
           guild_snapshot.push_back(g);
+        }
+      }
+      // Re-attach channel lists (channels are stored separately)
+      for (auto& guild : guild_snapshot) {
+        auto ch_it = guild_channels_.find(guild.id);
+        if (ch_it != guild_channels_.end()) {
+          guild.channels = ch_it->second;
         }
       }
     }
