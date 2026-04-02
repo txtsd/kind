@@ -342,10 +342,11 @@ int main(int argc, char* argv[]) {
 
   QObject::connect(&app, &kind::gui::App::mfa_required, &login_dialog, &kind::gui::LoginDialog::show_mfa_input);
 
-  // On login success, close dialog and update status bar
+  // On login success, close dialog, show main window, and update status bar
   QObject::connect(&app, &kind::gui::App::login_success, &login_dialog, &QDialog::accept);
-  QObject::connect(&app, &kind::gui::App::login_success, status_bar,
-                   [status_bar](const kind::User& user) {
+  QObject::connect(&app, &kind::gui::App::login_success, &main_window,
+                   [&main_window, status_bar](const kind::User& user) {
+                     main_window.show();
                      status_bar->set_user(QString::fromStdString(user.username));
                      status_bar->set_connecting();
                    });
@@ -755,8 +756,11 @@ int main(int argc, char* argv[]) {
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
-  // Show the window immediately — empty, data arrives asynchronously
-  main_window.show();
+  // Show the window immediately — empty, data arrives asynchronously.
+  // When --no-autologin is set, defer showing until login succeeds.
+  if (!force_dialog) {
+    main_window.show();
+  }
 
   // Download emoji shortcode data if not cached or stale (older than 7 days)
   {
