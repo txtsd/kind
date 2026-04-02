@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,9 +16,16 @@ public:
     std::string token_type; // "bot" or "user"
   };
 
-  virtual void save_token(std::string_view token, std::string_view token_type) = 0;
-  virtual std::optional<StoredToken> load_token() const = 0;
-  virtual void clear_token() = 0;
+  // Async operations: results delivered via callbacks.
+  // Callbacks may be invoked on any thread depending on the implementation.
+  using LoadCallback = std::function<void(std::optional<StoredToken>)>;
+  using SaveCallback = std::function<void(bool success)>;
+  using ClearCallback = std::function<void()>;
+
+  virtual void save_token(std::string_view token, std::string_view token_type,
+                          SaveCallback on_complete = {}) = 0;
+  virtual void load_token(LoadCallback on_complete) const = 0;
+  virtual void clear_token(ClearCallback on_complete = {}) = 0;
 };
 
 } // namespace kind

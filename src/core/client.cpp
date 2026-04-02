@@ -858,21 +858,26 @@ void Client::remove_store_observer(StoreObserver* obs) {
 // Actions
 // ============================================================
 
-bool Client::try_saved_login() {
-  return try_saved_login(token_store_->load_token());
+void Client::try_saved_login() {
+  log::client()->debug("try_saved_login: requesting token from store");
+  token_store_->load_token([this](std::optional<TokenStore::StoredToken> saved) {
+    if (saved) {
+      try_saved_login(*saved);
+    } else {
+      log::client()->debug("try_saved_login: no saved token found");
+    }
+  });
 }
 
-bool Client::try_saved_login(std::optional<TokenStore::StoredToken> saved) {
-  if (!saved) {
-    return false;
-  }
+bool Client::try_saved_login(const TokenStore::StoredToken& saved) {
   log::client()->debug("auto_login: attempting with stored token");
-  auth_->login_with_token(saved->token, saved->token_type);
+  auth_->login_with_token(saved.token, saved.token_type);
   return true;
 }
 
-std::optional<TokenStore::StoredToken> Client::saved_token() const {
-  return token_store_->load_token();
+void Client::saved_token(TokenStore::LoadCallback on_complete) const {
+  log::client()->debug("saved_token: requesting token from store");
+  token_store_->load_token(std::move(on_complete));
 }
 
 void Client::login_with_token(std::string_view token, std::string_view token_type) {

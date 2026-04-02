@@ -10,9 +10,10 @@ class KeychainTokenStore : public TokenStore {
 public:
   explicit KeychainTokenStore(const std::string& service_name = "kind");
 
-  void save_token(std::string_view token, std::string_view token_type) override;
-  std::optional<StoredToken> load_token() const override;
-  void clear_token() override;
+  void save_token(std::string_view token, std::string_view token_type,
+                  SaveCallback on_complete = {}) override;
+  void load_token(LoadCallback on_complete) const override;
+  void clear_token(ClearCallback on_complete = {}) override;
 
 private:
   std::string service_name_;

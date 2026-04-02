@@ -69,9 +69,9 @@ public:
   void remove_store_observer(StoreObserver* obs);
 
   // Actions (all async, results delivered via observers)
-  bool try_saved_login();
-  bool try_saved_login(std::optional<TokenStore::StoredToken> saved);
-  std::optional<TokenStore::StoredToken> saved_token() const;
+  void try_saved_login();
+  bool try_saved_login(const TokenStore::StoredToken& saved);
+  void saved_token(TokenStore::LoadCallback on_complete) const;
   void login_with_token(std::string_view token, std::string_view token_type = "user");
   void login_with_credentials(std::string_view email, std::string_view password);
   void submit_mfa_code(std::string_view code);

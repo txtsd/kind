@@ -1,5 +1,6 @@
 #include "auth/auth_manager.hpp"
 
+#include "logging.hpp"
 #include "rest/endpoints.hpp"
 #include "rest/rest_client.hpp"
 
@@ -122,7 +123,9 @@ void AuthManager::logout() {
     mfa_ticket_.clear();
   }
 
-  token_store_.clear_token();
+  token_store_.clear_token([this]() {
+    log::auth()->debug("logout: keychain entry cleared");
+  });
   observers_.notify([](AuthObserver* obs) { obs->on_logout(); });
 }
 
@@ -177,7 +180,11 @@ void AuthManager::validate_token(std::string token, std::string token_type, uint
                 current_user_ = user;
               }
 
-              token_store_.save_token(token, token_type);
+              token_store_.save_token(token, token_type, [](bool success) {
+                if (!success) {
+                  log::auth()->warn("validate_token: token persistence to keychain failed");
+                }
+              });
               observers_.notify([&](AuthObserver* obs) { obs->on_login_success(user); });
             });
 }

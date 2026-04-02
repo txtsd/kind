@@ -2,7 +2,6 @@
 
 #include "logging.hpp"
 
-#include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -635,11 +634,14 @@ DatabaseWriter::~DatabaseWriter() {
 }
 
 void DatabaseWriter::flush_sync() {
-  QEventLoop loop;
-  auto conn = connect(worker_, &DatabaseWriteWorker::flushed, &loop, &QEventLoop::quit);
-  emit flush_requested();
-  loop.exec();
-  disconnect(conn);
+  // BlockingQueuedConnection waits for the slot to complete on the
+  // worker thread without creating a nested event loop.
+  bool ok = QMetaObject::invokeMethod(worker_, [this]() {
+    worker_->flush();
+  }, Qt::BlockingQueuedConnection);
+  if (!ok) {
+    log::cache()->warn("flush_sync: failed to invoke flush on worker thread");
+  }
 }
 
 } // namespace kind

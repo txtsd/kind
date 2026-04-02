@@ -173,7 +173,10 @@ TEST_F(AuthManagerTest, TokenPersistenceAfterLogin) {
   mock_users_me_success();
   auth_->login_with_token("persist-me", "user");
 
-  auto loaded = token_store_->load_token();
+  std::optional<kind::TokenStore::StoredToken> loaded;
+  token_store_->load_token([&loaded](std::optional<kind::TokenStore::StoredToken> result) {
+    loaded = std::move(result);
+  });
   ASSERT_TRUE(loaded.has_value());
   EXPECT_EQ(loaded->token, "persist-me");
   EXPECT_EQ(loaded->token_type, "user");

@@ -832,26 +832,27 @@ int main(int argc, char* argv[]) {
     }
   });
 
-  // Load saved token and attempt auto-login (non-blocking)
-  auto saved_token = client.saved_token();
+  // Load saved token and attempt auto-login (non-blocking, async keychain read)
   bool force_dialog = qapp.arguments().contains("--no-autologin");
 
-  if (!force_dialog && saved_token && login_dialog.auto_login_enabled()) {
-    login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
-
-    // Try auto-login; if it fails, show dialog
-    QObject::connect(&app, &kind::gui::App::login_failure,
-                     &login_dialog, [&login_dialog](const QString&) {
-      login_dialog.show();
-    });
-
-    client.try_saved_login(saved_token);
-  } else {
-    if (saved_token) {
-      login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
-    }
+  // Connect login failure handler before async token load to avoid races
+  QObject::connect(&app, &kind::gui::App::login_failure,
+                   &login_dialog, [&login_dialog](const QString&) {
     login_dialog.show();
-  }
+  });
+
+  client.saved_token([&client, &login_dialog, force_dialog](
+                         std::optional<kind::TokenStore::StoredToken> saved_token) {
+    if (!force_dialog && saved_token && login_dialog.auto_login_enabled()) {
+      login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
+      client.try_saved_login(*saved_token);
+    } else {
+      if (saved_token) {
+        login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
+      }
+      login_dialog.show();
+    }
+  });
 
   // If login dialog is rejected (closed without logging in), quit
   QObject::connect(&login_dialog, &QDialog::rejected, &qapp, &QApplication::quit);
