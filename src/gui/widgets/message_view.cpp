@@ -411,7 +411,10 @@ void MessageView::set_member_roles(const std::vector<kind::Snowflake>& role_ids)
 }
 
 void MessageView::set_mention_color_preference(bool use_discord_colors) {
+  if (use_discord_mention_colors_ == use_discord_colors) return;
   use_discord_mention_colors_ = use_discord_colors;
+  // Trigger re-layout of existing messages with new mention colors
+  resize_timer_->start();
 }
 
 void MessageView::set_accent_color(uint32_t color) {
