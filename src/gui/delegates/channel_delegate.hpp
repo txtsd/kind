@@ -27,6 +27,7 @@ private:
   static constexpr int badge_height_ = 14;
   static constexpr int badge_hpad_ = 5;
   static constexpr int badge_right_margin_ = 4;
+  static constexpr int badge_font_px_ = 10;
 
   bool show_bar_{true};
   bool show_badge_{true};
@@ -35,8 +36,6 @@ private:
   void paint_category(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const;
   void paint_channel(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index,
                      const QString& prefix) const;
-  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
-                   const QString& text, const QColor& bg, const QColor& fg) const;
 };
 
 } // namespace kind::gui

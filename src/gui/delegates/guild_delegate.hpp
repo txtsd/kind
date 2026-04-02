@@ -37,6 +37,7 @@ private:
   static constexpr int badge_height_ = 16;
   static constexpr int badge_hpad_ = 5;
   static constexpr int badge_right_margin_ = 6;
+  static constexpr int badge_font_px_ = 11;
 
   bool show_bar_{true};
   bool show_badge_{true};
@@ -44,11 +45,6 @@ private:
 
   std::string guild_display_{"text"};
   std::unordered_map<std::string, QPixmap> pixmap_cache_;
-
-  void draw_initials(QPainter* painter, const QRect& rect, const QString& name, bool selected,
-                     const QStyleOptionViewItem& option) const;
-  void paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
-                   const QString& text, const QColor& bg, const QColor& fg) const;
 };
 
 } // namespace kind::gui

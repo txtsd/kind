@@ -1,6 +1,8 @@
 #include "delegates/dm_delegate.hpp"
 
 #include "models/dm_list_model.hpp"
+#include "renderers/badge_renderer.hpp"
+#include "theme.hpp"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -24,38 +26,6 @@ void DmDelegate::set_unread_options(bool bar, bool badge) {
 
 void DmDelegate::set_mention_options(bool badge) {
   mention_badge_ = badge;
-}
-
-void DmDelegate::draw_initials(QPainter* painter, const QRect& rect, const QString& name,
-                                bool selected, const QStyleOptionViewItem& option) const {
-  // Use the first letter of the username as initials
-  QString initials;
-  if (!name.isEmpty()) {
-    initials = name[0].toUpper();
-  }
-
-  // Draw a circular background
-  auto bg_color = option.palette.color(QPalette::Normal, QPalette::Mid);
-  bg_color.setAlpha(120);
-
-  QPainterPath circle;
-  circle.addEllipse(rect);
-  painter->setClipPath(circle);
-  painter->fillRect(rect, bg_color);
-  painter->setClipping(false);
-
-  // Draw text centered
-  QFont initials_font = option.font;
-  initials_font.setBold(true);
-  initials_font.setPixelSize(rect.height() / 3);
-  painter->setFont(initials_font);
-
-  if (selected) {
-    painter->setPen(option.palette.color(QPalette::Normal, QPalette::HighlightedText));
-  } else {
-    painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
-  }
-  painter->drawText(rect, Qt::AlignCenter, initials);
 }
 
 void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -85,18 +55,8 @@ void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 
   // Accent bars on the left edge
   if (show_bar_) {
-    if (has_unreads && has_mentions) {
-      QRect unread_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
-      painter->fillRect(unread_bar, option.palette.highlight().color());
-      QRect mention_bar(option.rect.left() + bar_width_, option.rect.top(), bar_width_, option.rect.height());
-      painter->fillRect(mention_bar, QColor(237, 66, 69));
-    } else if (has_mentions) {
-      QRect mention_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
-      painter->fillRect(mention_bar, QColor(237, 66, 69));
-    } else if (has_unreads) {
-      QRect unread_bar(option.rect.left(), option.rect.top(), bar_width_, option.rect.height());
-      painter->fillRect(unread_bar, option.palette.highlight().color());
-    }
+    draw_accent_bar(painter, option.rect, bar_width_, has_unreads, has_mentions,
+                    option.palette);
   }
 
   QString name = index.data(DmListModel::RecipientNameRole).toString();
@@ -104,20 +64,15 @@ void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 
   // Compute badge width to reserve space for text eliding
   int badge_space = 0;
-  auto compute_pill_width = [&](const QString& badge_text) {
-    QFontMetrics badge_fm(option.font);
-    int text_w = badge_fm.horizontalAdvance(badge_text);
-    return std::max(badge_height_, text_w + 2 * badge_hpad_);
-  };
   if (has_mentions && mention_badge_) {
     QString mention_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
-    badge_space += compute_pill_width(mention_text) + badge_right_margin_;
+    badge_space += badge_pill_width(option.font, mention_text, badge_height_, badge_hpad_) + badge_right_margin_;
   }
   if (has_unreads && show_badge_) {
     if (badge_space > 0) {
-      badge_space += 4; // gap between dual badges
+      badge_space += theme::badge_dual_gap;
     }
-    badge_space += compute_pill_width(unread_text);
+    badge_space += badge_pill_width(option.font, unread_text, badge_height_, badge_hpad_);
     if (!(has_mentions && mention_badge_)) {
       badge_space += badge_right_margin_;
     }
@@ -138,7 +93,7 @@ void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
       painter->drawPixmap(avatar_rect, it->second);
       painter->setClipping(false);
     } else {
-      draw_initials(painter, avatar_rect, name, opaque_selection, option);
+      draw_initials(painter, avatar_rect, name, opaque_selection, option, 1);
     }
 
     int text_x = avatar_x + avatar_size_ + avatar_text_gap_;
@@ -176,7 +131,7 @@ void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
       painter->drawPixmap(avatar_rect, it->second);
       painter->setClipping(false);
     } else {
-      draw_initials(painter, avatar_rect, name, opaque_selection, option);
+      draw_initials(painter, avatar_rect, name, opaque_selection, option, 1);
     }
 
   } else {
@@ -206,46 +161,17 @@ void DmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
   int badge_right = option.rect.right() - badge_right_margin_;
   if (has_mentions && mention_badge_) {
     QString mention_text = mention_count > 99 ? QStringLiteral("99+") : QString::number(mention_count);
-    paint_badge(painter, badge_right, option.rect, mention_text,
-                QColor(237, 66, 69), Qt::white);
+    paint_badge(painter, badge_right, option.rect, badge_height_, badge_hpad_,
+                badge_font_px_, mention_text, theme::mention_red, theme::badge_text_color);
     QFontMetrics badge_fm(option.font);
     int text_w = badge_fm.horizontalAdvance(mention_text);
     int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
-    badge_right -= pill_w + 4;
+    badge_right -= pill_w + theme::badge_dual_gap;
   }
   if (has_unreads && show_badge_) {
-    paint_badge(painter, badge_right, option.rect, unread_text,
-                QColor(150, 150, 150), Qt::white);
+    paint_badge(painter, badge_right, option.rect, badge_height_, badge_hpad_,
+                badge_font_px_, unread_text, theme::unread_gray, theme::badge_text_color);
   }
-
-  painter->restore();
-}
-
-void DmDelegate::paint_badge(QPainter* painter, int badge_right, const QRect& item_rect,
-                              const QString& text, const QColor& bg, const QColor& fg) const {
-  painter->save();
-  painter->setRenderHint(QPainter::Antialiasing);
-
-  QFont badge_font = painter->font();
-  badge_font.setPixelSize(10);
-  badge_font.setBold(true);
-  QFontMetrics fm(badge_font);
-
-  int text_w = fm.horizontalAdvance(text);
-  int pill_w = std::max(badge_height_, text_w + 2 * badge_hpad_);
-  int pill_x = badge_right - pill_w;
-  int pill_y = item_rect.top() + (item_rect.height() - badge_height_) / 2;
-  QRect pill_rect(pill_x, pill_y, pill_w, badge_height_);
-
-  QPainterPath path;
-  path.addRoundedRect(pill_rect, 3.0, 3.0);
-  painter->setPen(Qt::NoPen);
-  painter->setBrush(bg);
-  painter->drawPath(path);
-
-  painter->setFont(badge_font);
-  painter->setPen(fg);
-  painter->drawText(pill_rect, Qt::AlignCenter, text);
 
   painter->restore();
 }

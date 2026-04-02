@@ -26,6 +26,9 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   delegates/channel_delegate.cpp
   delegates/dm_delegate.hpp
   delegates/dm_delegate.cpp
+  theme.hpp
+  renderers/badge_renderer.hpp
+  renderers/badge_renderer.cpp
   widgets/server_list.hpp
   widgets/server_list.cpp
   widgets/channel_list.hpp
