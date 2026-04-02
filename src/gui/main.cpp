@@ -8,6 +8,7 @@
 #include "rest/qt_rest_client.hpp"
 #include "version.hpp"
 #include "widgets/channel_list.hpp"
+#include "widgets/dm_list.hpp"
 #include "widgets/message_input.hpp"
 #include "widgets/message_view.hpp"
 #include "widgets/server_list.hpp"
@@ -20,6 +21,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -65,6 +67,9 @@ int main(int argc, char* argv[]) {
   // Widgets
   auto* server_list = new kind::gui::ServerList();
   auto* channel_list = new kind::gui::ChannelList();
+  auto* dm_list = new kind::gui::DmList();
+  dm_list->set_image_cache(client.image_cache());
+  dm_list->dm_model()->set_read_state_manager(client.read_state_manager());
   auto* message_view = new kind::gui::MessageView();
   message_view->set_image_cache(client.image_cache());
   message_view->set_read_state_manager(client.read_state_manager());
@@ -90,8 +95,12 @@ int main(int argc, char* argv[]) {
   server_list->guild_model()->set_read_state_manager(client.read_state_manager());
   server_list->guild_model()->set_mute_state_manager(client.mute_state_manager());
 
+  // DM display mode preference
+  auto dm_display_pref = config.get_or<std::string>("appearance.dm_display", "both");
+  dm_list->set_display_mode(dm_display_pref);
+
   // Apply initial unread indicator options from config
-  auto apply_unread_options = [&config, channel_list, server_list]() {
+  auto apply_unread_options = [&config, channel_list, server_list, dm_list]() {
     bool ch_bar = config.get_or<bool>("appearance.channel_unread_bar", true);
     bool ch_badge = config.get_or<bool>("appearance.channel_unread_badge", true);
     channel_list->channel_delegate()->set_unread_options(ch_bar, ch_badge);
@@ -105,6 +114,12 @@ int main(int argc, char* argv[]) {
 
     bool mention_badge_g = config.get_or<bool>("appearance.mention_badge_guild", true);
     server_list->guild_delegate()->set_mention_options(mention_badge_g);
+
+    bool dm_bar = config.get_or<bool>("appearance.dm_unread_bar", true);
+    bool dm_badge = config.get_or<bool>("appearance.dm_unread_badge", true);
+    dm_list->dm_delegate()->set_unread_options(dm_bar, dm_badge);
+    bool mention_badge_dm = config.get_or<bool>("appearance.mention_badge_dm", true);
+    dm_list->dm_delegate()->set_mention_options(mention_badge_dm);
   };
   apply_unread_options();
 
@@ -119,10 +134,17 @@ int main(int argc, char* argv[]) {
   message_layout->addWidget(message_view, 1);
   message_layout->addWidget(message_input, 0);
 
+  // Channel/DM stack (only one visible at a time)
+  auto* channel_stack = new QStackedWidget();
+  channel_stack->addWidget(channel_list);  // index 0 = guild channels
+  channel_stack->addWidget(dm_list);       // index 1 = DM list
+  channel_stack->setMinimumWidth(120);
+  channel_stack->setMaximumWidth(200);
+
   // Splitter layout
   auto* splitter = new QSplitter(Qt::Horizontal);
   splitter->addWidget(server_list);
-  splitter->addWidget(channel_list);
+  splitter->addWidget(channel_stack);
   splitter->addWidget(message_area);
   splitter->setSizes({60, 150, 600});
 
@@ -238,12 +260,12 @@ int main(int argc, char* argv[]) {
 
   // Wire preferences dialog
   QObject::connect(preferences_action, &QAction::triggered, [&config, &main_window,
-      &client, server_list, channel_list, message_view,
+      &client, server_list, channel_list, dm_list, message_view,
       &current_guild_id, &compute_channel_permissions, &apply_unread_options]() {
     auto* prefs = new kind::gui::PreferencesDialog(config, &main_window);
     prefs->setAttribute(Qt::WA_DeleteOnClose);
     QObject::connect(prefs, &kind::gui::PreferencesDialog::settings_changed,
-                     [&config, &client, server_list, channel_list, message_view,
+                     [&config, &client, server_list, channel_list, dm_list, message_view,
                       &current_guild_id, &compute_channel_permissions, &apply_unread_options]() {
       // Re-apply edited indicator
       auto edited = config.get_or<std::string>("appearance.edited_indicator", "text");
@@ -258,6 +280,10 @@ int main(int argc, char* argv[]) {
       // Re-apply guild display mode
       auto guild_disp = config.get_or<std::string>("appearance.guild_display", "text");
       server_list->set_guild_display(guild_disp);
+
+      // Re-apply DM display mode
+      auto dm_disp = config.get_or<std::string>("appearance.dm_display", "both");
+      dm_list->set_display_mode(dm_disp);
 
       // Re-apply hide locked channels
       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
@@ -449,9 +475,41 @@ int main(int argc, char* argv[]) {
 
   // Shared actions for guild/channel selection (used by signals and restore)
   auto select_guild_action = [&client, &current_guild_id, &current_channel_id,
-                              server_list, channel_list, message_view, message_input,
+                              server_list, channel_list, dm_list, channel_stack,
+                              message_view, message_input,
                               &compute_channel_permissions, &config](
                                  kind::Snowflake guild_id) {
+    if (guild_id == kind::gui::GuildModel::DM_GUILD_ID) {
+      // Switch to DM list
+      current_guild_id = 0;
+      channel_stack->setCurrentWidget(dm_list);
+
+      // Visually select the DM entry in the server list
+      server_list->blockSignals(true);
+      auto* guild_model = server_list->guild_model();
+      for (int row = 0; row < guild_model->rowCount(); ++row) {
+        auto idx = guild_model->index(row);
+        if (idx.data(kind::gui::GuildModel::GuildIdRole).value<qulonglong>() == guild_id) {
+          server_list->setCurrentIndex(idx);
+          break;
+        }
+      }
+      server_list->blockSignals(false);
+
+      // Populate DM list from store
+      auto dms = client.private_channels();
+      QVector<kind::Channel> qvec(dms.begin(), dms.end());
+      dm_list->set_channels(qvec);
+
+      // Clear message view
+      current_channel_id = 0;
+      message_view->switch_channel(0, {});
+      message_input->set_read_only(true);
+      return;
+    }
+
+    // Regular guild: show channel list
+    channel_stack->setCurrentWidget(channel_list);
     current_guild_id = guild_id;
 
     // Visually select the guild in the server list
@@ -585,12 +643,58 @@ int main(int argc, char* argv[]) {
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected, select_guild_action);
   QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected, select_channel_action);
 
+  QObject::connect(dm_list, &kind::gui::DmList::dm_selected,
+                   [&client, &current_channel_id, &current_guild_id,
+                    dm_list, message_view, message_input](kind::Snowflake channel_id) {
+    current_channel_id = channel_id;
+    current_guild_id = 0;
+
+    // Visually select in DM list
+    dm_list->blockSignals(true);
+    auto* dm_model = dm_list->dm_model();
+    for (int row = 0; row < dm_model->rowCount(); ++row) {
+      if (dm_model->channel_id_at(row) == channel_id) {
+        dm_list->setCurrentIndex(dm_model->index(row));
+        break;
+      }
+    }
+    dm_list->blockSignals(false);
+
+    // Load cached messages
+    auto cached_msgs = client.messages(channel_id, {}, 50);
+    QVector<kind::Message> qvec(cached_msgs.begin(), cached_msgs.end());
+    message_view->switch_channel(channel_id, qvec);
+
+    // DMs always allow sending
+    message_input->set_read_only(false);
+
+    // Fetch fresh messages from server
+    client.select_channel(channel_id);
+  });
+
   QObject::connect(message_input, &kind::gui::MessageInput::message_submitted,
                    [&client, &current_channel_id](const QString& content) {
                      if (current_channel_id != 0) {
                        client.send_message(current_channel_id, content.toStdString());
                      }
                    });
+
+  // Update DM list when private channels change
+  QObject::connect(&app, &kind::gui::App::private_channels_updated,
+                   [server_list, dm_list, channel_stack](const QVector<kind::Channel>& channels) {
+    // Update guild model's DM channel IDs for badge aggregation
+    std::vector<kind::Snowflake> ids;
+    ids.reserve(channels.size());
+    for (const auto& ch : channels) {
+      ids.push_back(ch.id);
+    }
+    server_list->guild_model()->set_private_channel_ids(ids);
+
+    // Update DM list if it's currently shown
+    if (channel_stack->currentWidget() == dm_list) {
+      dm_list->set_channels(channels);
+    }
+  });
 
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
@@ -606,6 +710,15 @@ int main(int argc, char* argv[]) {
       if (!cached_guilds.empty()) {
         QVector<kind::Guild> qvec(cached_guilds.begin(), cached_guilds.end());
         server_list->set_guilds(qvec);
+      }
+      auto dms = client.private_channels();
+      if (!dms.empty()) {
+        std::vector<kind::Snowflake> dm_ids;
+        dm_ids.reserve(dms.size());
+        for (const auto& ch : dms) {
+          dm_ids.push_back(ch.id);
+        }
+        server_list->guild_model()->set_private_channel_ids(dm_ids);
       }
       auto cached_user = client.current_user();
       if (cached_user) {

@@ -28,6 +28,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   widgets/server_list.cpp
   widgets/channel_list.hpp
   widgets/channel_list.cpp
+  widgets/dm_list.hpp
+  widgets/dm_list.cpp
   widgets/jump_pill.hpp
   widgets/jump_pill.cpp
   widgets/loading_pill.hpp

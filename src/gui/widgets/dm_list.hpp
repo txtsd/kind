@@ -1,0 +1,51 @@
+#pragma once
+
+#include "delegates/dm_delegate.hpp"
+#include "models/channel.hpp"
+#include "models/dm_list_model.hpp"
+#include "models/snowflake.hpp"
+
+#include <QListView>
+#include <QPixmap>
+#include <QVector>
+
+#include <string>
+#include <unordered_map>
+
+namespace kind {
+class ImageCache;
+}
+
+namespace kind::gui {
+
+class DmList : public QListView {
+  Q_OBJECT
+
+public:
+  explicit DmList(QWidget* parent = nullptr);
+
+  DmListModel* dm_model() const { return model_; }
+  DmDelegate* dm_delegate() const { return delegate_; }
+
+  void set_image_cache(kind::ImageCache* cache);
+  void set_display_mode(const std::string& mode);
+
+public slots:
+  void set_channels(const QVector<kind::Channel>& channels);
+
+signals:
+  void dm_selected(kind::Snowflake channel_id);
+
+private:
+  void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
+  void fetch_avatars();
+  void on_image_ready(const QString& url, const QPixmap& pixmap);
+
+  DmListModel* model_;
+  DmDelegate* delegate_;
+  kind::ImageCache* image_cache_{nullptr};
+  std::string display_mode_{"both"};
+  std::unordered_map<std::string, QPixmap> pixmap_cache_;
+};
+
+} // namespace kind::gui
