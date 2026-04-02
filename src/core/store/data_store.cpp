@@ -122,27 +122,44 @@ std::optional<User> DataStore::current_user() const {
 
 // --- Guild ordering ---
 
+std::vector<Guild> DataStore::build_guild_snapshot_locked() const {
+  std::vector<Guild> snapshot;
+  snapshot.reserve(guilds_.size());
+  if (!guild_order_.empty()) {
+    std::unordered_set<Snowflake> seen;
+    for (auto id : guild_order_) {
+      auto it = guilds_.find(id);
+      if (it != guilds_.end()) {
+        snapshot.push_back(it->second);
+        seen.insert(id);
+      }
+    }
+    for (const auto& [id, guild] : guilds_) {
+      if (seen.find(id) == seen.end()) {
+        snapshot.push_back(guild);
+      }
+    }
+  } else {
+    for (const auto& [id, guild] : guilds_) {
+      snapshot.push_back(guild);
+    }
+  }
+  for (auto& guild : snapshot) {
+    auto ch_it = guild_channels_.find(guild.id);
+    if (ch_it != guild_channels_.end()) {
+      guild.channels = ch_it->second;
+    }
+  }
+  return snapshot;
+}
+
 void DataStore::set_guild_order(const std::vector<Snowflake>& ordered_ids) {
   std::vector<Guild> guild_snapshot;
   {
     std::unique_lock lock(mutex_);
     guild_order_ = ordered_ids;
     if (!observers_.empty()) {
-      // Re-derive the ordered snapshot using the same logic as guilds()
-      std::unordered_set<Snowflake> seen;
-      guild_snapshot.reserve(guilds_.size());
-      for (auto id : guild_order_) {
-        auto it = guilds_.find(id);
-        if (it != guilds_.end()) {
-          guild_snapshot.push_back(it->second);
-          seen.insert(id);
-        }
-      }
-      for (const auto& [id, g] : guilds_) {
-        if (seen.find(id) == seen.end()) {
-          guild_snapshot.push_back(g);
-        }
-      }
+      guild_snapshot = build_guild_snapshot_locked();
     }
   }
   if (!guild_snapshot.empty()) {
@@ -186,33 +203,7 @@ void DataStore::upsert_guild(Guild guild) {
     }
     guilds_[guild_id] = std::move(guild);
     if (!observers_.empty()) {
-      guild_snapshot.reserve(guilds_.size());
-      if (!guild_order_.empty()) {
-        std::unordered_set<Snowflake> seen;
-        for (auto id : guild_order_) {
-          auto it = guilds_.find(id);
-          if (it != guilds_.end()) {
-            guild_snapshot.push_back(it->second);
-            seen.insert(id);
-          }
-        }
-        for (const auto& [id, g] : guilds_) {
-          if (seen.find(id) == seen.end()) {
-            guild_snapshot.push_back(g);
-          }
-        }
-      } else {
-        for (const auto& [id, g] : guilds_) {
-          guild_snapshot.push_back(g);
-        }
-      }
-      // Re-attach channel lists (channels are stored separately)
-      for (auto& guild : guild_snapshot) {
-        auto ch_it = guild_channels_.find(guild.id);
-        if (ch_it != guild_channels_.end()) {
-          guild.channels = ch_it->second;
-        }
-      }
+      guild_snapshot = build_guild_snapshot_locked();
     }
   }
   observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
@@ -231,33 +222,7 @@ void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
       guilds_[guild_id] = std::move(guild);
     }
     if (!observers_.empty()) {
-      guild_snapshot.reserve(guilds_.size());
-      if (!guild_order_.empty()) {
-        std::unordered_set<Snowflake> seen;
-        for (auto id : guild_order_) {
-          auto it = guilds_.find(id);
-          if (it != guilds_.end()) {
-            guild_snapshot.push_back(it->second);
-            seen.insert(id);
-          }
-        }
-        for (const auto& [id, g] : guilds_) {
-          if (seen.find(id) == seen.end()) {
-            guild_snapshot.push_back(g);
-          }
-        }
-      } else {
-        for (const auto& [id, g] : guilds_) {
-          guild_snapshot.push_back(g);
-        }
-      }
-      // Re-attach channel lists (channels are stored separately)
-      for (auto& guild : guild_snapshot) {
-        auto ch_it = guild_channels_.find(guild.id);
-        if (ch_it != guild_channels_.end()) {
-          guild.channels = ch_it->second;
-        }
-      }
+      guild_snapshot = build_guild_snapshot_locked();
     }
   }
   log::store()->debug("bulk_upsert_guilds: notifying observers with {} guilds", guild_snapshot.size());
@@ -277,26 +242,7 @@ void DataStore::remove_guild(Snowflake id) {
     }
     guilds_.erase(id);
     if (!observers_.empty()) {
-      guild_snapshot.reserve(guilds_.size());
-      if (!guild_order_.empty()) {
-        std::unordered_set<Snowflake> seen;
-        for (auto gid : guild_order_) {
-          auto git = guilds_.find(gid);
-          if (git != guilds_.end()) {
-            guild_snapshot.push_back(git->second);
-            seen.insert(gid);
-          }
-        }
-        for (const auto& [gid, g] : guilds_) {
-          if (seen.find(gid) == seen.end()) {
-            guild_snapshot.push_back(g);
-          }
-        }
-      } else {
-        for (const auto& [gid, g] : guilds_) {
-          guild_snapshot.push_back(g);
-        }
-      }
+      guild_snapshot = build_guild_snapshot_locked();
     }
   }
   observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });

@@ -74,6 +74,10 @@ private:
   std::map<Snowflake, std::unordered_set<Snowflake>> pending_deletes_;
 
   ObserverList<StoreObserver> observers_;
+
+  // Build ordered guild snapshot with channels re-attached.
+  // Must be called with mutex_ held.
+  std::vector<Guild> build_guild_snapshot_locked() const;
 };
 
 } // namespace kind
