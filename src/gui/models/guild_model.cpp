@@ -12,6 +12,10 @@ int GuildModel::rowCount(const QModelIndex& parent) const {
   if (parent.isValid()) {
     return 0;
   }
+  // Only show the DM entry (row 0) when guilds are loaded
+  if (guilds_.empty()) {
+    return 0;
+  }
   return static_cast<int>(guilds_.size()) + 1;
 }
 
