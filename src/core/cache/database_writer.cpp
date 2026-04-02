@@ -350,14 +350,15 @@ void DatabaseWriteWorker::write_roles(kind::Snowflake guild_id, std::vector<kind
   del.exec();
 
   QSqlQuery q(db);
-  q.prepare("INSERT INTO roles (id, guild_id, name, permissions, position) "
-            "VALUES (:id, :gid, :name, :perms, :pos)");
+  q.prepare("INSERT INTO roles (id, guild_id, name, permissions, position, color) "
+            "VALUES (:id, :gid, :name, :perms, :pos, :color)");
   for (const auto& role : roles) {
     q.bindValue(":id", static_cast<qint64>(role.id));
     q.bindValue(":gid", static_cast<qint64>(guild_id));
     q.bindValue(":name", QString::fromStdString(role.name));
     q.bindValue(":perms", static_cast<qint64>(role.permissions));
     q.bindValue(":pos", role.position);
+    q.bindValue(":color", static_cast<qint64>(role.color));
     if (!q.exec()) {
       log::cache()->warn("Writer: failed to write role {}: {}", role.id,
                          q.lastError().text().toStdString());

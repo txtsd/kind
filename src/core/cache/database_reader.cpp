@@ -119,7 +119,7 @@ std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
   std::vector<Role> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.prepare("SELECT id, name, permissions, position FROM roles WHERE guild_id = :gid");
+  q.prepare("SELECT id, name, permissions, position, color FROM roles WHERE guild_id = :gid");
   q.bindValue(":gid", static_cast<qint64>(guild_id));
   q.exec();
   while (q.next()) {
@@ -128,6 +128,7 @@ std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
     role.name = q.value(1).toString().toStdString();
     role.permissions = static_cast<uint64_t>(q.value(2).toLongLong());
     role.position = q.value(3).toInt();
+    role.color = static_cast<uint32_t>(q.value(4).toInt());
     result.push_back(std::move(role));
   }
   log::cache()->debug("DB read: {} roles for guild {}", result.size(), guild_id);
@@ -139,7 +140,7 @@ DatabaseReader::all_roles() const {
   std::unordered_map<Snowflake, std::vector<Role>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT guild_id, id, name, permissions, position FROM roles");
+  q.exec("SELECT guild_id, id, name, permissions, position, color FROM roles");
   int count = 0;
   while (q.next()) {
     auto guild_id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -148,6 +149,7 @@ DatabaseReader::all_roles() const {
     role.name = q.value(2).toString().toStdString();
     role.permissions = static_cast<uint64_t>(q.value(3).toLongLong());
     role.position = q.value(4).toInt();
+    role.color = static_cast<uint32_t>(q.value(5).toInt());
     result[guild_id].push_back(std::move(role));
     ++count;
   }

@@ -14,9 +14,90 @@
 #include <QDateTime>
 #include <QFontMetrics>
 
+#include <spdlog/spdlog.h>
+
 #include <unordered_set>
 
 namespace kind::gui {
+
+static void resolve_mention(kind::TextSpan& span, const kind::Message& message,
+                            const MentionContext& ctx) {
+  uint32_t accent = ctx.use_discord_colors ? 0x5894FF : ctx.accent_color;
+  uint32_t accent_fg = 0xFF000000 | accent;
+  uint32_t accent_bg = (accent & 0x00FFFFFF) | 0x1E000000;  // alpha ~30
+  uint32_t accent_bg_self = (accent & 0x00FFFFFF) | 0x3C000000;  // alpha ~60
+
+  if (span.mention_user_id.has_value()) {
+    auto uid = *span.mention_user_id;
+    std::string name = "Unknown User";
+    for (const auto& m : message.mentions) {
+      if (m.id == uid) {
+        name = m.username;
+        break;
+      }
+    }
+    span.resolved_text = "@" + name;
+    span.mention_color = accent_fg;
+    span.mention_bg = accent_bg;
+    if (uid == ctx.current_user_id) {
+      span.is_self_mention = true;
+      span.mention_bg = accent_bg_self;
+    }
+    spdlog::debug("Resolved user mention: {} -> {}", uid, span.resolved_text);
+  } else if (span.mention_channel_id.has_value()) {
+    auto cid = *span.mention_channel_id;
+    std::string name = "unknown-channel";
+    for (const auto& ch : ctx.guild_channels) {
+      if (ch.id == cid) {
+        name = ch.name;
+        break;
+      }
+    }
+    span.resolved_text = "#" + name;
+    span.mention_color = accent_fg;
+    span.mention_bg = accent_bg;
+    spdlog::debug("Resolved channel mention: {} -> {}", cid, span.resolved_text);
+  } else if (span.mention_role_id.has_value()) {
+    auto rid = *span.mention_role_id;
+    std::string name = "unknown-role";
+    uint32_t role_color = accent;
+    for (const auto& role : ctx.guild_roles) {
+      if (role.id == rid) {
+        name = role.name;
+        if (role.color != 0) {
+          role_color = role.color;
+        }
+        break;
+      }
+    }
+    span.resolved_text = "@" + name;
+    span.mention_color = 0xFF000000 | role_color;
+    span.mention_bg = (role_color & 0x00FFFFFF) | 0x1E000000;
+    for (auto user_role : ctx.current_user_role_ids) {
+      if (user_role == rid) {
+        span.is_self_mention = true;
+        span.mention_bg = (role_color & 0x00FFFFFF) | 0x3C000000;
+        break;
+      }
+    }
+    spdlog::debug("Resolved role mention: {} -> {}", rid, span.resolved_text);
+  }
+
+  // Handle @everyone and @here
+  if (!span.mention_user_id.has_value() && !span.mention_channel_id.has_value() &&
+      !span.mention_role_id.has_value()) {
+    if (span.text == "@everyone" || span.text == "@here") {
+      span.resolved_text = span.text;
+      span.mention_color = accent_fg;
+      span.mention_bg = accent_bg;
+      if (message.mention_everyone) {
+        span.is_self_mention = true;
+        span.mention_bg = accent_bg_self;
+      }
+      spdlog::debug("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
+    }
+  }
+}
 
 // Append size parameters to Discord image URLs.
 static std::string add_image_size(const std::string& url, int display_width, int display_height = 0) {
@@ -42,7 +123,8 @@ static std::string add_image_size(const std::string& url, int display_width, int
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
     const std::unordered_map<std::string, QPixmap>& images,
-    EditedIndicator edited_style) {
+    EditedIndicator edited_style,
+    const MentionContext& mentions) {
   RenderedMessage result;
   result.viewport_width = viewport_width;
 
@@ -86,6 +168,13 @@ RenderedMessage compute_layout(
 
     // Parse content with markdown
     auto parsed = kind::markdown::parse(message.content);
+
+    // Resolve mentions in parsed content
+    for (auto& block : parsed.blocks) {
+      if (auto* span = std::get_if<kind::TextSpan>(&block)) {
+        resolve_mention(*span, message, mentions);
+      }
+    }
 
     // Append edited indicator based on user preference
     if (message.edited_timestamp.has_value()) {

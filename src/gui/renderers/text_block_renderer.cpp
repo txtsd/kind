@@ -183,7 +183,9 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
     if (std::holds_alternative<TextSpan>(block)) {
       const auto& span = std::get<TextSpan>(block);
       int start = full_text.size();
-      QString span_text = QString::fromStdString(span.text);
+      QString span_text = span.resolved_text.empty()
+          ? QString::fromStdString(span.text)
+          : QString::fromStdString(span.resolved_text);
       full_text += span_text;
       int length = span_text.size();
 
@@ -196,7 +198,7 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
       // Build format range if the span has any styling
       if (span.style != TextSpan::Normal || span.link_url.has_value() ||
           span.mention_user_id.has_value() || span.mention_channel_id.has_value() ||
-          span.mention_role_id.has_value()) {
+          span.mention_role_id.has_value() || span.mention_color != 0) {
         QTextLayout::FormatRange range;
         range.start = start;
         range.length = length;
@@ -230,8 +232,20 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
           fmt.setForeground(QColor(0, 168, 252));
           fmt.setFontUnderline(true);
         }
-        if (span.mention_user_id.has_value() || span.mention_channel_id.has_value() ||
-            span.mention_role_id.has_value()) {
+        if (span.mention_color != 0) {
+          fmt.setForeground(QColor(
+              (span.mention_color >> 16) & 0xFF,
+              (span.mention_color >> 8) & 0xFF,
+              span.mention_color & 0xFF,
+              (span.mention_color >> 24) & 0xFF));
+          fmt.setBackground(QColor(
+              (span.mention_bg >> 16) & 0xFF,
+              (span.mention_bg >> 8) & 0xFF,
+              span.mention_bg & 0xFF,
+              (span.mention_bg >> 24) & 0xFF));
+        } else if (span.mention_user_id.has_value() || span.mention_channel_id.has_value() ||
+                   span.mention_role_id.has_value()) {
+          // Fallback for unresolved mentions
           fmt.setForeground(QColor(88, 148, 255));
           fmt.setBackground(QColor(88, 148, 255, 30));
         }

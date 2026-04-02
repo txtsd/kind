@@ -11,6 +11,7 @@ struct Role {
   std::string name;
   uint64_t permissions{};
   int position{};
+  uint32_t color{0};
 
   bool operator==(const Role&) const = default;
 };

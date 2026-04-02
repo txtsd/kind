@@ -80,6 +80,7 @@ void DatabaseManager::create_schema() {
       "  name        TEXT NOT NULL,"
       "  permissions INTEGER NOT NULL DEFAULT 0,"
       "  position    INTEGER NOT NULL DEFAULT 0,"
+      "  color       INTEGER NOT NULL DEFAULT 0,"
       "  data        TEXT"
       ")");
 

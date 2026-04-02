@@ -338,6 +338,7 @@ std::optional<Role> parse_role(const QJsonObject& obj) {
   role.name = obj["name"].toString().toStdString();
   role.permissions = obj["permissions"].toString().toULongLong();
   role.position = obj["position"].toInt();
+  role.color = static_cast<uint32_t>(obj["color"].toInt(0));
   return role;
 }
 

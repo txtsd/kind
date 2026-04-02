@@ -30,6 +30,12 @@ struct TextSpan {
   std::optional<Snowflake> custom_emoji_id;
   std::optional<std::string> custom_emoji_name;
   bool animated_emoji{false};
+
+  // Resolved mention display (populated by compute_layout, not parser)
+  std::string resolved_text;    // "@username", "#channel", "@role"
+  uint32_t mention_color{0};   // ARGB color for text (0 = use default)
+  uint32_t mention_bg{0};      // ARGB color for background (0 = use default)
+  bool is_self_mention{false}; // stronger background highlight
 };
 
 struct CodeBlock {
