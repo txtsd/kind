@@ -141,6 +141,7 @@ private:
     std::vector<std::pair<Snowflake, ReadState>> read_states;
     std::unordered_map<Snowflake, Snowflake> channel_last_message_ids;
     std::vector<GuildMuteSettings> mute_settings;
+    std::vector<Channel> private_channels;
   };
 
   void handle_ready(const std::string& data_json) {
@@ -259,6 +260,23 @@ private:
           data->mute_settings.push_back(std::move(gs));
         }
       }
+
+      // Parse private channels (DMs)
+      auto private_channels_array = obj["private_channels"].toArray();
+      for (const auto& val : private_channels_array) {
+        auto channel = json_parse::parse_channel(val.toObject());
+        if (channel && channel->type == 1) {  // Only 1-on-1 DMs for now
+          data->private_channels.push_back(std::move(*channel));
+        }
+      }
+
+      for (const auto& pc : data->private_channels) {
+        if (pc.id != 0 && pc.last_message_id != 0) {
+          data->channel_last_message_ids[pc.id] = pc.last_message_id;
+        }
+      }
+
+      log::client()->debug("READY: parsed {} private channels", data->private_channels.size());
 
       log::client()->debug("READY: parsed {} guilds, {} read_states, {} mute_settings, {} channel_last_message_ids",
                            data->guilds.size(), data->read_states.size(),
@@ -412,6 +430,18 @@ private:
           }
           if (!db_entries.empty()) {
             emit dbw->mute_state_bulk_write_requested(std::move(db_entries));
+          }
+        }
+      }
+
+      // Upsert private channels (DMs) into store
+      if (!data->private_channels.empty()) {
+        auto pc_count = data->private_channels.size();
+        store->bulk_upsert_private_channels(std::move(data->private_channels));
+        log::client()->debug("READY: upserted {} private channels", pc_count);
+        if (dbw) {
+          for (const auto& pc : store->private_channels()) {
+            emit dbw->channel_write_requested(pc);
           }
         }
       }
