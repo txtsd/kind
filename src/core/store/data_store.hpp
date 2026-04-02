@@ -46,6 +46,9 @@ public:
   void set_member_roles(Snowflake guild_id, std::vector<Snowflake> role_ids);
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
 
+  // Channel-to-guild reverse lookup
+  Snowflake guild_id_for_channel(Snowflake channel_id) const;
+
   // Mutations (called by gateway event handlers)
   void set_current_user(User user);
   void upsert_guild(Guild guild);

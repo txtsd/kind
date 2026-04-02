@@ -522,6 +522,21 @@ private:
             }
           }
         }
+        if (!mentioned && !msg->mention_roles.empty()) {
+          auto guild_id = client_.store_->guild_id_for_channel(msg->channel_id);
+          if (guild_id != 0) {
+            auto role_ids = client_.store_->member_roles(guild_id);
+            for (auto mentioned_role : msg->mention_roles) {
+              for (auto user_role : role_ids) {
+                if (mentioned_role == user_role) {
+                  mentioned = true;
+                  break;
+                }
+              }
+              if (mentioned) break;
+            }
+          }
+        }
         if (mentioned) {
           log::client()->debug("MESSAGE_CREATE: mention detected in channel {}", msg->channel_id);
           client_.read_state_manager_->increment_mention(msg->channel_id);

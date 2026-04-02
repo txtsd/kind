@@ -290,6 +290,18 @@ std::vector<Snowflake> DataStore::member_roles(Snowflake guild_id) const {
   return {};
 }
 
+Snowflake DataStore::guild_id_for_channel(Snowflake channel_id) const {
+  std::shared_lock lock(mutex_);
+  for (const auto& [guild_id, channels] : guild_channels_) {
+    for (const auto& ch : channels) {
+      if (ch.id == channel_id) {
+        return guild_id;
+      }
+    }
+  }
+  return 0;
+}
+
 // --- Mutations ---
 
 void DataStore::set_current_user(User user) {
