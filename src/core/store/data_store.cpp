@@ -191,6 +191,25 @@ void DataStore::bulk_upsert_private_channels(std::vector<Channel> channels) {
   }
 }
 
+void DataStore::update_private_channel_last_message(Snowflake channel_id, Snowflake message_id) {
+  bool found = false;
+  {
+    std::unique_lock lock(mutex_);
+    for (auto& pc : private_channels_) {
+      if (pc.id == channel_id) {
+        if (message_id > pc.last_message_id) {
+          pc.last_message_id = message_id;
+        }
+        found = true;
+        break;
+      }
+    }
+  }
+  if (found) {
+    log::store()->debug("update_private_channel_last_message: channel={}, msg={}", channel_id, message_id);
+  }
+}
+
 // --- Guild ordering ---
 
 std::vector<Guild> DataStore::build_guild_snapshot_locked() const {

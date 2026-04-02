@@ -125,6 +125,10 @@ public:
       handle_typing_start(data_json);
     } else if (event_name == gateway::events::PresenceUpdate) {
       handle_presence_update(data_json);
+    } else if (event_name == gateway::events::ChannelCreate) {
+      handle_channel_create(data_json);
+    } else if (event_name == gateway::events::ChannelDelete) {
+      handle_channel_delete(data_json);
     } else if (event_name == "__DISCONNECT") {
       client_.gateway_observers_.notify([&data_json](GatewayObserver* obs) { obs->on_gateway_disconnect(data_json); });
     } else if (event_name == "__RECONNECTING") {
@@ -465,6 +469,7 @@ private:
     }
     log::client()->debug("MESSAGE_CREATE: channel={}, id={}, author={}", msg->channel_id, msg->id, msg->author.username);
     client_.store_->add_message(*msg);
+    client_.store_->update_private_channel_last_message(msg->channel_id, msg->id);
     if (client_.db_writer_) {
       emit client_.db_writer_->message_write_requested(*msg);
     }
@@ -646,6 +651,57 @@ private:
     auto status = obj["status"].toString().toStdString();
     client_.gateway_observers_.notify(
         [user_id, status](GatewayObserver* obs) { obs->on_presence_update(user_id, status); });
+  }
+
+  void handle_channel_create(const std::string& data_json) {
+    auto doc = QJsonDocument::fromJson(QByteArray::fromRawData(data_json.data(), data_json.size()));
+    if (doc.isNull() || !doc.isObject()) return;
+
+    auto channel = json_parse::parse_channel(doc.object());
+    if (!channel) return;
+
+    if (channel->type == 1) {
+      // DM channel created
+      log::client()->debug("CHANNEL_CREATE: DM channel {}", channel->id);
+      client_.store_->upsert_private_channel(*channel);
+      if (client_.db_writer_) {
+        emit client_.db_writer_->channel_write_requested(*channel);
+        emit client_.db_writer_->dm_recipients_write_requested(channel->id, channel->recipients);
+      }
+    } else {
+      // Guild channel
+      log::client()->debug("CHANNEL_CREATE: guild channel {} in guild {}", channel->id, channel->guild_id);
+      client_.store_->upsert_channel(*channel);
+      if (client_.db_writer_) {
+        emit client_.db_writer_->channel_write_requested(*channel);
+        if (!channel->permission_overwrites.empty()) {
+          emit client_.db_writer_->overwrites_write_requested(channel->id, channel->permission_overwrites);
+        }
+      }
+    }
+  }
+
+  void handle_channel_delete(const std::string& data_json) {
+    auto doc = QJsonDocument::fromJson(QByteArray::fromRawData(data_json.data(), data_json.size()));
+    if (doc.isNull() || !doc.isObject()) return;
+
+    auto obj = doc.object();
+    auto channel_id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+    auto type = obj["type"].toInt();
+
+    if (type == 1) {
+      log::client()->debug("CHANNEL_DELETE: DM channel {}", channel_id);
+      client_.store_->remove_private_channel(channel_id);
+      if (client_.db_writer_) {
+        emit client_.db_writer_->channel_delete_requested(channel_id);
+      }
+    } else {
+      log::client()->debug("CHANNEL_DELETE: guild channel {}", channel_id);
+      client_.store_->remove_channel(channel_id);
+      if (client_.db_writer_) {
+        emit client_.db_writer_->channel_delete_requested(channel_id);
+      }
+    }
   }
 
   Client& client_;

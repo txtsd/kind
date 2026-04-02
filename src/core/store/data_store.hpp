@@ -36,6 +36,7 @@ public:
   void upsert_private_channel(Channel channel);
   void remove_private_channel(Snowflake id);
   void bulk_upsert_private_channels(std::vector<Channel> channels);
+  void update_private_channel_last_message(Snowflake channel_id, Snowflake message_id);
 
   // Guild ordering (from user_settings_proto)
   void set_guild_order(const std::vector<Snowflake>& ordered_ids);
