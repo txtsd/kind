@@ -951,6 +951,40 @@ void Client::fetch_single_message(Snowflake channel_id, Snowflake message_id) {
   });
 }
 
+void Client::create_dm(Snowflake recipient_id) {
+  QJsonObject body;
+  QJsonArray recipients;
+  recipients.append(QString::number(recipient_id));
+  body["recipients"] = recipients;
+  auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
+
+  rest_->post(std::string(endpoints::users_me_channels), payload,
+              [this](RestClient::Response response) {
+    if (!response) {
+      log::client()->warn("Failed to create DM: {}", response.error().message);
+      return;
+    }
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(response.value()));
+    if (doc.isNull() || !doc.isObject()) {
+      log::client()->warn("Failed to parse DM channel response");
+      return;
+    }
+    auto channel = json_parse::parse_channel(doc.object());
+    if (channel && channel->type == 1) {
+      log::client()->debug("create_dm: created DM channel {}", channel->id);
+      store_->upsert_private_channel(*channel);
+      if (db_writer_) {
+        emit db_writer_->channel_write_requested(*channel);
+        emit db_writer_->dm_recipients_write_requested(channel->id, channel->recipients);
+      }
+    }
+  });
+}
+
+std::vector<User> Client::known_users() const {
+  return store_->all_users();
+}
+
 void Client::select_guild(Snowflake guild_id) {
   active_guild_id_.store(guild_id);
 

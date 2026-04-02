@@ -30,6 +30,7 @@ public:
                                 int limit) const;
   std::optional<User> user(Snowflake user_id) const;
   std::optional<User> current_user() const;
+  std::vector<User> all_users() const;
 
   // Private channels (DMs)
   std::vector<Channel> private_channels() const;

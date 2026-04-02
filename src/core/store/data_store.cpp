@@ -120,6 +120,18 @@ std::optional<User> DataStore::current_user() const {
   return current_user_;
 }
 
+std::vector<User> DataStore::all_users() const {
+  std::shared_lock lock(mutex_);
+  std::vector<User> result;
+  result.reserve(users_.size());
+  for (const auto& [id, user] : users_) {
+    if (!user.bot) {
+      result.push_back(user);
+    }
+  }
+  return result;
+}
+
 void DataStore::set_suppress_observers(bool suppress) {
   suppress_observers_ = suppress;
 }

@@ -6,6 +6,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   app.cpp
   dialogs/login_dialog.hpp
   dialogs/login_dialog.cpp
+  dialogs/new_dm_dialog.hpp
+  dialogs/new_dm_dialog.cpp
   dialogs/preferences_dialog.hpp
   dialogs/preferences_dialog.cpp
   models/guild_model.hpp

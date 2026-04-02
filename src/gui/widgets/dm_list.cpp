@@ -4,6 +4,7 @@
 #include "logging.hpp"
 
 #include <QImage>
+#include <QPushButton>
 
 namespace kind::gui {
 
@@ -15,6 +16,21 @@ DmList::DmList(QWidget* parent)
   setItemDelegate(delegate_);
   setMouseTracking(true);
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+
+  new_dm_button_ = new QPushButton("+", this);
+  new_dm_button_->setFixedSize(24, 24);
+  new_dm_button_->setCursor(Qt::PointingHandCursor);
+  new_dm_button_->setStyleSheet(
+      "QPushButton {"
+      "  background-color: rgba(88, 101, 242, 220);"
+      "  color: white;"
+      "  border: none;"
+      "  border-radius: 3px;"
+      "  font-weight: bold;"
+      "  font-size: 16px;"
+      "}");
+  connect(new_dm_button_, &QPushButton::clicked,
+          this, &DmList::create_dm_requested);
 
   connect(selectionModel(), &QItemSelectionModel::currentChanged, this, &DmList::on_selection_changed);
 }
@@ -93,6 +109,12 @@ void DmList::on_image_ready(const QString& url, const QPixmap& pixmap) {
   pixmap_cache_[url_str] = pixmap;
   delegate_->set_pixmap(url_str, pixmap);
   viewport()->update();
+}
+
+void DmList::resizeEvent(QResizeEvent* event) {
+  QListView::resizeEvent(event);
+  int btn_x = viewport()->width() - new_dm_button_->width() - 4;
+  new_dm_button_->move(btn_x, 4);
 }
 
 } // namespace kind::gui

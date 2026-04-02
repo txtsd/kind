@@ -14,6 +14,7 @@ inline constexpr std::string_view mfa_totp = "/auth/mfa/totp";
 
 // Users
 inline constexpr std::string_view users_me = "/users/@me";
+inline constexpr std::string_view users_me_channels = "/users/@me/channels";
 
 // Guilds
 inline std::string guild_channels(Snowflake guild_id) {

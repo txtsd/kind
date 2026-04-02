@@ -78,6 +78,7 @@ public:
   void send_message(Snowflake channel_id, std::string_view content);
   void ack_message(Snowflake channel_id, Snowflake message_id);
   void toggle_reaction(Snowflake channel_id, Snowflake message_id, const std::string& emoji, bool add);
+  void create_dm(Snowflake recipient_id);
   void select_guild(Snowflake guild_id);
   void select_channel(Snowflake channel_id);
   void fetch_message_history(Snowflake channel_id, std::optional<Snowflake> before = {});
@@ -109,6 +110,7 @@ public:
   std::optional<User> current_user() const;
   std::vector<Channel> private_channels() const;
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
+  std::vector<User> known_users() const;
   bool is_connected() const;
   int latency_ms() const;
 

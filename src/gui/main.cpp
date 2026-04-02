@@ -3,6 +3,7 @@
 #include "config/config_manager.hpp"
 #include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
+#include "dialogs/new_dm_dialog.hpp"
 #include "dialogs/preferences_dialog.hpp"
 #include "permissions.hpp"
 #include "rest/qt_rest_client.hpp"
@@ -670,6 +671,15 @@ int main(int argc, char* argv[]) {
 
     // Fetch fresh messages from server
     client.select_channel(channel_id);
+  });
+
+  QObject::connect(dm_list, &kind::gui::DmList::create_dm_requested,
+                   [&client, &main_window]() {
+    auto users = client.known_users();
+    kind::gui::NewDmDialog dialog(users, &main_window);
+    if (dialog.exec() == QDialog::Accepted && dialog.selected_user_id() != 0) {
+      client.create_dm(dialog.selected_user_id());
+    }
   });
 
   QObject::connect(message_input, &kind::gui::MessageInput::message_submitted,
