@@ -1,167 +1,16 @@
 #include "renderers/text_block_renderer.hpp"
 
 #include <QFontMetrics>
-#include <QPainterPath>
-#include <QTextOption>
+
+#include <spdlog/spdlog.h>
 
 namespace kind::gui {
 
 TextBlockRenderer::TextBlockRenderer(const kind::ParsedContent& content, int viewport_width,
                                      const QFont& font, const QString& author,
                                      const QString& timestamp, const QString& timestamp_tooltip)
-    : author_(author), timestamp_(timestamp), timestamp_tooltip_(timestamp_tooltip) {
-  build_layout(content, viewport_width, font);
-}
-
-int TextBlockRenderer::height(int /*width*/) const {
-  return total_height_;
-}
-
-void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
-  painter->save();
-
-  QFont base_font = text_layout_->font();
-  QFont bold_font = base_font;
-  bold_font.setBold(true);
-  QFontMetrics base_fm(base_font);
-
-  int x = rect.left() + padding_;
-  int y = rect.top() + padding_;
-
-  // Draw timestamp in dim color
-  painter->setFont(base_font);
-  painter->setPen(QColor(128, 128, 128));
-  painter->drawText(x, y + base_fm.ascent(), timestamp_);
-  x += timestamp_width_;
-
-  // Draw author in bold
-  painter->setFont(bold_font);
-  painter->setPen(QColor(220, 220, 220));
-  painter->drawText(x, y + base_fm.ascent(), author_);
-
-  // Draw code block backgrounds
-  QFont mono_font("monospace");
-  mono_font.setPointSize(base_font.pointSize() > 0 ? base_font.pointSize() : 10);
-  mono_font.setStyleHint(QFont::Monospace);
-
-  for (const auto& cb : code_blocks_) {
-    auto start_line = text_layout_->lineForTextPosition(cb.start);
-    auto end_line = text_layout_->lineForTextPosition(cb.start + cb.length);
-    if (!start_line.isValid()) continue;
-
-    qreal top = start_line.position().y() + rect.top() + padding_;
-    qreal bottom = end_line.isValid()
-        ? end_line.position().y() + end_line.height() + rect.top() + padding_
-        : start_line.position().y() + start_line.height() + rect.top() + padding_;
-
-    // Measure the widest line within the code block to size the background
-    constexpr qreal code_padding = 12.0;
-    qreal max_line_width = 0.0;
-    for (int li = 0; li < text_layout_->lineCount(); ++li) {
-      QTextLine line = text_layout_->lineAt(li);
-      if (!line.isValid()) continue;
-      qreal line_top = line.position().y() + rect.top() + padding_;
-      qreal line_bottom = line_top + line.height();
-      // Check if this line overlaps the code block vertical range
-      if (line_bottom > top && line_top < bottom) {
-        qreal w = line.naturalTextWidth();
-        if (w > max_line_width) {
-          max_line_width = w;
-        }
-      }
-    }
-
-    constexpr qreal cb_radius = 4.0;
-    qreal bg_width = max_line_width + 2 * code_padding;
-    // Ensure a minimum width and don't exceed the available width
-    constexpr qreal min_code_bg_width = 60.0;
-    bg_width = std::max(bg_width, min_code_bg_width);
-    bg_width = std::min(bg_width, static_cast<qreal>(rect.width() - 2 * padding_));
-    QRectF bg(rect.left() + padding_, top, bg_width, bottom - top);
-    QPainterPath cb_path;
-    cb_path.addRoundedRect(bg, cb_radius, cb_radius);
-    painter->fillPath(cb_path, QColor(30, 31, 34));
-    painter->setPen(QPen(QColor(60, 63, 68), 1.0));
-    painter->drawPath(cb_path);
-  }
-
-  // Draw inline code backgrounds and spoiler overlays
-  for (const auto& si : span_rects_) {
-    if (si.span.style & TextSpan::InlineCode) {
-      // Draw subtle background behind inline code
-      auto line = text_layout_->lineForTextPosition(si.start);
-      if (!line.isValid()) continue;
-      qreal sx = line.cursorToX(si.start);
-      qreal ex = line.cursorToX(si.start + si.length);
-      QRectF code_bg(sx + rect.left() + padding_,
-                     line.position().y() + rect.top() + padding_,
-                     ex - sx, line.height());
-      painter->fillRect(code_bg, QColor(60, 60, 60));
-    }
-  }
-
-  // Draw the main text layout
-  painter->setPen(QColor(220, 220, 220));
-  text_layout_->draw(painter, QPointF(rect.left() + padding_, rect.top() + padding_));
-
-  // Draw spoiler overlays on top of rendered text
-  for (const auto& si : span_rects_) {
-    if (si.span.style & TextSpan::Spoiler) {
-      auto line = text_layout_->lineForTextPosition(si.start);
-      if (!line.isValid()) continue;
-      qreal sx = line.cursorToX(si.start);
-      qreal ex = line.cursorToX(si.start + si.length);
-      QRectF spoiler_rect(sx + rect.left() + padding_,
-                          line.position().y() + rect.top() + padding_,
-                          ex - sx, line.height());
-      painter->fillRect(spoiler_rect, QColor(30, 30, 30));
-    }
-  }
-
-  painter->restore();
-}
-
-bool TextBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
-  for (const auto& si : span_rects_) {
-    if (!si.rect.contains(pos)) continue;
-
-    if (si.span.link_url.has_value()) {
-      result.type = HitResult::Link;
-      result.url = si.span.link_url.value();
-      return true;
-    }
-    if (si.span.mention_user_id.has_value()) {
-      result.type = HitResult::Mention;
-      result.id = si.span.mention_user_id.value();
-      return true;
-    }
-    if (si.span.mention_channel_id.has_value()) {
-      result.type = HitResult::Mention;
-      result.id = si.span.mention_channel_id.value();
-      return true;
-    }
-    if (si.span.mention_role_id.has_value()) {
-      result.type = HitResult::Mention;
-      result.id = si.span.mention_role_id.value();
-      return true;
-    }
-    if (si.span.style & TextSpan::Spoiler) {
-      result.type = HitResult::Spoiler;
-      return true;
-    }
-  }
-  return false;
-}
-
-QString TextBlockRenderer::tooltip_at(const QPoint& pos) const {
-  if (!timestamp_tooltip_.isEmpty() && timestamp_rect_.contains(pos)) {
-    return timestamp_tooltip_;
-  }
-  return {};
-}
-
-void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int viewport_width,
-                                     const QFont& font) {
+    : author_(author), timestamp_(timestamp), timestamp_tooltip_(timestamp_tooltip),
+      font_(font) {
   QFont bold_font = font;
   bold_font.setBold(true);
   QFontMetrics base_fm(font);
@@ -171,188 +20,75 @@ void TextBlockRenderer::build_layout(const kind::ParsedContent& content, int vie
   timestamp_rect_ = QRect(padding_, padding_, timestamp_width_, base_fm.height());
   author_width_ = bold_fm.horizontalAdvance(author_);
 
-  // Concatenate all block text and track per-span ranges
-  QString full_text;
-  QList<QTextLayout::FormatRange> format_ranges;
-
-  QFont mono_font("monospace");
-  mono_font.setPointSize(font.pointSize() > 0 ? font.pointSize() : 10);
-  mono_font.setStyleHint(QFont::Monospace);
-
-  for (const auto& block : content.blocks) {
-    if (std::holds_alternative<TextSpan>(block)) {
-      const auto& span = std::get<TextSpan>(block);
-      int start = full_text.size();
-      QString span_text = span.resolved_text.empty()
-          ? QString::fromStdString(span.text)
-          : QString::fromStdString(span.resolved_text);
-      full_text += span_text;
-      int length = span_text.size();
-
-      SpanInfo info;
-      info.span = span;
-      info.start = start;
-      info.length = length;
-      span_rects_.push_back(std::move(info));
-
-      // Build format range if the span has any styling
-      if (span.style != TextSpan::Normal || span.link_url.has_value() ||
-          span.mention_user_id.has_value() || span.mention_channel_id.has_value() ||
-          span.mention_role_id.has_value() || span.mention_color != 0) {
-        QTextLayout::FormatRange range;
-        range.start = start;
-        range.length = length;
-
-        QTextCharFormat fmt;
-        if (span.style & TextSpan::Bold) {
-          fmt.setFontWeight(QFont::Bold);
-        }
-        if (span.style & TextSpan::Italic) {
-          fmt.setFontItalic(true);
-        }
-        if (span.style & TextSpan::Underline) {
-          fmt.setFontUnderline(true);
-        }
-        if (span.style & TextSpan::Strikethrough) {
-          fmt.setFontStrikeOut(true);
-        }
-        if (span.style & TextSpan::InlineCode) {
-          fmt.setFont(mono_font);
-          fmt.setBackground(QColor(60, 60, 60));
-        }
-        if (span.style & TextSpan::Spoiler) {
-          fmt.setForeground(QColor(30, 30, 30));
-          fmt.setBackground(QColor(30, 30, 30));
-        }
-        if (span.style & TextSpan::Dim) {
-          fmt.setForeground(QColor(100, 100, 100));
-          fmt.setFontPointSize(std::max(font.pointSize() - 2, 7));
-        }
-        if (span.link_url.has_value()) {
-          fmt.setForeground(QColor(0, 168, 252));
-          fmt.setFontUnderline(true);
-        }
-        if (span.mention_color != 0) {
-          fmt.setForeground(QColor(
-              (span.mention_color >> 16) & 0xFF,
-              (span.mention_color >> 8) & 0xFF,
-              span.mention_color & 0xFF,
-              (span.mention_color >> 24) & 0xFF));
-          fmt.setBackground(QColor(
-              (span.mention_bg >> 16) & 0xFF,
-              (span.mention_bg >> 8) & 0xFF,
-              span.mention_bg & 0xFF,
-              (span.mention_bg >> 24) & 0xFF));
-        } else if (span.mention_user_id.has_value() || span.mention_channel_id.has_value() ||
-                   span.mention_role_id.has_value()) {
-          // Fallback for unresolved mentions
-          fmt.setForeground(QColor(88, 148, 255));
-          fmt.setBackground(QColor(88, 148, 255, 30));
-        }
-
-        range.format = fmt;
-        format_ranges.push_back(range);
-      }
-    } else if (std::holds_alternative<CodeBlock>(block)) {
-      const auto& cb = std::get<CodeBlock>(block);
-      // Add separator if there is preceding text
-      if (!full_text.isEmpty() && !full_text.endsWith('\n')) {
-        full_text += '\n';
-      }
-
-      // Record the start of the background area (includes padding line above)
-      int bg_start = full_text.size();
-      full_text += '\n'; // Padding line above code
-
-      int code_start = full_text.size();
-      QString code_text = QString::fromStdString(cb.code);
-      // Strip trailing newline from code so it doesn't add extra bottom space
-      if (code_text.endsWith('\n')) {
-        code_text.chop(1);
-      }
-      full_text += code_text;
-      int code_length = code_text.size();
-
-      // Style the code as monospace
-      QTextLayout::FormatRange range;
-      range.start = code_start;
-      range.length = code_length;
-      QTextCharFormat fmt;
-      fmt.setFont(mono_font);
-      range.format = fmt;
-      format_ranges.push_back(range);
-
-      full_text += '\n'; // Padding line below code
-      int bg_end = full_text.size();
-
-      CodeBlockInfo cbi;
-      cbi.start = bg_start;
-      cbi.length = bg_end - bg_start;
-      code_blocks_.push_back(cbi);
-
-      full_text += '\n'; // Separator after code block
-    }
-  }
-
-  // QTextLayout uses QChar::LineSeparator for line breaks, not \n
-  full_text.replace('\n', QChar::LineSeparator);
-
-  // Build the QTextLayout
-  text_layout_ = std::make_shared<QTextLayout>();
-  text_layout_->setFont(font);
-  text_layout_->setText(full_text);
-  text_layout_->setFormats(format_ranges);
-
-  QTextOption text_option;
-  text_option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-  text_layout_->setTextOption(text_option);
-
   int usable_width = viewport_width - (2 * padding_);
   int prefix_width = timestamp_width_ + author_width_;
 
-  text_layout_->beginLayout();
-  int y_offset = 0;
-  bool first_line = true;
-  while (true) {
-    QTextLine line = text_layout_->createLine();
-    if (!line.isValid()) break;
+  content_layout_ = std::make_unique<RichTextLayout>(content, usable_width, font, prefix_width);
 
-    if (first_line) {
-      int first_line_width = usable_width - prefix_width;
-      if (first_line_width > 0) {
-        line.setLineWidth(first_line_width);
-        line.setPosition(QPointF(prefix_width, y_offset));
-      } else {
-        line.setLineWidth(usable_width);
-        y_offset += base_fm.height();
-        line.setPosition(QPointF(0, y_offset));
-      }
-      first_line = false;
-    } else {
-      line.setLineWidth(usable_width);
-      line.setPosition(QPointF(0, y_offset));
-    }
-    y_offset += static_cast<int>(line.height());
-  }
-  text_layout_->endLayout();
-
-  total_height_ = y_offset + (2 * padding_);
+  total_height_ = content_layout_->height() + (2 * padding_);
   if (total_height_ < base_fm.height() + (2 * padding_)) {
     total_height_ = base_fm.height() + (2 * padding_);
   }
 
-  compute_span_rects();
+  spdlog::debug("TextBlockRenderer: height={}, prefix_width={}", total_height_, prefix_width);
 }
 
-void TextBlockRenderer::compute_span_rects() {
-  for (auto& si : span_rects_) {
-    auto line = text_layout_->lineForTextPosition(si.start);
-    if (!line.isValid()) continue;
+int TextBlockRenderer::height(int /*width*/) const {
+  return total_height_;
+}
 
-    qreal x1 = line.cursorToX(si.start);
-    qreal x2 = line.cursorToX(si.start + si.length);
-    si.rect = QRectF(x1, line.position().y(), x2 - x1, line.height());
+void TextBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
+  painter->save();
+
+  QFont bold_font = font_;
+  bold_font.setBold(true);
+  QFontMetrics base_fm(font_);
+
+  int x = rect.left() + padding_;
+  int y = rect.top() + padding_;
+
+  // Draw timestamp in dim color
+  painter->setFont(font_);
+  painter->setPen(QColor(128, 128, 128));
+  painter->drawText(x, y + base_fm.ascent(), timestamp_);
+  x += timestamp_width_;
+
+  // Draw author in bold
+  painter->setFont(bold_font);
+  painter->setPen(QColor(220, 220, 220));
+  painter->drawText(x, y + base_fm.ascent(), author_);
+
+  // Delegate text content rendering to RichTextLayout
+  QPoint origin(rect.left() + padding_, rect.top() + padding_);
+  content_layout_->paint(painter, origin);
+
+  painter->restore();
+}
+
+bool TextBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
+  // Check timestamp rect first
+  if (!timestamp_tooltip_.isEmpty() && timestamp_rect_.contains(pos)) {
+    // Timestamp is not a hit target for clicks, just tooltip
   }
+
+  // Delegate to RichTextLayout for span hit testing
+  // The layout origin matches what we pass to paint()
+  // But hit_test receives pos in the same coordinate space as paint's rect,
+  // so we need the origin that was used. Since TextBlockRenderer doesn't store
+  // the paint rect, span_rects_ in RichTextLayout are relative to the layout's
+  // internal coordinate system (0,0 being the layout origin).
+  // The old code compared pos directly against span rects that were also in
+  // layout-relative coordinates. We maintain the same behavior by passing
+  // origin (0,0) since the span rects are already layout-relative.
+  QPoint origin(0, 0);
+  return content_layout_->hit_test(pos, origin, result);
+}
+
+QString TextBlockRenderer::tooltip_at(const QPoint& pos) const {
+  if (!timestamp_tooltip_.isEmpty() && timestamp_rect_.contains(pos)) {
+    return timestamp_tooltip_;
+  }
+  return {};
 }
 
 } // namespace kind::gui

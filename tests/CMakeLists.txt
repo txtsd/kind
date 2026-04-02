@@ -30,6 +30,7 @@ add_executable(kind-tests
   gui/mention_resolution_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/rich_text_layout.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/system_message_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/embed_block_renderer.cpp

@@ -1,12 +1,11 @@
 #pragma once
 
 #include "renderers/block_renderer.hpp"
+#include "renderers/rich_text_layout.hpp"
 #include "text/markdown_parser.hpp"
 
 #include <QFont>
-#include <QTextLayout>
 #include <memory>
-#include <vector>
 
 namespace kind::gui {
 
@@ -31,25 +30,9 @@ private:
   int timestamp_width_{0};
   int total_height_{0};
   QRect timestamp_rect_;
+  QFont font_;
 
-  struct SpanInfo {
-    kind::TextSpan span;
-    int start{0};
-    int length{0};
-    QRectF rect;
-  };
-  std::vector<SpanInfo> span_rects_;
-
-  struct CodeBlockInfo {
-    int start{0};
-    int length{0};
-  };
-  std::vector<CodeBlockInfo> code_blocks_;
-
-  std::shared_ptr<QTextLayout> text_layout_;
-
-  void build_layout(const kind::ParsedContent& content, int viewport_width, const QFont& font);
-  void compute_span_rects();
+  std::unique_ptr<RichTextLayout> content_layout_;
 };
 
 } // namespace kind::gui
