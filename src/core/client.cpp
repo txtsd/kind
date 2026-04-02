@@ -442,6 +442,7 @@ private:
         if (dbw) {
           for (const auto& pc : store->private_channels()) {
             emit dbw->channel_write_requested(pc);
+            emit dbw->dm_recipients_write_requested(pc.id, pc.recipients);
           }
         }
       }
@@ -1116,6 +1117,7 @@ void Client::load_cache(std::function<void()> on_complete) {
     std::vector<Snowflake> guild_order;
     std::unordered_map<Snowflake, std::vector<Channel>> guild_channels;
     std::unordered_map<Snowflake, std::vector<Snowflake>> guild_member_roles;
+    std::vector<Channel> dm_channels;
     std::vector<std::pair<Snowflake, ReadState>> read_states;
     std::vector<std::tuple<Snowflake, int, bool>> mute_states;
   };
@@ -1146,12 +1148,13 @@ void Client::load_cache(std::function<void()> on_complete) {
       }
     }
 
+    data->dm_channels = reader.dm_channels();
     data->read_states = reader.read_states();
     data->mute_states = reader.mute_states();
-    log::client()->debug("load_cache worker: read {} guilds, {} channels across {} guilds, {} read_states, {} mute_states",
+    log::client()->debug("load_cache worker: read {} guilds, {} channels across {} guilds, {} dm_channels, {} read_states, {} mute_states",
                          data->guilds.size(), data->guild_channels.size(),
-                         data->guild_channels.size(), data->read_states.size(),
-                         data->mute_states.size());
+                         data->guild_channels.size(), data->dm_channels.size(),
+                         data->read_states.size(), data->mute_states.size());
     return data;
   });
 
@@ -1198,6 +1201,10 @@ void Client::load_cache(std::function<void()> on_complete) {
       store->set_member_roles(guild_id, role_ids);
     }
     log::client()->debug("load_cache: set member roles for {} guilds", data->guild_member_roles.size());
+    if (!data->dm_channels.empty()) {
+      store->bulk_upsert_private_channels(std::move(data->dm_channels));
+    }
+    log::client()->debug("load_cache: loaded {} DM channels", store->private_channels().size());
     store->set_suppress_observers(false);
 
     log::cache()->info("Loaded cache from database");
@@ -1294,6 +1301,9 @@ std::vector<Message> Client::messages(Snowflake channel_id,
 }
 std::optional<User> Client::current_user() const {
   return store_->current_user();
+}
+std::vector<Channel> Client::private_channels() const {
+  return store_->private_channels();
 }
 std::vector<Snowflake> Client::member_roles(Snowflake guild_id) const {
   return store_->member_roles(guild_id);

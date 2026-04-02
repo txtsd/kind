@@ -91,7 +91,8 @@ void DatabaseManager::create_schema() {
       "  name      TEXT,"
       "  position  INTEGER,"
       "  parent_id INTEGER,"
-      "  data      TEXT"
+      "  data            TEXT,"
+      "  last_message_id INTEGER DEFAULT 0"
       ")");
 
   exec(
@@ -164,6 +165,15 @@ void DatabaseManager::create_schema() {
       "  type  INTEGER NOT NULL,"
       "  muted INTEGER NOT NULL DEFAULT 0,"
       "  PRIMARY KEY (id, type)"
+      ")");
+
+  exec(
+      "CREATE TABLE IF NOT EXISTS dm_recipients ("
+      "  channel_id INTEGER,"
+      "  user_id    INTEGER,"
+      "  username   TEXT,"
+      "  avatar     TEXT,"
+      "  PRIMARY KEY (channel_id, user_id)"
       ")");
 
   exec("INSERT OR IGNORE INTO schema_version (version) VALUES (2)");

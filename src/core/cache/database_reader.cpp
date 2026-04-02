@@ -68,7 +68,7 @@ std::vector<Channel> DatabaseReader::channels(Snowflake guild_id) const {
   std::vector<Channel> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.prepare("SELECT id, guild_id, type, name, position, parent_id "
+  q.prepare("SELECT id, guild_id, type, name, position, parent_id, last_message_id "
             "FROM channels WHERE guild_id = :gid");
   q.bindValue(":gid", static_cast<qint64>(guild_id));
   q.exec();
@@ -82,6 +82,7 @@ std::vector<Channel> DatabaseReader::channels(Snowflake guild_id) const {
     if (!q.value(5).isNull()) {
       ch.parent_id = static_cast<Snowflake>(q.value(5).toLongLong());
     }
+    ch.last_message_id = static_cast<Snowflake>(q.value(6).toLongLong());
     result.push_back(std::move(ch));
   }
   log::cache()->debug("DB read: {} channels for guild {}", result.size(), guild_id);
@@ -145,6 +146,37 @@ std::vector<Snowflake> DatabaseReader::member_roles(Snowflake guild_id) const {
     }
   }
   log::cache()->debug("DB read: {} member roles for guild {}", result.size(), guild_id);
+  return result;
+}
+
+std::vector<Channel> DatabaseReader::dm_channels() const {
+  std::vector<Channel> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT id, type, name, last_message_id FROM channels WHERE guild_id = 0 AND type = 1");
+  while (q.next()) {
+    Channel ch;
+    ch.id = static_cast<Snowflake>(q.value(0).toLongLong());
+    ch.type = q.value(1).toInt();
+    ch.name = q.value(2).toString().toStdString();
+    ch.last_message_id = static_cast<Snowflake>(q.value(3).toLongLong());
+    ch.guild_id = 0;
+
+    // Load recipients
+    QSqlQuery rq(db);
+    rq.prepare("SELECT user_id, username, avatar FROM dm_recipients WHERE channel_id = :cid");
+    rq.bindValue(":cid", static_cast<qint64>(ch.id));
+    rq.exec();
+    while (rq.next()) {
+      User user;
+      user.id = static_cast<Snowflake>(rq.value(0).toLongLong());
+      user.username = rq.value(1).toString().toStdString();
+      user.avatar_hash = rq.value(2).toString().toStdString();
+      ch.recipients.push_back(std::move(user));
+    }
+    result.push_back(std::move(ch));
+  }
+  log::cache()->debug("DB read: {} dm channels", result.size());
   return result;
 }
 

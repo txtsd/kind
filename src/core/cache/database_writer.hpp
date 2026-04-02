@@ -46,6 +46,7 @@ public slots:
                         kind::Snowflake last_message_id);
   void write_app_state(QString key, QString value);
   void write_mute_state(kind::Snowflake id, int type, bool muted);
+  void write_dm_recipients(kind::Snowflake channel_id, std::vector<kind::User> recipients);
   void write_mute_state_bulk(std::vector<std::tuple<kind::Snowflake, int, bool>> entries);
   void close_db();
   void flush();
@@ -94,6 +95,8 @@ signals:
                                   int unread_count, kind::Snowflake last_message_id);
   void app_state_write_requested(QString key, QString value);
   void mute_state_write_requested(kind::Snowflake id, int type, bool muted);
+  void dm_recipients_write_requested(kind::Snowflake channel_id,
+                                     std::vector<kind::User> recipients);
   void mute_state_bulk_write_requested(
       std::vector<std::tuple<kind::Snowflake, int, bool>> entries);
   void flush_requested();

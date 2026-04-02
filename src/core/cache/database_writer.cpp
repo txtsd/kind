@@ -18,6 +18,7 @@ Q_DECLARE_METATYPE(kind::User)
 Q_DECLARE_METATYPE(std::vector<kind::Role>)
 Q_DECLARE_METATYPE(std::vector<kind::PermissionOverwrite>)
 Q_DECLARE_METATYPE(std::vector<kind::Snowflake>)
+Q_DECLARE_METATYPE(std::vector<kind::User>)
 using MuteStateEntryVec = std::vector<std::tuple<kind::Snowflake, int, bool>>;
 Q_DECLARE_METATYPE(MuteStateEntryVec)
 
@@ -30,6 +31,8 @@ static const int ow_vec_reg = qRegisterMetaType<std::vector<kind::PermissionOver
     "std::vector<kind::PermissionOverwrite>");
 static const int sf_vec_reg =
     qRegisterMetaType<std::vector<kind::Snowflake>>("std::vector<kind::Snowflake>");
+static const int user_vec_reg =
+    qRegisterMetaType<std::vector<kind::User>>("std::vector<kind::User>");
 static const int mute_vec_reg =
     qRegisterMetaType<MuteStateEntryVec>("MuteStateEntryVec");
 
@@ -95,8 +98,8 @@ void DatabaseWriteWorker::write_channel(kind::Channel channel) {
   ensure_db();
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.prepare("INSERT OR REPLACE INTO channels (id, guild_id, type, name, position, parent_id) "
-            "VALUES (:id, :guild_id, :type, :name, :position, :parent_id)");
+  q.prepare("INSERT OR REPLACE INTO channels (id, guild_id, type, name, position, parent_id, last_message_id) "
+            "VALUES (:id, :guild_id, :type, :name, :position, :parent_id, :last_message_id)");
   q.bindValue(":id", static_cast<qint64>(channel.id));
   q.bindValue(":guild_id", static_cast<qint64>(channel.guild_id));
   q.bindValue(":type", channel.type);
@@ -105,6 +108,7 @@ void DatabaseWriteWorker::write_channel(kind::Channel channel) {
   q.bindValue(":parent_id", channel.parent_id
                                  ? QVariant(static_cast<qint64>(*channel.parent_id))
                                  : QVariant());
+  q.bindValue(":last_message_id", static_cast<qint64>(channel.last_message_id));
   if (!q.exec()) {
     log::cache()->warn("Writer: failed to write channel {}: {}", channel.id,
                        q.lastError().text().toStdString());
@@ -542,6 +546,34 @@ void DatabaseWriteWorker::write_mute_state_bulk(
   log::cache()->debug("DB write: {} mute states (bulk)", entries.size());
 }
 
+void DatabaseWriteWorker::write_dm_recipients(kind::Snowflake channel_id,
+                                               std::vector<kind::User> recipients) {
+  ensure_db();
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  db.transaction();
+
+  QSqlQuery del(db);
+  del.prepare("DELETE FROM dm_recipients WHERE channel_id = :cid");
+  del.bindValue(":cid", static_cast<qint64>(channel_id));
+  del.exec();
+
+  QSqlQuery q(db);
+  q.prepare("INSERT OR REPLACE INTO dm_recipients (channel_id, user_id, username, avatar) "
+            "VALUES (:cid, :uid, :name, :avatar)");
+  for (const auto& user : recipients) {
+    q.bindValue(":cid", static_cast<qint64>(channel_id));
+    q.bindValue(":uid", static_cast<qint64>(user.id));
+    q.bindValue(":name", QString::fromStdString(user.username));
+    q.bindValue(":avatar", QString::fromStdString(user.avatar_hash));
+    if (!q.exec()) {
+      log::cache()->warn("Writer: failed to write dm_recipient {} for channel {}: {}",
+                         user.id, channel_id, q.lastError().text().toStdString());
+    }
+  }
+  db.commit();
+  log::cache()->debug("DB write: {} dm_recipients for channel {}", recipients.size(), channel_id);
+}
+
 void DatabaseWriteWorker::flush() {
   log::cache()->debug("DB flush requested");
   emit flushed();
@@ -583,6 +615,8 @@ DatabaseWriter::DatabaseWriter(const std::string& db_path, QObject* parent)
           &DatabaseWriteWorker::write_app_state);
   connect(this, &DatabaseWriter::mute_state_write_requested, worker_,
           &DatabaseWriteWorker::write_mute_state);
+  connect(this, &DatabaseWriter::dm_recipients_write_requested, worker_,
+          &DatabaseWriteWorker::write_dm_recipients);
   connect(this, &DatabaseWriter::mute_state_bulk_write_requested, worker_,
           &DatabaseWriteWorker::write_mute_state_bulk);
   connect(this, &DatabaseWriter::flush_requested, worker_, &DatabaseWriteWorker::flush);

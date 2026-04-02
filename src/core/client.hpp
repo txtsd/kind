@@ -107,6 +107,7 @@ public:
                                 std::optional<Snowflake> before,
                                 int limit = 50) const;
   std::optional<User> current_user() const;
+  std::vector<Channel> private_channels() const;
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
   bool is_connected() const;
   int latency_ms() const;

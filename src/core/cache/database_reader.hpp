@@ -37,6 +37,7 @@ public:
                                 std::optional<Snowflake> before = {},
                                 int limit = 50) const;
   std::vector<std::pair<Snowflake, ReadState>> read_states() const;
+  std::vector<Channel> dm_channels() const;
   std::vector<std::tuple<Snowflake, int, bool>> mute_states() const;
   std::optional<std::string> app_state(const std::string& key) const;
 
