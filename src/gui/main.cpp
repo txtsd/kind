@@ -306,6 +306,10 @@ int main(int argc, char* argv[]) {
         channel_list->set_channels(qvec, perms, hide_locked);
       }
 
+      // Re-apply mention color preference
+      auto mention_pref = config.get_or<std::string>("appearance.mention_colors", "theme");
+      message_view->set_mention_color_preference(mention_pref == "discord");
+
       // Re-apply unread indicator options
       apply_unread_options();
     });

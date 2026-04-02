@@ -77,6 +77,14 @@ void PreferencesDialog::setup_ui() {
   mention_badge_guild_ = new QCheckBox("Badge on guilds");
   appearance_layout->addRow(mention_badge_guild_);
 
+  // -- Mention colors --
+  appearance_layout->addRow(new QLabel("<b>Mention colors</b>"));
+
+  mention_colors_combo_ = new QComboBox();
+  mention_colors_combo_->addItem("Theme (system accent)", "theme");
+  mention_colors_combo_->addItem("Discord (blue)", "discord");
+  appearance_layout->addRow("Mention colors:", mention_colors_combo_);
+
   pages_->addWidget(appearance_page);
 
   // -- Network page (placeholder) --
@@ -160,6 +168,13 @@ void PreferencesDialog::load_settings() {
   // Mention indicators
   mention_badge_channel_->setChecked(config_.get_or<bool>("appearance.mention_badge_channel", true));
   mention_badge_guild_->setChecked(config_.get_or<bool>("appearance.mention_badge_guild", true));
+
+  // Mention colors
+  auto mention_colors = config_.get_or<std::string>("appearance.mention_colors", "theme");
+  int mention_idx = mention_colors_combo_->findData(QString::fromStdString(mention_colors));
+  if (mention_idx >= 0) {
+    mention_colors_combo_->setCurrentIndex(mention_idx);
+  }
 }
 
 void PreferencesDialog::save_settings() {
@@ -181,6 +196,10 @@ void PreferencesDialog::save_settings() {
   // Mention indicators
   config_.set<bool>("appearance.mention_badge_channel", mention_badge_channel_->isChecked());
   config_.set<bool>("appearance.mention_badge_guild", mention_badge_guild_->isChecked());
+
+  // Mention colors
+  config_.set<std::string>("appearance.mention_colors",
+                           mention_colors_combo_->currentData().toString().toStdString());
 
   config_.save();
 }

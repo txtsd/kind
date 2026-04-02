@@ -47,6 +47,9 @@ private:
   // Mention indicators
   QCheckBox* mention_badge_channel_{};
   QCheckBox* mention_badge_guild_{};
+
+  // Mention colors
+  QComboBox* mention_colors_combo_{};
 };
 
 } // namespace kind::gui
