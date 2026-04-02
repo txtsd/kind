@@ -20,8 +20,8 @@
 
 namespace kind::gui {
 
-static void resolve_mention(kind::TextSpan& span, const kind::Message& message,
-                            const MentionContext& ctx) {
+void resolve_mention(kind::TextSpan& span, const kind::Message& message,
+                     const MentionContext& ctx) {
   uint32_t accent = ctx.use_discord_colors ? 0x5894FF : ctx.accent_color;
   uint32_t accent_fg = 0xFF000000 | accent;
   uint32_t accent_bg = (accent & 0x00FFFFFF) | 0x1E000000;  // alpha ~30

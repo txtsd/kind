@@ -4,6 +4,7 @@
 #include "models/message.hpp"
 #include "models/rendered_message.hpp"
 #include "models/role.hpp"
+#include "text/markdown_parser.hpp"
 
 #include <QFont>
 #include <QPixmap>
@@ -23,6 +24,9 @@ struct MentionContext {
   bool use_discord_colors{false};
   uint32_t accent_color{0x89B4FA};  // default theme accent (Catppuccin blue)
 };
+
+void resolve_mention(kind::TextSpan& span, const kind::Message& message,
+                     const MentionContext& ctx);
 
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
