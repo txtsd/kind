@@ -60,6 +60,11 @@ public:
   void add_observer(StoreObserver* obs);
   void remove_observer(StoreObserver* obs);
 
+  // Suppress observer notifications during bulk loading.
+  // While suppressed, mutations still update internal state
+  // but don't fire on_guilds_updated / on_channels_updated.
+  void set_suppress_observers(bool suppress);
+
 private:
   mutable std::shared_mutex mutex_;
   std::size_t max_messages_per_channel_;
@@ -72,6 +77,7 @@ private:
   std::vector<Snowflake> guild_order_;
   std::map<Snowflake, std::vector<Snowflake>> member_roles_;
   std::map<Snowflake, std::unordered_set<Snowflake>> pending_deletes_;
+  bool suppress_observers_{false};
 
   ObserverList<StoreObserver> observers_;
 

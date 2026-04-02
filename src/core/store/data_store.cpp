@@ -120,6 +120,10 @@ std::optional<User> DataStore::current_user() const {
   return current_user_;
 }
 
+void DataStore::set_suppress_observers(bool suppress) {
+  suppress_observers_ = suppress;
+}
+
 // --- Guild ordering ---
 
 std::vector<Guild> DataStore::build_guild_snapshot_locked() const {
@@ -163,7 +167,7 @@ void DataStore::set_guild_order(const std::vector<Snowflake>& ordered_ids) {
     }
   }
   if (!guild_snapshot.empty()) {
-    observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
+    if (!suppress_observers_) observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
   }
 }
 
@@ -206,7 +210,7 @@ void DataStore::upsert_guild(Guild guild) {
       guild_snapshot = build_guild_snapshot_locked();
     }
   }
-  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
+  if (!suppress_observers_) observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
 void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
@@ -226,7 +230,7 @@ void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
     }
   }
   log::store()->debug("bulk_upsert_guilds: notifying observers with {} guilds", guild_snapshot.size());
-  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
+  if (!suppress_observers_) observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
 void DataStore::remove_guild(Snowflake id) {
@@ -245,7 +249,7 @@ void DataStore::remove_guild(Snowflake id) {
       guild_snapshot = build_guild_snapshot_locked();
     }
   }
-  observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
+  if (!suppress_observers_) observers_.notify([&guild_snapshot](StoreObserver* o) { o->on_guilds_updated(guild_snapshot); });
 }
 
 void DataStore::upsert_channel(Channel channel) {
@@ -265,7 +269,7 @@ void DataStore::upsert_channel(Channel channel) {
       channel_snapshot = channels;
     }
   }
-  observers_.notify(
+  if (!suppress_observers_) observers_.notify(
       [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
 }
 
@@ -281,7 +285,7 @@ void DataStore::bulk_upsert_channels(Snowflake guild_id, std::vector<Channel> ch
   }
   log::store()->debug("bulk_upsert_channels: notifying observers with {} channels for guild {}",
                       channel_snapshot.size(), guild_id);
-  observers_.notify(
+  if (!suppress_observers_) observers_.notify(
       [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
 }
 
@@ -304,7 +308,7 @@ void DataStore::remove_channel(Snowflake id) {
     channel_messages_.erase(id);
   }
   if (guild_id != 0) {
-    observers_.notify(
+    if (!suppress_observers_) observers_.notify(
         [guild_id, &channel_snapshot](StoreObserver* o) { o->on_channels_updated(guild_id, channel_snapshot); });
   }
 }
@@ -434,7 +438,7 @@ void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
       message_snapshot.assign(deque.begin(), deque.end());
     }
   }
-  observers_.notify(
+  if (!suppress_observers_) observers_.notify(
       [channel_id, &message_snapshot](StoreObserver* o) { o->on_messages_updated(channel_id, message_snapshot); });
 }
 
@@ -472,7 +476,7 @@ void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> m
     }
   }
   if (!added.empty()) {
-    observers_.notify(
+    if (!suppress_observers_) observers_.notify(
         [channel_id, &added](StoreObserver* o) { o->on_messages_prepended(channel_id, added); });
   }
 }

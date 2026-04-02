@@ -1148,6 +1148,11 @@ void Client::load_cache(std::function<void()> on_complete) {
     }
     log::client()->debug("load_cache: loaded {} mute states", data->mute_states.size());
 
+    // Suppress store observers during bulk cache load. The on_complete
+    // callback handles GUI updates once all data is in place. Without
+    // suppression, observer signals fire before channels are loaded,
+    // producing guild snapshots with empty channel lists.
+    store->set_suppress_observers(true);
     auto guilds_count = data->guilds.size();
     store->bulk_upsert_guilds(std::move(data->guilds));
     log::client()->debug("load_cache: upserted {} guilds", guilds_count);
@@ -1163,6 +1168,7 @@ void Client::load_cache(std::function<void()> on_complete) {
       store->set_member_roles(guild_id, role_ids);
     }
     log::client()->debug("load_cache: set member roles for {} guilds", data->guild_member_roles.size());
+    store->set_suppress_observers(false);
 
     log::cache()->info("Loaded cache from database");
 
