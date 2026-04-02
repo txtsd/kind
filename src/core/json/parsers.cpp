@@ -116,6 +116,19 @@ std::optional<Channel> parse_channel(const QJsonObject& obj) {
       channel.permission_overwrites.push_back(std::move(*ow));
     }
   }
+
+  auto recipients_array = obj["recipients"].toArray();
+  for (const auto& val : recipients_array) {
+    auto user = parse_user(val.toObject());
+    if (user) {
+      channel.recipients.push_back(std::move(*user));
+    }
+  }
+
+  if (obj.contains("last_message_id") && !obj["last_message_id"].isNull()) {
+    channel.last_message_id = static_cast<Snowflake>(obj["last_message_id"].toString().toULongLong());
+  }
+
   return channel;
 }
 
