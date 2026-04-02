@@ -1,12 +1,14 @@
 #include "app.hpp"
 #include "client.hpp"
 #include "config/config_manager.hpp"
+#include "config/platform_paths.hpp"
 #include "logging.hpp"
 #include "dialogs/login_dialog.hpp"
 #include "dialogs/new_dm_dialog.hpp"
 #include "dialogs/preferences_dialog.hpp"
 #include "permissions.hpp"
 #include "rest/qt_rest_client.hpp"
+#include "text/emoji_map.hpp"
 #include "version.hpp"
 #include "widgets/channel_list.hpp"
 #include "widgets/dm_list.hpp"
@@ -21,11 +23,14 @@
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QNetworkAccessManager>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <chrono>
+#include <filesystem>
 #include <unordered_map>
 
 int main(int argc, char* argv[]) {
@@ -738,6 +743,27 @@ int main(int argc, char* argv[]) {
 
   // Show the window immediately — empty, data arrives asynchronously
   main_window.show();
+
+  // Download emoji shortcode data if not cached or stale (older than 7 days)
+  {
+    auto emoji_cache = kind::platform_paths().cache_dir / "emoji.json";
+    bool need_download = !std::filesystem::exists(emoji_cache);
+    if (!need_download) {
+      auto mod_time = std::filesystem::last_write_time(emoji_cache);
+      auto age = std::filesystem::file_time_type::clock::now() - mod_time;
+      auto days =
+          std::chrono::duration_cast<std::chrono::hours>(age).count() / 24;
+      if (days >= 7) {
+        need_download = true;
+        kind::log::client()->debug(
+            "emoji: cache is {} days old, refreshing", days);
+      }
+    }
+    if (need_download) {
+      auto* emoji_nam = new QNetworkAccessManager(&main_window);
+      kind::download_emoji_data(emoji_nam);
+    }
+  }
 
   // Kick off async cache load (DB reads on worker thread)
   if (has_account) {
