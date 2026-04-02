@@ -90,6 +90,17 @@ int main(int argc, char* argv[]) {
     message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
   }
 
+  // Mention color preference
+  auto mention_pref = config.get_or<std::string>("appearance.mention_colors", "theme");
+  message_view->set_mention_color_preference(mention_pref == "discord");
+
+  // Accent color from palette
+  auto accent = qApp->palette().color(QPalette::Normal, QPalette::Accent);
+  uint32_t accent_rgb = (static_cast<uint32_t>(accent.red()) << 16) |
+                        (static_cast<uint32_t>(accent.green()) << 8) |
+                        static_cast<uint32_t>(accent.blue());
+  message_view->set_accent_color(accent_rgb);
+
   // Set ReadStateManager and MuteStateManager on channel and guild models
   channel_list->channel_model()->set_read_state_manager(client.read_state_manager());
   channel_list->channel_model()->set_mute_state_manager(client.mute_state_manager());
@@ -502,6 +513,10 @@ int main(int argc, char* argv[]) {
       QVector<kind::Channel> qvec(dms.begin(), dms.end());
       dm_list->set_channels(qvec);
 
+      // Clear guild context for DMs
+      message_view->set_guild_context({}, {});
+      message_view->set_member_roles({});
+
       // Clear message view
       current_channel_id = 0;
       message_view->switch_channel(0, {});
@@ -536,6 +551,14 @@ int main(int argc, char* argv[]) {
       auto perms = compute_channel_permissions(guild_id, qvec);
       bool hide_locked = config.get_or<bool>("appearance.hide_locked_channels", false);
       channel_list->set_channels(qvec, perms, hide_locked);
+
+      // Set guild context for mention resolution
+      auto guild_opt_ctx = client.guild(guild_id);
+      if (guild_opt_ctx) {
+        message_view->set_guild_context(guild_opt_ctx->roles, cached_channels);
+      }
+      auto ctx_member_roles = client.member_roles(guild_id);
+      message_view->set_member_roles(ctx_member_roles);
 
       if (last_channel != 0) {
         auto* chan_model = channel_list->channel_model();
@@ -715,7 +738,7 @@ int main(int argc, char* argv[]) {
   // Kick off async cache load (DB reads on worker thread)
   if (has_account) {
     client.load_cache([&client, server_list, &select_guild_action, &select_channel_action,
-                       &current_guild_id, status_bar]() {
+                       &current_guild_id, status_bar, message_view]() {
       auto cached_guilds = client.guilds();
       if (!cached_guilds.empty()) {
         server_list->blockSignals(true);
@@ -735,6 +758,7 @@ int main(int argc, char* argv[]) {
       auto cached_user = client.current_user();
       if (cached_user) {
         status_bar->set_user(QString::fromStdString(cached_user->username));
+        message_view->set_current_user_id(cached_user->id);
       }
       if (current_guild_id == 0) {
         auto last = client.last_selection();
@@ -751,8 +775,9 @@ int main(int argc, char* argv[]) {
   // Restore guild/channel on login success (handles fresh data from READY)
   QObject::connect(&app, &kind::gui::App::login_success,
                    [&client, &select_guild_action, &select_channel_action,
-                    &current_guild_id, &current_channel_id]
-                   (const kind::User&) {
+                    &current_guild_id, &current_channel_id, message_view]
+                   (const kind::User& user) {
+    message_view->set_current_user_id(user.id);
     // Only restore if nothing is currently selected (first login)
     if (current_guild_id == 0) {
       auto last = client.last_selection();

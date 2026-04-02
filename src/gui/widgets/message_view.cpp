@@ -63,7 +63,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     layouts.reserve(msgs.size());
     for (const auto& msg : msgs) {
       auto images = cached_pixmaps_for(msg);
-      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_));
+      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
     }
     model_->set_messages(msgs, std::move(layouts));
   });
@@ -173,7 +173,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
     auto images = cached_pixmaps_for(msg);
-    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_));
+    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
     request_images(msg);
 
     // Try to resolve reply context from locally loaded messages
@@ -294,7 +294,7 @@ void MessageView::add_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context()));
   request_images(msg);
 
   if (!auto_scroll_) {
@@ -310,7 +310,7 @@ void MessageView::update_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context()));
   request_images(msg);
 }
 
@@ -396,6 +396,39 @@ void MessageView::set_edited_indicator(kind::gui::EditedIndicator style) {
   edited_indicator_ = style;
 }
 
+void MessageView::set_guild_context(const std::vector<kind::Role>& roles,
+                                     const std::vector<kind::Channel>& channels) {
+  guild_roles_ = roles;
+  guild_channels_ = channels;
+}
+
+void MessageView::set_current_user_id(kind::Snowflake user_id) {
+  current_user_id_ = user_id;
+}
+
+void MessageView::set_member_roles(const std::vector<kind::Snowflake>& role_ids) {
+  member_role_ids_ = role_ids;
+}
+
+void MessageView::set_mention_color_preference(bool use_discord_colors) {
+  use_discord_mention_colors_ = use_discord_colors;
+}
+
+void MessageView::set_accent_color(uint32_t color) {
+  accent_color_ = color;
+}
+
+MentionContext MessageView::build_mention_context() const {
+  MentionContext ctx;
+  ctx.current_user_id = current_user_id_;
+  ctx.current_user_role_ids = member_role_ids_;
+  ctx.guild_roles = guild_roles_;
+  ctx.guild_channels = guild_channels_;
+  ctx.use_discord_colors = use_discord_mention_colors_;
+  ctx.accent_color = accent_color_;
+  return ctx;
+}
+
 void MessageView::position_jump_pill() {
   int pill_x = (viewport()->width() - jump_pill_->width()) / 2;
   int pill_y = viewport()->height() - jump_pill_->height() - 8;
@@ -470,7 +503,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
 
               const auto& msg = model_->messages()[row_idx];
               auto images = cached_pixmaps_for(msg);
-              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_));
+              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
 
               // Measure new height after re-render
               int new_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();

@@ -39,6 +39,12 @@ public:
   void set_image_cache(kind::ImageCache* cache);
   void set_read_state_manager(kind::ReadStateManager* manager);
   void set_edited_indicator(kind::gui::EditedIndicator style);
+  void set_guild_context(const std::vector<kind::Role>& roles,
+                         const std::vector<kind::Channel>& channels);
+  void set_current_user_id(kind::Snowflake user_id);
+  void set_member_roles(const std::vector<kind::Snowflake>& role_ids);
+  void set_mention_color_preference(bool use_discord_colors);
+  void set_accent_color(uint32_t color);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
   void scroll_to_message(kind::Snowflake message_id);
@@ -99,6 +105,15 @@ private:
   void updateGeometries() override;
 
   kind::gui::EditedIndicator edited_indicator_{kind::gui::EditedIndicator::Text};
+
+  kind::Snowflake current_user_id_{0};
+  std::vector<kind::Role> guild_roles_;
+  std::vector<kind::Channel> guild_channels_;
+  std::vector<kind::Snowflake> member_role_ids_;
+  bool use_discord_mention_colors_{false};
+  uint32_t accent_color_{0x89B4FA};
+
+  kind::gui::MentionContext build_mention_context() const;
 
   kind::Snowflake highlight_id_{0};
   qreal highlight_opacity_{0.0};
