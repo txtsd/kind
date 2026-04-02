@@ -180,6 +180,7 @@ void AuthManager::validate_token(std::string token, std::string token_type, uint
                 current_user_ = user;
               }
 
+              token_store_.set_account_id(user.id);
               token_store_.save_token(token, token_type, [](bool success) {
                 if (!success) {
                   log::auth()->warn("validate_token: token persistence to keychain failed");

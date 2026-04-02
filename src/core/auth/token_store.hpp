@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -10,6 +11,10 @@ namespace kind {
 class TokenStore {
 public:
   virtual ~TokenStore() = default;
+
+  // Set the account ID used to scope keychain keys. Default no-op for
+  // implementations that don't need per-account scoping (e.g. file-based).
+  virtual void set_account_id(uint64_t /*user_id*/) {}
 
   struct StoredToken {
     std::string token;

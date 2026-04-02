@@ -64,8 +64,10 @@ int main(int argc, char* argv[]) {
 
   kind::ConfigManager config;
   kind::Client client(config);
+  // Skip loading cached account data when auto-login is disabled
+  bool force_dialog = qapp.arguments().contains("--no-autologin");
   // Open the last active account's database (schema only, no data loading)
-  bool has_account = client.try_load_last_account();
+  bool has_account = !force_dialog && client.try_load_last_account();
   kind::gui::App app(client);
 
   // Load cached data from disk (async — DB reads on worker thread)
@@ -833,7 +835,6 @@ int main(int argc, char* argv[]) {
   });
 
   // Load saved token and attempt auto-login (non-blocking, async keychain read)
-  bool force_dialog = qapp.arguments().contains("--no-autologin");
 
   // Connect login failure handler before async token load to avoid races
   QObject::connect(&app, &kind::gui::App::login_failure,

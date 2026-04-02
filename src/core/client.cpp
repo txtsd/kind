@@ -53,6 +53,9 @@ public:
   void on_login_success(const User& user) override {
     client_.store_->set_current_user(user);
 
+    // Scope the keychain key to this account for future token operations
+    client_.token_store_->set_account_id(user.id);
+
     // Initialize per-account database now that we know the user ID
     if (!client_.test_mode_ && !client_.db_manager_) {
       client_.init_account_db(user.id);
@@ -1206,6 +1209,9 @@ bool Client::try_load_last_account() {
   if (user_id == 0) {
     return false;
   }
+
+  // Scope the keychain key to this account before any token operations
+  token_store_->set_account_id(user_id);
 
   init_account_db(user_id);
   return db_reader_ != nullptr;
