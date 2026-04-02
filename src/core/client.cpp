@@ -881,19 +881,23 @@ void Client::saved_token(TokenStore::LoadCallback on_complete) const {
 }
 
 void Client::login_with_token(std::string_view token, std::string_view token_type) {
+  log::client()->debug("login_with_token: type={}, token_length={}", token_type, token.size());
   auth_->login_with_token(token, token_type);
 }
 
 void Client::login_with_credentials(std::string_view email, std::string_view password) {
+  log::client()->debug("login_with_credentials: email={}", email);
   auth_->login_with_credentials(email, password);
 }
 
 void Client::submit_mfa_code(std::string_view code) {
+  log::client()->debug("submit_mfa_code");
   auth_->submit_mfa_code(code);
 }
 
 void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
                              const std::string& emoji, bool add) {
+  log::client()->debug("toggle_reaction: channel={}, message={}, emoji={}, add={}", channel_id, message_id, emoji, add);
   auto path = endpoints::reaction_url(channel_id, message_id, emoji);
   if (add) {
     rest_->put(path, "", [channel_id, message_id](RestClient::Response response) {
@@ -931,6 +935,7 @@ void Client::ack_message(Snowflake channel_id, Snowflake message_id) {
 }
 
 void Client::send_message(Snowflake channel_id, std::string_view content) {
+  log::client()->debug("send_message: channel={}, length={}", channel_id, content.size());
   QJsonObject body;
   body["content"] = QString::fromUtf8(content.data(), static_cast<int>(content.size()));
   std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
@@ -1003,6 +1008,7 @@ void Client::fetch_single_message(Snowflake channel_id, Snowflake message_id) {
 }
 
 void Client::create_dm(Snowflake recipient_id) {
+  log::client()->debug("create_dm: recipient={}", recipient_id);
   QJsonObject body;
   QJsonArray recipients;
   recipients.append(QString::number(recipient_id));
@@ -1041,6 +1047,7 @@ Snowflake Client::guild_id_for_channel(Snowflake channel_id) const {
 }
 
 void Client::select_guild(Snowflake guild_id) {
+  log::client()->debug("select_guild: guild={}", guild_id);
   active_guild_id_.store(guild_id);
 
   rest_->get(endpoints::guild_channels(guild_id), [this, guild_id](RestClient::Response response) {
@@ -1085,6 +1092,7 @@ void Client::select_guild(Snowflake guild_id) {
 }
 
 void Client::select_channel(Snowflake channel_id) {
+  log::client()->debug("select_channel: channel={}", channel_id);
   active_channel_id_.store(channel_id);
 
   std::string path = endpoints::channel_messages(channel_id);
@@ -1171,10 +1179,12 @@ void Client::fetch_message_history(Snowflake channel_id, std::optional<Snowflake
 }
 
 void Client::logout() {
+  log::client()->debug("logout");
   auth_->logout();
 }
 
 bool Client::try_load_last_account() {
+  log::client()->debug("try_load_last_account");
   if (!db_path_override_.empty()) {
     // Test mode: use the override path directly
     init_account_db(0);
@@ -1379,6 +1389,7 @@ void Client::save_cache() {
 }
 
 void Client::save_last_selection(Snowflake guild_id, Snowflake channel_id) {
+  log::client()->debug("save_last_selection: guild={}, channel={}", guild_id, channel_id);
   if (db_writer_) {
     emit db_writer_->app_state_write_requested("last_guild_id", QString::number(guild_id));
     emit db_writer_->app_state_write_requested("last_channel_id", QString::number(channel_id));
@@ -1386,6 +1397,7 @@ void Client::save_last_selection(Snowflake guild_id, Snowflake channel_id) {
 }
 
 void Client::save_guild_channel(Snowflake guild_id, Snowflake channel_id) {
+  log::client()->debug("save_guild_channel: guild={}, channel={}", guild_id, channel_id);
   if (db_writer_) {
     auto key = "guild_channel_" + std::to_string(guild_id);
     emit db_writer_->app_state_write_requested(QString::fromStdString(key), QString::number(channel_id));

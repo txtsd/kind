@@ -305,6 +305,7 @@ Snowflake DataStore::guild_id_for_channel(Snowflake channel_id) const {
 // --- Mutations ---
 
 void DataStore::set_current_user(User user) {
+  log::store()->debug("set_current_user: {}", user.username);
   {
     std::unique_lock lock(mutex_);
     users_[user.id] = user;
@@ -313,6 +314,7 @@ void DataStore::set_current_user(User user) {
 }
 
 void DataStore::upsert_guild(Guild guild) {
+  log::store()->debug("upsert_guild: id={}", guild.id);
   Snowflake guild_id = guild.id;
   std::vector<Guild> guild_snapshot;
   {
@@ -349,6 +351,7 @@ void DataStore::bulk_upsert_guilds(std::vector<Guild> guilds) {
 }
 
 void DataStore::remove_guild(Snowflake id) {
+  log::store()->debug("remove_guild: id={}", id);
   std::vector<Guild> guild_snapshot;
   {
     std::unique_lock lock(mutex_);
@@ -368,6 +371,7 @@ void DataStore::remove_guild(Snowflake id) {
 }
 
 void DataStore::upsert_channel(Channel channel) {
+  log::store()->debug("upsert_channel: id={}, guild={}", channel.id, channel.guild_id);
   Snowflake guild_id = channel.guild_id;
   std::vector<Channel> channel_snapshot;
   {
@@ -405,6 +409,7 @@ void DataStore::bulk_upsert_channels(Snowflake guild_id, std::vector<Channel> ch
 }
 
 void DataStore::remove_channel(Snowflake id) {
+  log::store()->debug("remove_channel: id={}", id);
   Snowflake guild_id = 0;
   std::vector<Channel> channel_snapshot;
   {
@@ -429,6 +434,7 @@ void DataStore::remove_channel(Snowflake id) {
 }
 
 void DataStore::add_message(Message msg) {
+  log::store()->trace("add_message: id={}, channel={}", msg.id, msg.channel_id);
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
@@ -454,6 +460,7 @@ void DataStore::add_message(Message msg) {
 }
 
 void DataStore::update_message(Message msg) {
+  log::store()->trace("update_message: id={}, channel={}", msg.id, msg.channel_id);
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
@@ -512,6 +519,7 @@ std::optional<Message> DataStore::update_reaction(Snowflake channel_id, Snowflak
 }
 
 void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
+  log::store()->debug("remove_message: id={}, channel={}", message_id, channel_id);
   {
     std::unique_lock lock(mutex_);
     bool found = false;
@@ -534,6 +542,7 @@ void DataStore::remove_message(Snowflake channel_id, Snowflake message_id) {
 }
 
 void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
+  log::store()->debug("set_messages: {} messages for channel {}", msgs.size(), channel_id);
   std::vector<Message> message_snapshot;
   {
     std::unique_lock lock(mutex_);
@@ -558,6 +567,7 @@ void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
 }
 
 void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> msgs) {
+  log::store()->debug("add_messages_before: {} messages for channel {}", msgs.size(), channel_id);
   std::vector<Message> added;
   {
     std::unique_lock lock(mutex_);
