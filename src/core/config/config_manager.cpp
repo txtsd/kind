@@ -82,11 +82,126 @@ std::filesystem::path ConfigManager::path() const {
   return path_;
 }
 
+void ConfigManager::set_active_account(uint64_t user_id) {
+  std::unique_lock lock(mutex_);
+  active_account_id_ = user_id;
+  if (user_id != 0) {
+    account_prefix_ = "account." + std::to_string(user_id) + ".";
+    log::config()->debug("Active account set to {}", user_id);
+  } else {
+    account_prefix_.clear();
+    log::config()->debug("Active account cleared");
+  }
+}
+
+uint64_t ConfigManager::active_account() const {
+  std::shared_lock lock(mutex_);
+  return active_account_id_;
+}
+
+std::vector<ConfigManager::KnownAccount> ConfigManager::known_accounts() const {
+  std::shared_lock lock(mutex_);
+  std::vector<KnownAccount> result;
+
+  auto* known = table_.get("known_accounts");
+  if (!known || !known->is_table()) {
+    return result;
+  }
+
+  auto* entries = known->as_table()->get("entries");
+  if (!entries || !entries->is_array()) {
+    return result;
+  }
+
+  for (const auto& entry : *entries->as_array()) {
+    if (!entry.is_table()) continue;
+    auto* tbl = entry.as_table();
+
+    KnownAccount account;
+    auto* uid_node = tbl->get("user_id");
+    if (uid_node) {
+      auto val = uid_node->value<int64_t>();
+      if (val) {
+        account.user_id = static_cast<uint64_t>(*val);
+      }
+    }
+
+    auto* username_node = tbl->get("username");
+    if (username_node) {
+      auto val = username_node->value<std::string>();
+      if (val) {
+        account.username = *val;
+      }
+    }
+
+    if (account.user_id != 0) {
+      result.push_back(std::move(account));
+    }
+  }
+
+  log::config()->debug("Loaded {} known accounts", result.size());
+  return result;
+}
+
+void ConfigManager::add_known_account(uint64_t user_id, const std::string& username) {
+  std::unique_lock lock(mutex_);
+
+  // Ensure known_accounts table exists
+  auto* known = table_.get("known_accounts");
+  if (!known || !known->is_table()) {
+    table_.insert("known_accounts", toml::table{});
+    known = table_.get("known_accounts");
+  }
+
+  auto* known_tbl = known->as_table();
+  auto* entries = known_tbl->get("entries");
+  if (!entries || !entries->is_array()) {
+    known_tbl->insert("entries", toml::array{});
+    entries = known_tbl->get("entries");
+  }
+
+  auto* arr = entries->as_array();
+
+  // Check if this user_id already exists and update if so
+  for (auto& entry : *arr) {
+    if (!entry.is_table()) continue;
+    auto* tbl = entry.as_table();
+    auto* uid_node = tbl->get("user_id");
+    if (uid_node) {
+      auto val = uid_node->value<int64_t>();
+      if (val && static_cast<uint64_t>(*val) == user_id) {
+        tbl->insert_or_assign("username", username);
+        log::config()->debug("Updated known account: {} ({})", username, user_id);
+        return;
+      }
+    }
+  }
+
+  // Add new entry
+  toml::table entry;
+  entry.insert("user_id", static_cast<int64_t>(user_id));
+  entry.insert("username", username);
+  arr->push_back(std::move(entry));
+
+  log::config()->debug("Added known account: {} ({})", username, user_id);
+}
+
 toml::node* ConfigManager::navigate(std::string_view key) {
   return const_cast<toml::node*>(std::as_const(*this).navigate(key));
 }
 
 const toml::node* ConfigManager::navigate(std::string_view key) const {
+  // If an account is active, try account-scoped key first
+  if (active_account_id_ != 0) {
+    auto account_key = account_prefix_ + std::string(key);
+    auto* result = navigate_raw(account_key);
+    if (result) return result;
+  }
+  // Fall back to global key
+  return navigate_raw(key);
+}
+
+const toml::node* ConfigManager::navigate_raw(std::string_view key) const {
   std::string key_str(key);
   const toml::table* current = &table_;
   std::string::size_type start = 0;
@@ -109,60 +224,29 @@ const toml::node* ConfigManager::navigate(std::string_view key) const {
 toml::table ConfigManager::default_config() {
   return toml::parse(R"(
 [general]
-frontend = "gui"
 log_level = "info"
-log_file = ""
-
-[auth]
-token = ""
-token_type = "user"
-store_credentials = false
 
 [appearance]
-theme = "dark"
-font_family = ""
-font_size = 0
-timestamp_format = "%H:%M"
-show_avatars = true
-compact_mode = false
-hide_locked_channels = true
-message_grouping_seconds = 300
-
-[appearance.tui]
-color_mode = "auto"
-mouse_enabled = true
-unicode_borders = true
+guild_display = "icon_text"
+mention_colors = "theme"
+edited_indicator = "text"
+hide_locked_channels = false
+dm_display = "both"
+channel_unread_bar = true
+channel_unread_badge = true
+guild_unread_bar = true
+guild_unread_badge = true
+dm_unread_bar = true
+dm_unread_badge = true
+mention_badge_channel = true
+mention_badge_guild = true
+mention_badge_dm = true
 
 [behavior]
 max_messages_per_channel = 500
-fetch_history_on_channel_switch = true
-typing_indicator_enabled = true
-send_typing_indicator = true
-reconnect_max_retries = 10
 reconnect_base_delay_ms = 1000
 reconnect_max_delay_ms = 30000
-
-[keybinds]
-next_server = "Alt+Down"
-prev_server = "Alt+Up"
-next_channel = "Ctrl+Down"
-prev_channel = "Ctrl+Up"
-focus_message_input = "i"
-scroll_up = "PageUp"
-scroll_down = "PageDown"
-quit = "Ctrl+Q"
-
-[notifications]
-enabled = true
-sound = false
-desktop = true
-flash_taskbar = true
-
-[network]
-api_base_url = "https://discord.com/api/v10"
-gateway_url = ""
-proxy = ""
-request_timeout_ms = 30000
+reconnect_max_retries = 10
 )"sv);
 }
 

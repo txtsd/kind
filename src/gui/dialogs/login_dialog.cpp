@@ -1,20 +1,42 @@
 #include "login_dialog.hpp"
 
+#include "logging.hpp"
+
 #include <QFormLayout>
 #include <QSettings>
 #include <QVBoxLayout>
 
 namespace kind::gui {
 
-LoginDialog::LoginDialog(QWidget* parent) : QDialog(parent) {
+LoginDialog::LoginDialog(const std::vector<ConfigManager::KnownAccount>& known_accounts,
+                         QWidget* parent)
+    : QDialog(parent) {
   setWindowTitle("kind - Login");
   setMinimumWidth(400);
-  setup_ui();
+  setup_ui(known_accounts);
   setup_connections();
 }
 
-void LoginDialog::setup_ui() {
+void LoginDialog::setup_ui(const std::vector<ConfigManager::KnownAccount>& known_accounts) {
   auto* main_layout = new QVBoxLayout(this);
+
+  // Known accounts dropdown (shown above tabs when accounts exist)
+  if (!known_accounts.empty()) {
+    account_combo_ = new QComboBox(this);
+
+    for (const auto& acct : known_accounts) {
+      auto label = QString::fromStdString(acct.username)
+                   + " (" + QString::number(acct.user_id) + ")";
+      account_combo_->addItem(label, QVariant::fromValue(static_cast<qulonglong>(acct.user_id)));
+    }
+    account_combo_->addItem("New account", QVariant::fromValue(static_cast<qulonglong>(0)));
+
+    auto* account_layout = new QFormLayout();
+    account_layout->addRow("Account:", account_combo_);
+    main_layout->addLayout(account_layout);
+
+    log::gui()->debug("LoginDialog: populated {} known accounts in dropdown", known_accounts.size());
+  }
 
   tab_widget_ = new QTabWidget(this);
 
@@ -117,6 +139,33 @@ void LoginDialog::setup_connections() {
       emit mfa_code_submitted(code);
     }
   });
+
+  // Wire account dropdown to load token from keychain
+  if (account_combo_) {
+    connect(account_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+      if (index < 0) return;
+      auto user_id = account_combo_->itemData(index).value<qulonglong>();
+
+      if (user_id == 0) {
+        // "New account" selected: clear token input
+        token_input_->clear();
+        log::gui()->debug("LoginDialog: 'New account' selected, cleared token input");
+        return;
+      }
+
+      log::gui()->debug("LoginDialog: account {} selected, loading token from keychain", user_id);
+
+      if (token_loader_) {
+        token_loader_(user_id, [this](const std::string& token, const std::string& token_type) {
+          // This callback may be called asynchronously, so ensure we're on the UI thread
+          QMetaObject::invokeMethod(this, [this, token, token_type]() {
+            load_saved_token(token, token_type);
+            log::gui()->debug("LoginDialog: token loaded for selected account");
+          });
+        });
+      }
+    });
+  }
 }
 
 void LoginDialog::show_error(const QString& message) {
@@ -152,6 +201,10 @@ void LoginDialog::load_saved_token(const std::string& token, const std::string& 
 
 bool LoginDialog::auto_login_enabled() const {
   return auto_login_checkbox_->isChecked();
+}
+
+void LoginDialog::set_token_loader(TokenLoader loader) {
+  token_loader_ = std::move(loader);
 }
 
 } // namespace kind::gui

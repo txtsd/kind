@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstdint>
 #include <memory>
 
 namespace kind::log {
@@ -11,6 +12,10 @@ void init();
 
 // Initialize with console-only logging (no file sink). For tests.
 void init_console_only();
+
+// Reinitialize the file sink to an account-scoped log directory.
+// Keeps the console sink unchanged. Call after login when user ID is known.
+void reinit_for_account(uint64_t user_id);
 
 // Apply log level spec from --log-level flag.
 // Format: "debug" (global) or "gateway=debug,rest=warn" (per-subsystem)

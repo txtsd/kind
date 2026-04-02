@@ -270,8 +270,20 @@ int main(int argc, char* argv[]) {
                      status_bar, &kind::gui::StatusBar::on_request_finished);
   }
 
-  // Login dialog
-  kind::gui::LoginDialog login_dialog;
+  // Login dialog with known accounts
+  auto known_accounts = config.known_accounts();
+  kind::gui::LoginDialog login_dialog(known_accounts);
+
+  // Wire token loader so the dropdown can fetch tokens from keychain
+  login_dialog.set_token_loader([&client](uint64_t user_id, auto on_loaded) {
+    // Temporarily scope the keychain to the selected account
+    client.token_store_for_login()->set_account_id(user_id);
+    client.saved_token([on_loaded = std::move(on_loaded)](std::optional<kind::TokenStore::StoredToken> saved) {
+      if (saved) {
+        on_loaded(saved->token, saved->token_type);
+      }
+    });
+  });
 
   // Track the currently selected guild and channel for filtering
   kind::Snowflake current_guild_id = 0;

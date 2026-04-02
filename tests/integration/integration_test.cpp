@@ -114,8 +114,6 @@ protected:
     std::filesystem::create_directories(config_dir_);
 
     config_ = std::make_unique<kind::ConfigManager>(config_dir_ / "config.toml");
-    config_->set<std::string>("network.api_base_url", server_->rest_base_url());
-    config_->set<std::string>("network.gateway_url", server_->gateway_url());
 
     // Set up mock server data
     server_->set_token("test-valid-token");
@@ -141,6 +139,8 @@ protected:
     // Use test-specific keychain and database to avoid touching the user's real data
     auto test_db = (config_dir_ / "test.db").string();
     client_ = std::make_unique<kind::Client>(*config_, "kind-test", test_db);
+    client_->set_api_base_url(server_->rest_base_url());
+    config_->set<std::string>("network.gateway_url", server_->gateway_url());
   }
 
   std::unique_ptr<kind::test::MockDiscordServer> server_;

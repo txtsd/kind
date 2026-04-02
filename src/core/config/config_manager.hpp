@@ -2,11 +2,13 @@
 
 #include "config/platform_paths.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 #include <toml++/toml.hpp>
 
 namespace kind {
@@ -25,14 +27,34 @@ public:
   void reload();
   std::filesystem::path path() const;
 
+  // Account scoping: when active, get() checks [account.{user_id}.{key}]
+  // first, falling back to global. set() always writes to the account section.
+  void set_active_account(uint64_t user_id);
+  uint64_t active_account() const;
+
+  // Known accounts management
+  struct KnownAccount {
+    uint64_t user_id{0};
+    std::string username;
+  };
+  std::vector<KnownAccount> known_accounts() const;
+  void add_known_account(uint64_t user_id, const std::string& username);
+
 private:
   static toml::table default_config();
+  const toml::node* navigate_raw(std::string_view key) const;
   toml::node* navigate(std::string_view key);
   const toml::node* navigate(std::string_view key) const;
+
+  // Navigate/create intermediate tables for set operations
+  static void set_at_key(toml::table& table, std::string_view key, auto value);
 
   std::filesystem::path path_;
   toml::table table_;
   mutable std::shared_mutex mutex_;
+
+  uint64_t active_account_id_{0};
+  std::string account_prefix_; // "account.{user_id}." when active
 };
 
 // Template implementations
@@ -66,15 +88,22 @@ template <typename T> T ConfigManager::get_or(std::string_view key, T default_va
 template <typename T> void ConfigManager::set(std::string_view key, T value) {
   std::unique_lock lock(mutex_);
 
+  // When an account is active, write to the account section
+  std::string actual_key;
+  if (active_account_id_ != 0) {
+    actual_key = account_prefix_ + std::string(key);
+  } else {
+    actual_key = std::string(key);
+  }
+
   // Split key by dots and navigate/create intermediate tables
-  std::string key_str(key);
   toml::table* current = &table_;
 
   std::string::size_type start = 0;
-  std::string::size_type dot = key_str.find('.');
+  std::string::size_type dot = actual_key.find('.');
 
   while (dot != std::string::npos) {
-    std::string segment = key_str.substr(start, dot - start);
+    std::string segment = actual_key.substr(start, dot - start);
     auto it = current->find(segment);
     if (it == current->end()) {
       current->insert(segment, toml::table{});
@@ -85,10 +114,10 @@ template <typename T> void ConfigManager::set(std::string_view key, T value) {
       throw std::runtime_error(std::string("config path element is not a table: ") + segment);
     }
     start = dot + 1;
-    dot = key_str.find('.', start);
+    dot = actual_key.find('.', start);
   }
 
-  std::string final_key = key_str.substr(start);
+  std::string final_key = actual_key.substr(start);
   current->insert_or_assign(final_key, value);
 }
 

@@ -115,6 +115,12 @@ public:
   bool is_connected() const;
   int latency_ms() const;
 
+  // Override the API base URL (for testing with mock servers).
+  void set_api_base_url(const std::string& url);
+
+  // Returns the token store for login dialog account selection.
+  TokenStore* token_store_for_login() const { return token_store_.get(); }
+
   // Returns the REST client for signal connections (loading indicator).
   RestClient* rest_client() const { return rest_.get(); }
 

@@ -89,6 +89,40 @@ void init_console_only() {
   get_or_create("gui");
 }
 
+void reinit_for_account(uint64_t user_id) {
+  auto log_dir = platform_paths().state_dir / "accounts" / std::to_string(user_id) / "logs";
+  std::filesystem::create_directories(log_dir);
+  auto log_path = (log_dir / "kind.log").string();
+
+  auto new_file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+      log_path, 25 * 1024 * 1024, 10);
+  new_file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
+  new_file_sink->set_level(spdlog::level::trace);
+
+  // Replace the file sink (index 1) in the shared sinks vector, or add one
+  // if we only had the console sink.
+  auto& s = sinks();
+  if (s.size() >= 2) {
+    s[1] = new_file_sink;
+  } else if (s.size() == 1) {
+    s.push_back(new_file_sink);
+  } else {
+    // Shouldn't happen, but handle gracefully
+    return;
+  }
+
+  // Update all registered loggers to use the new sink set
+  spdlog::apply_all([&s](std::shared_ptr<spdlog::logger> logger) {
+    auto level = logger->level();
+    auto& logger_sinks = logger->sinks();
+    logger_sinks.clear();
+    logger_sinks.insert(logger_sinks.end(), s.begin(), s.end());
+    logger->set_level(level);
+  });
+
+  config()->info("Log file sink reinitialized for account {} at {}", user_id, log_path);
+}
+
 std::shared_ptr<spdlog::logger> gateway() { return get_or_create("gateway"); }
 std::shared_ptr<spdlog::logger> rest() { return get_or_create("rest"); }
 std::shared_ptr<spdlog::logger> client() { return get_or_create("client"); }

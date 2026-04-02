@@ -56,6 +56,18 @@ public:
     // Scope the keychain key to this account for future token operations
     client_.token_store_->set_account_id(user.id);
 
+    // Set the active account in config so reads/writes are scoped
+    client_.config_.set_active_account(user.id);
+
+    // Register this account as a known account
+    client_.config_.add_known_account(user.id, user.username);
+    client_.config_.save();
+
+    // Reinitialize log file sink to account-scoped directory
+    if (!client_.test_mode_) {
+      log::reinit_for_account(user.id);
+    }
+
     // Initialize per-account database now that we know the user ID
     if (!client_.test_mode_ && !client_.db_manager_) {
       client_.init_account_db(user.id);
@@ -762,7 +774,7 @@ private:
 
 Client::Client(ConfigManager& config, const std::string& keychain_service,
                const std::string& db_path_override) : config_(config) {
-  auto api_base = config.get_or<std::string>("network.api_base_url", std::string(endpoints::api_base));
+  auto api_base = std::string(endpoints::api_base);
   auto max_messages = static_cast<std::size_t>(config.get_or<int64_t>("behavior.max_messages_per_channel", 500));
   auto reconnect_base = config.get_or<int64_t>("behavior.reconnect_base_delay_ms", 1000);
   auto reconnect_max = config.get_or<int64_t>("behavior.reconnect_max_delay_ms", 30000);
@@ -822,6 +834,11 @@ Client::~Client() {
   if (auth_ && auth_bridge_) {
     auth_->remove_observer(auth_bridge_.get());
   }
+}
+
+void Client::set_api_base_url(const std::string& url) {
+  rest_->set_base_url(url);
+  log::client()->debug("API base URL overridden to: {}", url);
 }
 
 void Client::wire_bridges() {

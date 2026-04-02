@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config/config_manager.hpp"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -8,6 +10,10 @@
 #include <QPushButton>
 #include <QTabWidget>
 #include <QWidget>
+
+#include <cstdint>
+#include <functional>
+#include <vector>
 
 namespace kind {
 class Client;
@@ -19,7 +25,11 @@ class LoginDialog : public QDialog {
   Q_OBJECT
 
 public:
-  explicit LoginDialog(QWidget* parent = nullptr);
+  // Callback type for loading a token from keychain for a given user_id
+  using TokenLoader = std::function<void(uint64_t user_id, std::function<void(const std::string& token, const std::string& token_type)>)>;
+
+  explicit LoginDialog(const std::vector<ConfigManager::KnownAccount>& known_accounts,
+                       QWidget* parent = nullptr);
 
   void show_error(const QString& message);
   void show_mfa_input();
@@ -28,16 +38,22 @@ public:
   void load_saved_token(const std::string& token, const std::string& token_type);
   bool auto_login_enabled() const;
 
+  // Set the callback used to load tokens for known accounts
+  void set_token_loader(TokenLoader loader);
+
 signals:
   void token_login_requested(QString token, QString token_type);
   void credential_login_requested(QString email, QString password);
   void mfa_code_submitted(QString code);
 
 private:
-  void setup_ui();
+  void setup_ui(const std::vector<ConfigManager::KnownAccount>& known_accounts);
   void setup_connections();
 
   QTabWidget* tab_widget_{};
+
+  // Known accounts dropdown
+  QComboBox* account_combo_{};
 
   // Token tab
   QLineEdit* token_input_{};
@@ -59,6 +75,9 @@ private:
 
   // Status
   QLabel* status_label_{};
+
+  // Token loader callback
+  TokenLoader token_loader_;
 };
 
 } // namespace kind::gui
