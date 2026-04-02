@@ -2,10 +2,13 @@
 
 #include "models/embed.hpp"
 #include "renderers/block_renderer.hpp"
+#include "renderers/rich_text_layout.hpp"
+#include "workers/render_worker.hpp"
 
 #include <QFont>
 #include <QPixmap>
 #include <QRect>
+#include <memory>
 #include <vector>
 
 namespace kind::gui {
@@ -14,7 +17,8 @@ class EmbedBlockRenderer : public BlockRenderer {
 public:
   EmbedBlockRenderer(const kind::Embed& embed, int viewport_width, const QFont& font,
                      const QPixmap& image = {}, const QPixmap& thumbnail = {},
-                     std::vector<QPixmap> extra_images = {});
+                     std::vector<QPixmap> extra_images = {},
+                     const MentionContext& mentions = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -47,12 +51,23 @@ private:
   mutable QRect title_rect_;
   mutable QRect bare_image_rect_;
 
+  // Rich text layouts for formatted content
+  std::unique_ptr<RichTextLayout> title_layout_;
+  std::unique_ptr<RichTextLayout> description_layout_;
+
   struct FieldRow {
     int y_offset{0};
     int row_height{0};
-    std::vector<std::pair<int, const kind::EmbedField*>> columns; // x_offset, field
+    struct FieldCol {
+      int x_offset{0};
+      const kind::EmbedField* field{nullptr};
+      std::unique_ptr<RichTextLayout> value_layout;
+    };
+    std::vector<FieldCol> columns;
   };
   std::vector<FieldRow> field_rows_;
+
+  MentionContext mentions_;
 
   int compute_layout();
 };

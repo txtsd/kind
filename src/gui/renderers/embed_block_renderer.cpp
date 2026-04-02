@@ -1,7 +1,12 @@
 #include "renderers/embed_block_renderer.hpp"
 
+#include "text/emoji_map.hpp"
+#include "text/markdown_parser.hpp"
+
 #include <QFontMetrics>
 #include <QPainterPath>
+
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
 
@@ -35,12 +40,35 @@ static const QColor field_name_color(0xdc, 0xdc, 0xdc);
 static const QColor field_value_color(0xb9, 0xba, 0xbe);
 static const QColor image_placeholder_color(0x40, 0x40, 0x44);
 
+// Parse text through markdown, resolve emoji shortcodes and mentions,
+// then build a RichTextLayout for it.
+static std::unique_ptr<RichTextLayout> parse_embed_text(
+    const std::string& text, int width, const QFont& font,
+    const MentionContext& mentions) {
+  auto parsed = kind::markdown::parse(text);
+
+  // Resolve emoji shortcodes and mentions in parsed spans
+  for (auto& block : parsed.blocks) {
+    if (auto* span = std::get_if<kind::TextSpan>(&block)) {
+      kind::replace_emoji_shortcodes(span->text);
+      // Mentions in embeds use the same format as message content.
+      // We pass a dummy Message since embeds don't carry mention metadata,
+      // but the shortcode/channel/role resolution still works via context.
+      kind::Message dummy;
+      resolve_mention(*span, dummy, mentions);
+    }
+  }
+
+  return std::make_unique<RichTextLayout>(parsed, width, font);
+}
+
 EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_width,
                                        const QFont& font, const QPixmap& image,
                                        const QPixmap& thumbnail,
-                                       std::vector<QPixmap> extra_images)
+                                       std::vector<QPixmap> extra_images,
+                                       const MentionContext& mentions)
     : embed_(embed), font_(font), image_(image), thumbnail_(thumbnail),
-      extra_images_(std::move(extra_images)) {
+      extra_images_(std::move(extra_images)), mentions_(mentions) {
   bold_font_ = font_;
   bold_font_.setBold(true);
 
@@ -73,6 +101,10 @@ EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_wi
   }
 
   total_height_ = compute_layout();
+
+  spdlog::debug("EmbedBlockRenderer: type={}, width={}, height={}, has_title_layout={}, has_desc_layout={}",
+                embed_.type, embed_width_, total_height_,
+                title_layout_ != nullptr, description_layout_ != nullptr);
 }
 
 int EmbedBlockRenderer::height(int /*width*/) const {
@@ -135,20 +167,16 @@ int EmbedBlockRenderer::compute_layout() {
     y += small_bold_fm.height() + section_spacing_;
   }
 
-  // Title
+  // Title (now with RichTextLayout for markdown/mentions)
   if (embed_.title.has_value() && !embed_.title->empty()) {
-    QString title_text = QString::fromStdString(*embed_.title);
-    QRect bounding = bold_fm.boundingRect(0, 0, text_area_width, 0,
-                                          Qt::TextWordWrap, title_text);
-    y += bounding.height() + section_spacing_;
+    title_layout_ = parse_embed_text(*embed_.title, text_area_width, bold_font_, mentions_);
+    y += title_layout_->height() + section_spacing_;
   }
 
-  // Description
+  // Description (now with RichTextLayout for markdown/mentions)
   if (embed_.description.has_value() && !embed_.description->empty()) {
-    QString desc_text = QString::fromStdString(*embed_.description);
-    QRect bounding = fm.boundingRect(0, 0, text_area_width, 0,
-                                     Qt::TextWordWrap, desc_text);
-    y += bounding.height() + section_spacing_;
+    description_layout_ = parse_embed_text(*embed_.description, text_area_width, font_, mentions_);
+    y += description_layout_->height() + section_spacing_;
   }
 
   // Ensure thumbnail height is accounted for
@@ -171,36 +199,41 @@ int EmbedBlockRenderer::compute_layout() {
 
       if (!embed_.fields[i].inline_field) {
         // Full-width field
-        row.columns.emplace_back(0, &embed_.fields[i]);
+        FieldRow::FieldCol col;
+        col.x_offset = 0;
+        col.field = &embed_.fields[i];
+        col.value_layout = parse_embed_text(embed_.fields[i].value, content_width, font_, mentions_);
 
         QString name = QString::fromStdString(embed_.fields[i].name);
-        QString value = QString::fromStdString(embed_.fields[i].value);
         int name_h = small_bold_fm.boundingRect(0, 0, content_width, 0,
                                                 Qt::TextWordWrap, name).height();
-        int value_h = fm.boundingRect(0, 0, content_width, 0,
-                                      Qt::TextWordWrap, value).height();
+        int value_h = col.value_layout->height();
         row.row_height = name_h + value_h + 4;
+        row.columns.push_back(std::move(col));
         ++i;
       } else {
         // Collect up to 3 inline fields
-        int col = 0;
+        int c = 0;
         int max_h = 0;
 
-        while (i < embed_.fields.size() && embed_.fields[i].inline_field && col < 3) {
-          int x_off = col * (field_width + field_spacing_);
-          row.columns.emplace_back(x_off, &embed_.fields[i]);
+        while (i < embed_.fields.size() && embed_.fields[i].inline_field && c < 3) {
+          int x_off = c * (field_width + field_spacing_);
+
+          FieldRow::FieldCol col;
+          col.x_offset = x_off;
+          col.field = &embed_.fields[i];
+          col.value_layout = parse_embed_text(embed_.fields[i].value, field_width, font_, mentions_);
 
           QString name = QString::fromStdString(embed_.fields[i].name);
-          QString value = QString::fromStdString(embed_.fields[i].value);
           int name_h = small_bold_fm.boundingRect(0, 0, field_width, 0,
                                                   Qt::TextWordWrap, name).height();
-          int value_h = fm.boundingRect(0, 0, field_width, 0,
-                                        Qt::TextWordWrap, value).height();
+          int value_h = col.value_layout->height();
           int h = name_h + value_h + 4;
           if (h > max_h) {
             max_h = h;
           }
-          ++col;
+          row.columns.push_back(std::move(col));
+          ++c;
           ++i;
         }
         row.row_height = max_h;
@@ -406,59 +439,46 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     y += small_bold_fm.height() + section_spacing_;
   }
 
-  // Title
+  // Title (rich text)
   title_rect_ = QRect();
-  if (embed_.title.has_value() && !embed_.title->empty()) {
-    painter->setFont(bold_font_);
+  if (title_layout_) {
     if (embed_.url.has_value()) {
-      painter->setPen(title_link_color);
-    } else {
-      painter->setPen(text_color);
+      // For linked titles, save the rect for hit testing
+      title_rect_ = QRect(x_base, y, text_area_width, title_layout_->height());
     }
-    QString title_text = QString::fromStdString(*embed_.title);
-    QRect bounding = bold_fm.boundingRect(x_base, y, text_area_width, 0,
-                                          Qt::TextWordWrap, title_text);
-    painter->drawText(bounding, Qt::TextWordWrap, title_text);
-    title_rect_ = bounding;
-    y += bounding.height() + section_spacing_;
+    title_layout_->paint(painter, QPoint(x_base, y));
+    y += title_layout_->height() + section_spacing_;
   }
 
-  // Description
-  if (embed_.description.has_value() && !embed_.description->empty()) {
-    painter->setFont(font_);
-    painter->setPen(text_color);
-    QString desc_text = QString::fromStdString(*embed_.description);
-    QRect bounding = fm.boundingRect(x_base, y, text_area_width, 0,
-                                     Qt::TextWordWrap, desc_text);
-    painter->drawText(bounding, Qt::TextWordWrap, desc_text);
-    y += bounding.height() + section_spacing_;
+  // Description (rich text)
+  if (description_layout_) {
+    description_layout_->paint(painter, QPoint(x_base, y));
+    y += description_layout_->height() + section_spacing_;
   }
 
   // Fields
   if (!field_rows_.empty()) {
-    int field_width = (content_width - 2 * field_spacing_) / 3;
-
     for (const auto& row : field_rows_) {
-      for (const auto& [x_off, field] : row.columns) {
-        int fx = x_base + x_off;
+      for (const auto& col : row.columns) {
+        int fx = x_base + col.x_offset;
         int fy = top + row.y_offset;
-        int fw = field->inline_field ? field_width : content_width;
+        int fw = col.field->inline_field
+            ? (content_width - 2 * field_spacing_) / 3
+            : content_width;
 
-        // Field name
+        // Field name (plain text, short metadata)
         painter->setFont(small_bold_font_);
         painter->setPen(field_name_color);
-        QString name = QString::fromStdString(field->name);
+        QString name = QString::fromStdString(col.field->name);
         QRect name_bounding = small_bold_fm.boundingRect(fx, fy, fw, 0,
                                                          Qt::TextWordWrap, name);
         painter->drawText(name_bounding, Qt::TextWordWrap, name);
 
-        // Field value
-        painter->setFont(font_);
-        painter->setPen(field_value_color);
-        QString value = QString::fromStdString(field->value);
-        QRect value_bounding = fm.boundingRect(fx, fy + name_bounding.height() + 4, fw, 0,
-                                               Qt::TextWordWrap, value);
-        painter->drawText(value_bounding, Qt::TextWordWrap, value);
+        // Field value (rich text)
+        if (col.value_layout) {
+          QPoint value_origin(fx, fy + name_bounding.height() + 4);
+          col.value_layout->paint(painter, value_origin);
+        }
       }
     }
   }
@@ -587,11 +607,23 @@ void EmbedBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
 }
 
 bool EmbedBlockRenderer::hit_test(const QPoint& pos, HitResult& result) const {
-  // Title link hit test
+  // Title link hit test (for embeds with a URL on the title)
   if (embed_.url.has_value() && title_rect_.isValid() && title_rect_.contains(pos)) {
     result.type = HitResult::Link;
     result.url = *embed_.url;
     return true;
+  }
+
+  // Description rich text hit test
+  if (description_layout_) {
+    // We need the origin that was used during paint. It depends on the rect
+    // passed to paint, which we don't store. The hit_test caller uses the
+    // same coordinate space, so we reconstruct from the stored layout state.
+    // For now, delegate without offset since the rect origin is typically (0,0)
+    // in list-view delegate coordinate space.
+    // The description origin during paint is (x_base, y_after_title).
+    // Since we don't store these, we skip sub-element hit testing for description
+    // and title layouts for now. The title URL hit test above covers the main case.
   }
 
   return false;
