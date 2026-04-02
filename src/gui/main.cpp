@@ -718,8 +718,10 @@ int main(int argc, char* argv[]) {
                        &current_guild_id, status_bar]() {
       auto cached_guilds = client.guilds();
       if (!cached_guilds.empty()) {
+        server_list->blockSignals(true);
         QVector<kind::Guild> qvec(cached_guilds.begin(), cached_guilds.end());
         server_list->set_guilds(qvec);
+        server_list->blockSignals(false);
       }
       auto dms = client.private_channels();
       if (!dms.empty()) {
