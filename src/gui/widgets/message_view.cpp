@@ -470,12 +470,11 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
             pending_images_.erase(it);
             kind::log::gui()->trace("image_ready: {}, updating {} messages", std_url, message_ids.size());
 
-            // Decode once, cache the pixmap
-            QPixmap pixmap;
-            pixmap.loadFromData(image.data);
-            if (pixmap.isNull()) {
+            // Convert pre-decoded QImage to QPixmap (fast, no decoding)
+            if (image.decoded.isNull()) {
               return;
             }
+            QPixmap pixmap = QPixmap::fromImage(image.decoded);
             pixmap_cache_[std_url] = pixmap;
 
             // Find the first visible row to detect if images load above viewport

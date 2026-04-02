@@ -45,9 +45,9 @@ target_link_libraries(kind-core
   PUBLIC
     spdlog::spdlog
     tomlplusplus::tomlplusplus
+    Qt6::Gui
   PRIVATE
     Qt6::Core
-    Qt6::Gui
     Qt6::Concurrent
     Qt6::Network
     Qt6::WebSockets

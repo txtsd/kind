@@ -29,9 +29,8 @@ void ServerList::set_image_cache(kind::ImageCache* cache) {
   if (image_cache_) {
     connect(image_cache_, &kind::ImageCache::image_ready, this,
             [this](const QString& url, const kind::CachedImage& img) {
-              QImage qimg;
-              if (qimg.loadFromData(img.data)) {
-                on_image_ready(url, QPixmap::fromImage(qimg));
+              if (!img.decoded.isNull()) {
+                on_image_ready(url, QPixmap::fromImage(img.decoded));
               }
             });
   }
@@ -89,9 +88,8 @@ void ServerList::fetch_guild_icons() {
     // Check image cache memory
     auto cached = image_cache_->get(url_str);
     if (cached) {
-      QImage qimg;
-      if (qimg.loadFromData(cached->data)) {
-        QPixmap pm = QPixmap::fromImage(qimg);
+      if (!cached->decoded.isNull()) {
+        QPixmap pm = QPixmap::fromImage(cached->decoded);
         pixmap_cache_[url_str] = pm;
         delegate_->set_pixmap(url_str, pm);
       }

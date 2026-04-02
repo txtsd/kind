@@ -114,11 +114,10 @@ std::optional<CachedImage> ImageCache::load_from_disk(const std::string& url) co
 
   CachedImage image;
   image.data = data;
-
-  QImage qi = QImage::fromData(data);
-  if (!qi.isNull()) {
-    image.width = qi.width();
-    image.height = qi.height();
+  image.decoded = QImage::fromData(data);
+  if (!image.decoded.isNull()) {
+    image.width = image.decoded.width();
+    image.height = image.decoded.height();
   }
 
   return image;
@@ -199,21 +198,43 @@ void ImageCache::start_download(const std::string& url) {
       return;
     }
 
-    CachedImage image;
-    image.data = data;
-    image.mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
-                          .toString()
-                          .toStdString();
+    auto mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
+                         .toString()
+                         .toStdString();
 
     log::cache()->debug("image downloaded: {} ({}KB)", url, data.size() / 1024);
-    add_to_memory(url, image);
-    log::cache()->debug("image ready: {}", url);
-    emit image_ready(QString::fromStdString(url), image);
 
-    QtConcurrent::run([this, url, image]() {
-      save_to_disk(url, image);
+    // Decode image off the UI thread, then emit and cache on the main thread
+    auto future = QtConcurrent::run([data]() -> QImage {
+      return QImage::fromData(data);
     });
 
+    auto* decode_watcher = new QFutureWatcher<QImage>(this);
+    connect(decode_watcher, &QFutureWatcher<QImage>::finished,
+            this, [this, decode_watcher, url, data, mime_type]() {
+      decode_watcher->deleteLater();
+
+      CachedImage image;
+      image.data = data;
+      image.decoded = decode_watcher->result();
+      image.mime_type = mime_type;
+      if (!image.decoded.isNull()) {
+        image.width = image.decoded.width();
+        image.height = image.decoded.height();
+      }
+
+      add_to_memory(url, image);
+      log::cache()->debug("image ready: {}", url);
+      emit image_ready(QString::fromStdString(url), image);
+
+      QtConcurrent::run([this, url, image]() {
+        save_to_disk(url, image);
+      });
+    });
+
+    decode_watcher->setFuture(future);
+
+    // Start next downloads immediately; this download slot is already free
     process_queue();
   });
 }

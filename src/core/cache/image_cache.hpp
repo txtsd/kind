@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QFutureWatcher>
+#include <QImage>
 #include <QObject>
 #include <QString>
 
@@ -20,6 +21,7 @@ namespace kind {
 
 struct CachedImage {
   QByteArray data;
+  QImage decoded;
   int width{0};
   int height{0};
   std::string mime_type;
