@@ -26,6 +26,7 @@ add_executable(kind-tests
   gui/sticker_block_renderer_test.cpp
   gui/component_block_renderer_test.cpp
   gui/loading_pill_test.cpp
+  gui/dm_list_model_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/message_model.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
@@ -36,6 +37,7 @@ add_executable(kind-tests
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/sticker_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/widgets/loading_pill.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/models/dm_list_model.cpp
 )
 
 set_target_properties(kind-tests PROPERTIES AUTOMOC ON)
