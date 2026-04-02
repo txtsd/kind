@@ -1251,23 +1251,33 @@ void Client::load_cache(std::function<void()> on_complete) {
 
     data->user = reader.current_user();
     data->guilds = reader.guilds();
-    for (auto& guild : data->guilds) {
-      guild.roles = reader.roles(guild.id);
-    }
     data->guild_order = reader.guild_order();
 
-    for (const auto& guild : data->guilds) {
-      auto channels = reader.channels(guild.id);
-      for (auto& ch : channels) {
-        ch.permission_overwrites = reader.permission_overwrites(ch.id);
-      }
-      data->guild_channels[guild.id] = std::move(channels);
+    // Bulk read all roles, channels, overwrites, and member roles in
+    // single queries instead of per-guild/per-channel loops.
+    auto all_roles = reader.all_roles();
+    auto all_channels = reader.all_guild_channels();
+    auto all_overwrites = reader.all_permission_overwrites();
+    data->guild_member_roles = reader.all_member_roles();
 
-      auto role_ids = reader.member_roles(guild.id);
-      if (!role_ids.empty()) {
-        data->guild_member_roles[guild.id] = std::move(role_ids);
+    // Attach roles to guilds
+    for (auto& guild : data->guilds) {
+      auto roles_it = all_roles.find(guild.id);
+      if (roles_it != all_roles.end()) {
+        guild.roles = std::move(roles_it->second);
       }
     }
+
+    // Attach overwrites to channels, then group by guild
+    for (auto& [guild_id, channels] : all_channels) {
+      for (auto& ch : channels) {
+        auto ow_it = all_overwrites.find(ch.id);
+        if (ow_it != all_overwrites.end()) {
+          ch.permission_overwrites = std::move(ow_it->second);
+        }
+      }
+    }
+    data->guild_channels = std::move(all_channels);
 
     data->dm_channels = reader.dm_channels();
     data->read_states = reader.read_states();

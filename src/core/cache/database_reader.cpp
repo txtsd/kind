@@ -89,6 +89,32 @@ std::vector<Channel> DatabaseReader::channels(Snowflake guild_id) const {
   return result;
 }
 
+std::unordered_map<Snowflake, std::vector<Channel>>
+DatabaseReader::all_guild_channels() const {
+  std::unordered_map<Snowflake, std::vector<Channel>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT id, guild_id, type, name, position, parent_id, last_message_id "
+         "FROM channels WHERE guild_id != 0");
+  int count = 0;
+  while (q.next()) {
+    Channel ch;
+    ch.id = static_cast<Snowflake>(q.value(0).toLongLong());
+    ch.guild_id = static_cast<Snowflake>(q.value(1).toLongLong());
+    ch.type = q.value(2).toInt();
+    ch.name = q.value(3).toString().toStdString();
+    ch.position = q.value(4).toInt();
+    if (!q.value(5).isNull()) {
+      ch.parent_id = static_cast<Snowflake>(q.value(5).toLongLong());
+    }
+    ch.last_message_id = static_cast<Snowflake>(q.value(6).toLongLong());
+    result[ch.guild_id].push_back(std::move(ch));
+    ++count;
+  }
+  log::cache()->debug("DB read: {} channels across {} guilds (bulk)", count, result.size());
+  return result;
+}
+
 std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
   std::vector<Role> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
@@ -105,6 +131,27 @@ std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
     result.push_back(std::move(role));
   }
   log::cache()->debug("DB read: {} roles for guild {}", result.size(), guild_id);
+  return result;
+}
+
+std::unordered_map<Snowflake, std::vector<Role>>
+DatabaseReader::all_roles() const {
+  std::unordered_map<Snowflake, std::vector<Role>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT guild_id, id, name, permissions, position FROM roles");
+  int count = 0;
+  while (q.next()) {
+    auto guild_id = static_cast<Snowflake>(q.value(0).toLongLong());
+    Role role;
+    role.id = static_cast<Snowflake>(q.value(1).toLongLong());
+    role.name = q.value(2).toString().toStdString();
+    role.permissions = static_cast<uint64_t>(q.value(3).toLongLong());
+    role.position = q.value(4).toInt();
+    result[guild_id].push_back(std::move(role));
+    ++count;
+  }
+  log::cache()->debug("DB read: {} roles across {} guilds (bulk)", count, result.size());
   return result;
 }
 
@@ -129,6 +176,27 @@ std::vector<PermissionOverwrite> DatabaseReader::permission_overwrites(
   return result;
 }
 
+std::unordered_map<Snowflake, std::vector<PermissionOverwrite>>
+DatabaseReader::all_permission_overwrites() const {
+  std::unordered_map<Snowflake, std::vector<PermissionOverwrite>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT channel_id, target_id, type, allow, deny FROM permission_overwrites");
+  int count = 0;
+  while (q.next()) {
+    auto channel_id = static_cast<Snowflake>(q.value(0).toLongLong());
+    PermissionOverwrite ow;
+    ow.id = static_cast<Snowflake>(q.value(1).toLongLong());
+    ow.type = q.value(2).toInt();
+    ow.allow = static_cast<uint64_t>(q.value(3).toLongLong());
+    ow.deny = static_cast<uint64_t>(q.value(4).toLongLong());
+    result[channel_id].push_back(ow);
+    ++count;
+  }
+  log::cache()->debug("DB read: {} overwrites across {} channels (bulk)", count, result.size());
+  return result;
+}
+
 std::vector<Snowflake> DatabaseReader::member_roles(Snowflake guild_id) const {
   std::vector<Snowflake> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
@@ -146,6 +214,30 @@ std::vector<Snowflake> DatabaseReader::member_roles(Snowflake guild_id) const {
     }
   }
   log::cache()->debug("DB read: {} member roles for guild {}", result.size(), guild_id);
+  return result;
+}
+
+std::unordered_map<Snowflake, std::vector<Snowflake>>
+DatabaseReader::all_member_roles() const {
+  std::unordered_map<Snowflake, std::vector<Snowflake>> result;
+  QSqlDatabase db = QSqlDatabase::database(connection_name_);
+  QSqlQuery q(db);
+  q.exec("SELECT guild_id, roles FROM members WHERE user_id = 0");
+  while (q.next()) {
+    auto guild_id = static_cast<Snowflake>(q.value(0).toLongLong());
+    auto json_str = q.value(1).toString();
+    auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+    if (doc.isArray()) {
+      std::vector<Snowflake> roles;
+      for (const auto& val : doc.array()) {
+        roles.push_back(static_cast<Snowflake>(val.toString().toULongLong()));
+      }
+      if (!roles.empty()) {
+        result[guild_id] = std::move(roles);
+      }
+    }
+  }
+  log::cache()->debug("DB read: member roles for {} guilds (bulk)", result.size());
   return result;
 }
 

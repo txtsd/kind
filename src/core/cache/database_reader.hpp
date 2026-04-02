@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace kind {
@@ -29,9 +30,13 @@ public:
   std::vector<Guild> guilds() const;
   std::vector<Snowflake> guild_order() const;
   std::vector<Channel> channels(Snowflake guild_id) const;
+  std::unordered_map<Snowflake, std::vector<Channel>> all_guild_channels() const;
   std::vector<Role> roles(Snowflake guild_id) const;
+  std::unordered_map<Snowflake, std::vector<Role>> all_roles() const;
   std::vector<PermissionOverwrite> permission_overwrites(Snowflake channel_id) const;
+  std::unordered_map<Snowflake, std::vector<PermissionOverwrite>> all_permission_overwrites() const;
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
+  std::unordered_map<Snowflake, std::vector<Snowflake>> all_member_roles() const;
   std::optional<User> current_user() const;
   std::vector<Message> messages(Snowflake channel_id,
                                 std::optional<Snowflake> before = {},
