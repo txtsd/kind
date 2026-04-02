@@ -55,8 +55,32 @@ int main(int argc, char* argv[]) {
   qapp.setApplicationName("kind");
   qapp.setApplicationVersion(kind::version);
 
-  // --log-level debug  or  --log-level gateway=debug,rest=warn
   auto args = qapp.arguments();
+
+  // --help / --version
+  if (args.contains("--help") || args.contains("-h")) {
+    fprintf(stdout,
+        "kind %s \xe2\x80\x94 kind is not Discord\n"
+        "\n"
+        "Usage: kind-gui [options]\n"
+        "\n"
+        "Options:\n"
+        "  -h, --help               Show this help and exit\n"
+        "  -v, --version            Show version and exit\n"
+        "  --no-autologin           Skip auto-login, show login dialog\n"
+        "  --log-level <spec>       Set log level (e.g. debug, gui=trace,rest=warn)\n"
+        "\n"
+        "Log subsystems: gateway, rest, client, cache, auth, config, store, gui\n"
+        "Log levels: trace, debug, info, warn, error, critical, off\n",
+        kind::version);
+    return 0;
+  }
+  if (args.contains("--version") || args.contains("-v")) {
+    fprintf(stdout, "kind %s\n", kind::version);
+    return 0;
+  }
+
+  // --log-level debug  or  --log-level gateway=debug,rest=warn
   int log_idx = args.indexOf("--log-level");
   if (log_idx >= 0 && log_idx + 1 < args.size()) {
     kind::log::apply_level_spec(args[log_idx + 1].toStdString());
