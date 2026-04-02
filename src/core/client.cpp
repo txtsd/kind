@@ -265,11 +265,42 @@ private:
         }
       }
 
+      // Parse users array (user token READY provides user objects separately)
+      std::unordered_map<Snowflake, User> ready_users;
+      auto users_array = obj["users"].toArray();
+      for (const auto& val : users_array) {
+        auto user = json_parse::parse_user(val.toObject());
+        if (user) {
+          ready_users[user->id] = *user;
+        }
+      }
+      log::client()->debug("READY: parsed {} users", ready_users.size());
+
       // Parse private channels (DMs)
+      // User token READY uses "recipient_ids" (array of ID strings) instead
+      // of "recipients" (array of user objects). Resolve from ready_users.
       auto private_channels_array = obj["private_channels"].toArray();
       for (const auto& val : private_channels_array) {
-        auto channel = json_parse::parse_channel(val.toObject());
-        if (channel && channel->type == 1) {  // Only 1-on-1 DMs for now
+        auto pc_obj = val.toObject();
+        auto channel = json_parse::parse_channel(pc_obj);
+        if (channel && channel->type == 1) {
+          // Resolve recipient_ids to full User objects
+          if (channel->recipients.empty()) {
+            auto recipient_ids = pc_obj["recipient_ids"].toArray();
+            for (const auto& rid : recipient_ids) {
+              auto uid = static_cast<Snowflake>(rid.toString().toULongLong());
+              auto it = ready_users.find(uid);
+              if (it != ready_users.end()) {
+                channel->recipients.push_back(it->second);
+              } else {
+                // Create a stub user with just the ID
+                User stub;
+                stub.id = uid;
+                stub.username = "User " + std::to_string(uid);
+                channel->recipients.push_back(stub);
+              }
+            }
+          }
           data->private_channels.push_back(std::move(*channel));
         }
       }
