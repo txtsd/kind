@@ -19,6 +19,7 @@ target_sources(kind-core PRIVATE
   read_state_manager.cpp
   store/data_store.cpp
   text/markdown_parser.cpp
+  text/emoji_map.cpp
   rest/rate_limiter.cpp
   rest/qt_rest_client.cpp
   gateway/heartbeat.cpp

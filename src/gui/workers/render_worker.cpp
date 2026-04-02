@@ -9,6 +9,7 @@
 #include "renderers/sticker_block_renderer.hpp"
 #include "renderers/system_message_renderer.hpp"
 #include "renderers/text_block_renderer.hpp"
+#include "text/emoji_map.hpp"
 #include "text/markdown_parser.hpp"
 
 #include <QDateTime>
@@ -169,6 +170,13 @@ RenderedMessage compute_layout(
     // Parse content with markdown
     auto parsed = kind::markdown::parse(message.content);
 
+    // Replace emoji shortcodes in parsed spans
+    for (auto& block : parsed.blocks) {
+      if (auto* span = std::get_if<kind::TextSpan>(&block)) {
+        kind::replace_emoji_shortcodes(span->text);
+      }
+    }
+
     // Resolve mentions in parsed content
     for (auto& block : parsed.blocks) {
       if (auto* span = std::get_if<kind::TextSpan>(&block)) {
@@ -284,7 +292,8 @@ RenderedMessage compute_layout(
     }
 
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
-        embed, viewport_width, font, embed_img, embed_thumb));
+        embed, viewport_width, font, embed_img, embed_thumb,
+        std::vector<QPixmap>{}, mentions));
   }
 
   // Attach extra same-URL images to the first embed that had that URL
@@ -313,7 +322,7 @@ RenderedMessage compute_layout(
     }
     result.blocks[first_same_url_embed_idx] = std::make_shared<EmbedBlockRenderer>(
         first_embed, viewport_width, font, first_img, first_thumb,
-        std::move(extra_same_url_images));
+        std::move(extra_same_url_images), mentions);
   }
 
   // Show indicator for skipped bare-image embeds
