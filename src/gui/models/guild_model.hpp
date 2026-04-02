@@ -24,6 +24,8 @@ public:
     MentionCountRole,
   };
 
+  static constexpr kind::Snowflake DM_GUILD_ID = 1;
+
   explicit GuildModel(QObject* parent = nullptr);
 
   int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -34,6 +36,8 @@ public:
 
   void set_read_state_manager(kind::ReadStateManager* mgr);
   void set_mute_state_manager(kind::MuteStateManager* mgr);
+
+  void set_private_channel_ids(const std::vector<kind::Snowflake>& ids);
 
 private:
   void on_unread_changed(kind::Snowflake channel_id);
@@ -50,8 +54,12 @@ private:
     QString unread_text;
   };
 
+  void recompute_dm_cache();
+
   std::vector<kind::Guild> guilds_;
   std::vector<GuildCache> cache_;
+  std::vector<kind::Snowflake> private_channel_ids_;
+  GuildCache dm_cache_;
   kind::ReadStateManager* read_state_manager_{nullptr};
   kind::MuteStateManager* mute_state_manager_{nullptr};
 };
