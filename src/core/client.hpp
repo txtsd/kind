@@ -111,6 +111,7 @@ public:
   std::vector<Channel> private_channels() const;
   std::vector<Snowflake> member_roles(Snowflake guild_id) const;
   std::vector<User> known_users() const;
+  Snowflake guild_id_for_channel(Snowflake channel_id) const;
   bool is_connected() const;
   int latency_ms() const;
 

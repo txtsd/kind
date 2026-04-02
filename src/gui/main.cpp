@@ -676,6 +676,18 @@ int main(int argc, char* argv[]) {
   QObject::connect(server_list, &kind::gui::ServerList::guild_selected, select_guild_action);
   QObject::connect(channel_list, &kind::gui::ChannelList::channel_selected, select_channel_action);
 
+  // Navigate to channel when a #channel mention is clicked
+  QObject::connect(message_view, &kind::gui::MessageView::channel_mention_clicked,
+                   [&client, &select_guild_action, &select_channel_action](
+                       kind::Snowflake channel_id) {
+                     kind::log::gui()->debug("channel_mention_clicked: {}", channel_id);
+                     auto guild_id = client.guild_id_for_channel(channel_id);
+                     if (guild_id != 0) {
+                       select_guild_action(guild_id);
+                       select_channel_action(channel_id);
+                     }
+                   });
+
   QObject::connect(dm_list, &kind::gui::DmList::dm_selected,
                    [&client, &current_channel_id, &current_guild_id,
                     dm_list, message_view, message_input](kind::Snowflake channel_id) {

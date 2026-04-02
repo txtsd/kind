@@ -294,7 +294,7 @@ bool RichTextLayout::hit_test(const QPoint& pos, const QPoint& origin,
       return true;
     }
     if (si.span.mention_channel_id.has_value()) {
-      result.type = HitResult::Mention;
+      result.type = HitResult::ChannelMention;
       result.id = si.span.mention_channel_id.value();
       return true;
     }

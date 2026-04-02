@@ -60,6 +60,7 @@ signals:
   void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
                       int button_index);
   void ack_requested(kind::Snowflake channel_id, kind::Snowflake message_id);
+  void channel_mention_clicked(kind::Snowflake channel_id);
 
 public slots:
   void set_messages(const QVector<kind::Message>& messages);

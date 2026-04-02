@@ -33,6 +33,7 @@ signals:
   void scroll_to_message_requested(kind::Snowflake message_id);
   void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
                       int button_index);
+  void channel_mention_clicked(kind::Snowflake channel_id);
 
 private:
   static constexpr int padding_ = 4;

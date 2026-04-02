@@ -11,7 +11,7 @@
 namespace kind::gui {
 
 struct HitResult {
-  enum Type { None, Link, Mention, Reaction, Button, Spoiler, ScrollToMessage };
+  enum Type { None, Link, Mention, ChannelMention, Reaction, Button, Spoiler, ScrollToMessage };
   Type type{None};
   std::string url;
   kind::Snowflake id{0};

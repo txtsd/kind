@@ -1031,6 +1031,10 @@ std::vector<User> Client::known_users() const {
   return store_->all_users();
 }
 
+Snowflake Client::guild_id_for_channel(Snowflake channel_id) const {
+  return store_->guild_id_for_channel(channel_id);
+}
+
 void Client::select_guild(Snowflake guild_id) {
   active_guild_id_.store(guild_id);
 

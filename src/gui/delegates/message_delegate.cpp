@@ -189,6 +189,13 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     }
     break;
 
+  case HitResult::ChannelMention:
+    if (hit_result.id != 0) {
+      emit channel_mention_clicked(hit_result.id);
+      return true;
+    }
+    break;
+
   case HitResult::None:
   case HitResult::Mention:
     break;
