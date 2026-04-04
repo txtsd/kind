@@ -1,6 +1,5 @@
 #pragma once
 
-#include "cache/lru_cache.hpp"
 #include "models/message.hpp"
 #include "models/rendered_message.hpp"
 #include "models/snowflake.hpp"
@@ -46,7 +45,6 @@ public:
   void set_member_roles(const std::vector<kind::Snowflake>& role_ids);
   void set_mention_color_preference(bool use_discord_colors);
   void set_accent_color(uint32_t color);
-  void set_pixmap_cache_capacity(int capacity);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
   void scroll_to_message(kind::Snowflake message_id);
@@ -128,8 +126,6 @@ private:
   kind::ReadStateManager* read_state_manager_{nullptr};
   // Maps image URL to set of message IDs waiting for that image
   std::unordered_map<std::string, std::vector<kind::Snowflake>> pending_images_;
-  // Decoded pixmap cache: URL -> QPixmap (decoded once, reused on re-renders)
-  kind::LruCache<std::string, QPixmap> pixmap_cache_;
 };
 
 } // namespace kind::gui

@@ -1,6 +1,7 @@
 #include "widgets/message_view.hpp"
 
 #include "cache/image_cache.hpp"
+#include "cdn_url.hpp"
 #include "delegates/message_delegate.hpp"
 #include "logging.hpp"
 #include "models/message_model.hpp"
@@ -18,34 +19,7 @@
 
 namespace kind::gui {
 
-// Append size parameters to Discord image URLs.
-// cdn.discordapp.com: ?size=N (power of 2, 16-4096)
-// images-ext-*.discordapp.net / media.discordapp.net: ?width=N&height=N
-static std::string add_image_size(const std::string& url, int display_width, int display_height = 0) {
-  if (display_height == 0) {
-    display_height = display_width;
-  }
-
-  char sep = (url.find('?') != std::string::npos) ? '&' : '?';
-
-  if (url.find("cdn.discordapp.com") != std::string::npos) {
-    int s = 16;
-    while (s < display_width && s < 4096) {
-      s *= 2;
-    }
-    return url + sep + "size=" + std::to_string(s);
-  }
-
-  if (url.find("discordapp.net") != std::string::npos
-      || url.find("discord.com") != std::string::npos) {
-    return url + sep + "width=" + std::to_string(display_width)
-           + "&height=" + std::to_string(display_height);
-  }
-
-  return url;
-}
-
-MessageView::MessageView(QWidget* parent) : QListView(parent), pixmap_cache_(200) {
+MessageView::MessageView(QWidget* parent) : QListView(parent) {
   model_ = new MessageModel(this);
   delegate_ = new MessageDelegate(this);
 
@@ -423,10 +397,6 @@ void MessageView::set_accent_color(uint32_t color) {
   accent_color_ = color;
 }
 
-void MessageView::set_pixmap_cache_capacity(int capacity) {
-  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
-}
-
 MentionContext MessageView::build_mention_context() const {
   MentionContext ctx;
   ctx.current_user_id = current_user_id_;
@@ -475,12 +445,9 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
             pending_images_.erase(it);
             kind::log::gui()->trace("image_ready: {}, updating {} messages", std_url, message_ids.size());
 
-            // Convert pre-decoded QImage to QPixmap (fast, no decoding)
             if (image.decoded.isNull()) {
               return;
             }
-            QPixmap pixmap = QPixmap::fromImage(image.decoded);
-            pixmap_cache_.put(std_url, pixmap);
 
             // Find the first visible row to detect if images load above viewport
             int first_visible_row = -1;
@@ -537,15 +504,18 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
     if (url.empty()) {
       return;
     }
-    auto px = pixmap_cache_.get(url);
-    if (px) {
-      images[url] = *px;
+    if (!image_cache_) {
+      return;
+    }
+    auto cached = image_cache_->get(url);
+    if (cached && !cached->decoded.isNull()) {
+      images[url] = QPixmap::fromImage(cached->decoded);
     }
   };
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      try_get(add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
+      try_get(kind::cdn_url::add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
     }
     if (embed.thumbnail) {
       bool squareish = true;
@@ -556,12 +526,13 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
       int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      try_get(add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
+      try_get(kind::cdn_url::add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      if (att.is_video() && !att.proxy_url.empty()) {
+      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
+      if (att.is_video()) {
         int req_w = att.width.value_or(520);
         int req_h = att.height.value_or(520);
         if (req_w > 520) {
@@ -572,9 +543,9 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
           req_w = req_w * 300 / std::max(req_h, 1);
           req_h = 300;
         }
-        try_get(add_image_size(att.proxy_url, req_w, req_h) + "&format=webp");
+        try_get(kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp");
       } else {
-        try_get(add_image_size(att.url, 520));
+        try_get(kind::cdn_url::add_image_size(base, 520));
       }
     }
   }
@@ -604,8 +575,8 @@ void MessageView::request_images(const kind::Message& msg) {
     if (url.empty()) {
       return;
     }
-    // Skip if already decoded in pixmap cache
-    if (pixmap_cache_.contains(url)) {
+    // Skip if already in image cache
+    if (image_cache_->get(url).has_value()) {
       return;
     }
     pending_images_[url].push_back(msg.id);
@@ -615,7 +586,7 @@ void MessageView::request_images(const kind::Message& msg) {
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
       std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      request_image(add_image_size(key, 520));
+      request_image(kind::cdn_url::add_image_size(key, 520));
     }
     if (embed.thumbnail) {
       std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
@@ -627,14 +598,13 @@ void MessageView::request_images(const kind::Message& msg) {
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
       int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      request_image(add_image_size(key, thumb_size));
+      request_image(kind::cdn_url::add_image_size(key, thumb_size));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      if (att.is_video() && !att.proxy_url.empty()) {
-        // Use proxy URL with format=webp to get a video thumbnail frame
-        // Pass correct aspect ratio dimensions so Discord doesn't square-crop
+      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
+      if (att.is_video()) {
         int req_w = att.width.value_or(520);
         int req_h = att.height.value_or(520);
         if (req_w > 520) {
@@ -645,9 +615,9 @@ void MessageView::request_images(const kind::Message& msg) {
           req_w = req_w * 300 / std::max(req_h, 1);
           req_h = 300;
         }
-        request_image(add_image_size(att.proxy_url, req_w, req_h) + "&format=webp");
+        request_image(kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp");
       } else {
-        request_image(add_image_size(att.url, 520));
+        request_image(kind::cdn_url::add_image_size(base, 520));
       }
     }
   }
@@ -731,17 +701,11 @@ void MessageView::log_memory_stats() const {
     }
   }
 
-  int64_t pixmap_cache_bytes = 0;
-  pixmap_cache_.for_each([&](const std::string&, const QPixmap& px) {
-    pixmap_cache_bytes += static_cast<int64_t>(px.width()) * px.height() * px.depth() / 8;
-  });
-
   logger->trace(
       "app stats: messages={}, rendered={} valid, blocks={}, "
-      "pixmap_blocks={} ({:.1f}MB), pixmap_cache={} items ({:.1f}MB), pending={}",
+      "pixmap_blocks={} ({:.1f}MB), pending={}",
       model_->rowCount(), rendered_valid, total_blocks,
       renderer_pixmap_count, renderer_pixmap_bytes / (1024.0 * 1024.0),
-      pixmap_cache_.size(), pixmap_cache_bytes / (1024.0 * 1024.0),
       pending_images_.size());
 }
 
