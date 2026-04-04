@@ -6,7 +6,9 @@
 
 namespace kind {
 
-DataStore::DataStore(std::size_t max_messages_per_channel) : max_messages_per_channel_(max_messages_per_channel) {}
+DataStore::DataStore(std::size_t max_messages_per_channel, std::size_t max_channel_buffers)
+    : max_messages_per_channel_(max_messages_per_channel)
+    , max_channel_buffers_(max_channel_buffers) {}
 
 // --- Thread-safe reads ---
 
@@ -438,6 +440,12 @@ void DataStore::add_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
+    // Don't create new channel buffers beyond the cap for unviewed channels
+    if (max_channel_buffers_ > 0
+        && channel_messages_.find(channel_id) == channel_messages_.end()
+        && channel_messages_.size() >= max_channel_buffers_) {
+      return;
+    }
     // Apply pending delete if this message was deleted before being cached
     auto pending_it = pending_deletes_.find(channel_id);
     if (pending_it != pending_deletes_.end() && pending_it->second.count(msg.id)) {
@@ -464,6 +472,12 @@ void DataStore::update_message(Message msg) {
   Snowflake channel_id = msg.channel_id;
   {
     std::unique_lock lock(mutex_);
+    // Don't create new channel buffers beyond the cap for unviewed channels
+    if (max_channel_buffers_ > 0
+        && channel_messages_.find(channel_id) == channel_messages_.end()
+        && channel_messages_.size() >= max_channel_buffers_) {
+      return;
+    }
     auto& deque = channel_messages_[channel_id];
     for (auto& existing : deque) {
       if (existing.id == msg.id) {
@@ -603,6 +617,40 @@ void DataStore::add_messages_before(Snowflake channel_id, std::vector<Message> m
   if (!added.empty()) {
     if (!suppress_observers_) observers_.notify(
         [channel_id, &added](StoreObserver* o) { o->on_messages_prepended(channel_id, added); });
+  }
+}
+
+// --- Channel LRU tracking ---
+
+void DataStore::touch_channel(Snowflake channel_id) {
+  std::unique_lock lock(mutex_);
+
+  auto it = channel_lru_map_.find(channel_id);
+  if (it != channel_lru_map_.end()) {
+    channel_lru_.splice(channel_lru_.begin(), channel_lru_, it->second);
+    return;
+  }
+
+  channel_lru_.push_front(channel_id);
+  channel_lru_map_[channel_id] = channel_lru_.begin();
+
+  if (max_channel_buffers_ > 0 && channel_lru_.size() > max_channel_buffers_) {
+    auto oldest_id = channel_lru_.back();
+    channel_lru_.pop_back();
+    channel_lru_map_.erase(oldest_id);
+    channel_messages_.erase(oldest_id);
+    log::store()->debug("evicted channel message buffer: {}", oldest_id);
+  }
+
+  if (log::store()->should_log(spdlog::level::trace)) {
+    std::size_t total_msgs = 0;
+    for (const auto& [cid, deque] : channel_messages_) {
+      total_msgs += deque.size();
+    }
+    log::store()->trace("store stats: channel_buffers={}, total_messages={}, guilds={}, "
+                        "guild_channels={}, private_channels={}, users={}",
+                        channel_messages_.size(), total_msgs, guilds_.size(),
+                        guild_channels_.size(), private_channels_.size(), users_.size());
   }
 }
 

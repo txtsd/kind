@@ -8,9 +8,11 @@
 #include "models/user.hpp"
 
 #include <deque>
+#include <list>
 #include <map>
 #include <optional>
 #include <shared_mutex>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -18,7 +20,8 @@ namespace kind {
 
 class DataStore {
 public:
-  explicit DataStore(std::size_t max_messages_per_channel = 500);
+  explicit DataStore(std::size_t max_messages_per_channel = 500,
+                     std::size_t max_channel_buffers = 0);
 
   // Thread-safe reads (return copies)
   std::vector<Guild> guilds() const;
@@ -67,6 +70,9 @@ public:
   void set_messages(Snowflake channel_id, std::vector<Message> msgs);
   void add_messages_before(Snowflake channel_id, std::vector<Message> msgs);
 
+  // Channel LRU tracking and buffer eviction
+  void touch_channel(Snowflake channel_id);
+
   // Observer management
   void add_observer(StoreObserver* obs);
   void remove_observer(StoreObserver* obs);
@@ -79,6 +85,9 @@ public:
 private:
   mutable std::shared_mutex mutex_;
   std::size_t max_messages_per_channel_;
+  std::size_t max_channel_buffers_;
+  std::list<Snowflake> channel_lru_;
+  std::unordered_map<Snowflake, std::list<Snowflake>::iterator> channel_lru_map_;
 
   User current_user_;
   std::map<Snowflake, Guild> guilds_;

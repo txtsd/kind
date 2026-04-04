@@ -514,3 +514,122 @@ TEST(DataStoreTier3, GuildWith50kChannels) {
 
   EXPECT_EQ(store.channels(1).size(), 50000u);
 }
+
+// =============================================================================
+// Channel buffer eviction
+// =============================================================================
+
+TEST(DataStoreChannelEviction, EvictsOldestChannelWhenCapReached) {
+  kind::DataStore store(500, 2); // 500 msgs/channel, 2 channel buffers max
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1), make_channel(30, 1)});
+  store.upsert_guild(guild);
+
+  store.touch_channel(10);
+  store.add_message(make_message(100, 10, "in channel 10"));
+
+  store.touch_channel(20);
+  store.add_message(make_message(200, 20, "in channel 20"));
+
+  store.touch_channel(30);
+  store.add_message(make_message(300, 30, "in channel 30"));
+
+  // Channel 10 (oldest touched) should be evicted
+  auto msgs10 = store.messages(10);
+  EXPECT_TRUE(msgs10.empty());
+
+  // Channels 20 and 30 should remain
+  auto msgs20 = store.messages(20);
+  EXPECT_EQ(msgs20.size(), 1);
+  auto msgs30 = store.messages(30);
+  EXPECT_EQ(msgs30.size(), 1);
+}
+
+TEST(DataStoreChannelEviction, TouchPromotesChannel) {
+  kind::DataStore store(500, 2);
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1), make_channel(30, 1)});
+  store.upsert_guild(guild);
+
+  store.touch_channel(10);
+  store.add_message(make_message(100, 10, "ch10"));
+
+  store.touch_channel(20);
+  store.add_message(make_message(200, 20, "ch20"));
+
+  store.touch_channel(10); // promote channel 10
+
+  store.touch_channel(30);
+  store.add_message(make_message(300, 30, "ch30"));
+
+  // Channel 20 should be evicted (oldest after 10 was promoted)
+  EXPECT_TRUE(store.messages(20).empty());
+  EXPECT_FALSE(store.messages(10).empty());
+  EXPECT_FALSE(store.messages(30).empty());
+}
+
+TEST(DataStoreChannelEviction, ZeroCapMeansUnlimited) {
+  kind::DataStore store(500, 0); // 0 = no channel buffer limit
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1), make_channel(30, 1)});
+  store.upsert_guild(guild);
+
+  for (int ch : {10, 20, 30}) {
+    store.touch_channel(ch);
+    store.add_message(make_message(ch * 10, ch, "msg"));
+  }
+
+  EXPECT_FALSE(store.messages(10).empty());
+  EXPECT_FALSE(store.messages(20).empty());
+  EXPECT_FALSE(store.messages(30).empty());
+}
+
+TEST(DataStoreChannelEviction, AddMessageRespectsBufferCap) {
+  kind::DataStore store(500, 2); // cap at 2 channel buffers
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1), make_channel(30, 1)});
+  store.upsert_guild(guild);
+
+  // Touch and add messages to channels 10 and 20 (fills the cap)
+  store.touch_channel(10);
+  store.add_message(make_message(100, 10, "msg"));
+  store.touch_channel(20);
+  store.add_message(make_message(200, 20, "msg"));
+
+  // Gateway message arrives for channel 30 (not touched, buffer cap reached)
+  store.add_message(make_message(300, 30, "msg"));
+
+  // Channel 30 should NOT have a buffer since cap is reached
+  EXPECT_TRUE(store.messages(30).empty());
+  // Existing buffers should be intact
+  EXPECT_FALSE(store.messages(10).empty());
+  EXPECT_FALSE(store.messages(20).empty());
+}
+
+TEST(DataStoreChannelEviction, UpdateMessageRespectsBufferCap) {
+  kind::DataStore store(500, 2);
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1), make_channel(30, 1)});
+  store.upsert_guild(guild);
+
+  store.touch_channel(10);
+  store.add_message(make_message(100, 10, "msg"));
+  store.touch_channel(20);
+  store.add_message(make_message(200, 20, "msg"));
+
+  // Update for an uncached channel should not create a new buffer
+  kind::Message update_msg = make_message(300, 30, "edited");
+  store.update_message(std::move(update_msg));
+
+  EXPECT_TRUE(store.messages(30).empty());
+}
+
+TEST(DataStoreChannelEviction, AddMessageAllowedForExistingBuffer) {
+  kind::DataStore store(500, 2);
+  auto guild = make_guild(1, "guild", {make_channel(10, 1), make_channel(20, 1)});
+  store.upsert_guild(guild);
+
+  store.touch_channel(10);
+  store.add_message(make_message(100, 10, "first"));
+  store.touch_channel(20);
+  store.add_message(make_message(200, 20, "first"));
+
+  // Adding to an existing buffer should work even at cap
+  store.add_message(make_message(101, 10, "second"));
+  EXPECT_EQ(store.messages(10).size(), 2);
+}
