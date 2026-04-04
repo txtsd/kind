@@ -40,6 +40,18 @@ if(KIND_BUILD_TUI)
   endif()
 endif()
 
+# Custom allocator
+if(KIND_ALLOCATOR STREQUAL "mimalloc")
+  find_package(mimalloc REQUIRED)
+  message(STATUS "Using mimalloc allocator")
+elseif(KIND_ALLOCATOR STREQUAL "jemalloc")
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(jemalloc REQUIRED IMPORTED_TARGET jemalloc)
+  message(STATUS "Using jemalloc allocator")
+elseif(NOT KIND_ALLOCATOR STREQUAL "none")
+  message(FATAL_ERROR "KIND_ALLOCATOR must be mimalloc, jemalloc, or none (got '${KIND_ALLOCATOR}')")
+endif()
+
 # QtKeychain (system keychain for token storage)
 find_package(Qt6Keychain REQUIRED)
 

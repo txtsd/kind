@@ -18,6 +18,8 @@ option(KIND_BUILD_TESTS "Build tests" ON)
 option(KIND_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(KIND_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
 option(KIND_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+set(KIND_ALLOCATOR "mimalloc" CACHE STRING "Custom allocator: mimalloc, jemalloc, or none")
+set_property(CACHE KIND_ALLOCATOR PROPERTY STRINGS mimalloc jemalloc none)
 
 if(KIND_ENABLE_ASAN)
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
@@ -39,6 +41,7 @@ configure_file(
 )
 
 include(cmake/dependencies.cmake)
+include(cmake/allocator.cmake)
 
 add_subdirectory(src/core)
 

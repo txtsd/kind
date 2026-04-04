@@ -10,6 +10,8 @@ target_link_libraries(kind-tui
     ftxui::component
 )
 
+kind_link_allocator(kind-tui)
+
 include(GNUInstallDirs)
 
 install(TARGETS kind-tui

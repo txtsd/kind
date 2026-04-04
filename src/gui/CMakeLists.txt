@@ -84,6 +84,8 @@ target_link_libraries(kind-gui
     Qt6::Widgets
 )
 
+kind_link_allocator(kind-gui)
+
 include(GNUInstallDirs)
 
 install(TARGETS kind-gui
