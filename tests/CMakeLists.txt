@@ -81,6 +81,10 @@ kind_add_test_executable(kind-test-read-state
   core/read_state_test.cpp
 )
 
+kind_add_test_executable(kind-test-lru-cache
+  core/lru_cache_test.cpp
+)
+
 # --- GUI tests ---
 
 kind_add_test_executable(kind-test-message-model
