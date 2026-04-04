@@ -1,5 +1,6 @@
 #include "workers/render_worker.hpp"
 
+#include "cdn_url.hpp"
 #include "renderers/attachment_block_renderer.hpp"
 #include "renderers/component_block_renderer.hpp"
 #include "renderers/embed_block_renderer.hpp"
@@ -98,27 +99,6 @@ void resolve_mention(kind::TextSpan& span, const kind::Message& message,
       spdlog::debug("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
     }
   }
-}
-
-// Append size parameters to Discord image URLs.
-static std::string add_image_size(const std::string& url, int display_width, int display_height = 0) {
-  if (display_height == 0) {
-    display_height = display_width;
-  }
-  char sep = (url.find('?') != std::string::npos) ? '&' : '?';
-  if (url.find("cdn.discordapp.com") != std::string::npos) {
-    int s = 16;
-    while (s < display_width && s < 4096) {
-      s *= 2;
-    }
-    return url + sep + "size=" + std::to_string(s);
-  }
-  if (url.find("discordapp.net") != std::string::npos
-      || url.find("discord.com") != std::string::npos) {
-    return url + sep + "width=" + std::to_string(display_width)
-           + "&height=" + std::to_string(display_height);
-  }
-  return url;
 }
 
 RenderedMessage compute_layout(
@@ -236,7 +216,7 @@ RenderedMessage compute_layout(
     QPixmap embed_img;
     QPixmap embed_thumb;
     if (embed.image) {
-      std::string key = add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520);
+      std::string key = kind::cdn_url::add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -258,7 +238,7 @@ RenderedMessage compute_layout(
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
       int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      std::string key = add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
+      std::string key = kind::cdn_url::add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -304,7 +284,7 @@ RenderedMessage compute_layout(
     auto& first_embed = message.embeds[0]; // The first embed with a URL
     QPixmap first_img, first_thumb;
     if (first_embed.image) {
-      std::string key = add_image_size(first_embed.image->proxy_url.value_or(first_embed.image->url), 520);
+      std::string key = kind::cdn_url::add_image_size(first_embed.image->proxy_url.value_or(first_embed.image->url), 520);
       auto img_it = images.find(key);
       if (img_it != images.end()) first_img = img_it->second;
     }
@@ -316,7 +296,7 @@ RenderedMessage compute_layout(
         sq = (ratio >= 0.8 && ratio <= 1.2);
       }
       int ts = (first_embed.type == "video" || !sq) ? 520 : 128;
-      std::string key = add_image_size(first_embed.thumbnail->proxy_url.value_or(first_embed.thumbnail->url), ts);
+      std::string key = kind::cdn_url::add_image_size(first_embed.thumbnail->proxy_url.value_or(first_embed.thumbnail->url), ts);
       auto img_it = images.find(key);
       if (img_it != images.end()) first_thumb = img_it->second;
     }
@@ -353,9 +333,9 @@ RenderedMessage compute_layout(
           req_w = req_w * 300 / std::max(req_h, 1);
           req_h = 300;
         }
-        key = add_image_size(att.proxy_url, req_w, req_h) + "&format=webp";
+        key = kind::cdn_url::add_image_size(att.proxy_url, req_w, req_h) + "&format=webp";
       } else {
-        key = add_image_size(att.url, 520);
+        key = kind::cdn_url::add_image_size(att.url, 520);
       }
       auto it = images.find(key);
       if (it != images.end()) {

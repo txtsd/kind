@@ -85,6 +85,10 @@ kind_add_test_executable(kind-test-lru-cache
   core/lru_cache_test.cpp
 )
 
+kind_add_test_executable(kind-test-cdn-url
+  core/cdn_url_test.cpp
+)
+
 # --- GUI tests ---
 
 kind_add_test_executable(kind-test-message-model
