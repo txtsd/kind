@@ -15,12 +15,29 @@
 
 namespace kind {
 
+QImage ImageCache::clamp_image_size(const QImage& image, int max_dim) {
+  if (image.isNull() || max_dim <= 0) {
+    return image;
+  }
+  if (image.width() <= max_dim && image.height() <= max_dim) {
+    return image;
+  }
+  auto scaled = image.scaled(max_dim, max_dim, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+  log::cache()->trace("image clamped: {}x{} -> {}x{} (saved {:.1f}KB)",
+                       image.width(), image.height(),
+                       scaled.width(), scaled.height(),
+                       (image.sizeInBytes() - scaled.sizeInBytes()) / 1024.0);
+  return scaled;
+}
+
 ImageCache::ImageCache(const std::filesystem::path& disk_cache_dir,
                        int max_memory_items,
+                       int max_image_dimension,
                        int64_t max_disk_bytes,
                        QObject* parent)
     : QObject(parent)
     , max_memory_items_(max_memory_items)
+    , max_image_dimension_(max_image_dimension)
     , disk_cache_dir_(disk_cache_dir)
     , max_disk_bytes_(max_disk_bytes)
     , network_(new QNetworkAccessManager(this)) {
@@ -145,7 +162,7 @@ std::optional<CachedImage> ImageCache::load_from_disk(const std::string& url) co
 
   CachedImage image;
   image.data = data;
-  image.decoded = QImage::fromData(data);
+  image.decoded = clamp_image_size(QImage::fromData(data), max_image_dimension_);
   if (!image.decoded.isNull()) {
     image.width = image.decoded.width();
     image.height = image.decoded.height();
@@ -182,8 +199,31 @@ void ImageCache::add_to_memory(const std::string& url, const CachedImage& image)
 
   evict_memory_if_needed();
 
+  // Store only decoded image in memory; raw bytes are on disk.
+  CachedImage memory_image;
+  memory_image.decoded = image.decoded;
+  memory_image.width = image.width;
+  memory_image.height = image.height;
+  memory_image.mime_type = image.mime_type;
+  // memory_image.data deliberately left empty
+
   lru_order_.push_front(url);
-  memory_cache_[url] = MemoryEntry{image, lru_order_.begin()};
+  memory_cache_[url] = MemoryEntry{std::move(memory_image), lru_order_.begin()};
+
+  if (log::cache()->should_log(spdlog::level::trace)) {
+    int64_t total_bytes = 0;
+    for (const auto& [k, entry] : memory_cache_) {
+      const auto& img = entry.image.decoded;
+      if (!img.isNull()) {
+        total_bytes += static_cast<int64_t>(img.sizeInBytes());
+      }
+    }
+    log::cache()->trace("image memory cache: {} items, {:.1f}MB total, added {}x{} ({:.1f}KB) for {}",
+                         memory_cache_.size(), total_bytes / (1024.0 * 1024.0),
+                         image.width, image.height,
+                         image.decoded.isNull() ? 0.0 : image.decoded.sizeInBytes() / 1024.0,
+                         url);
+  }
 }
 
 void ImageCache::evict_memory_if_needed() const {
@@ -235,9 +275,10 @@ void ImageCache::start_download(const std::string& url) {
 
     log::cache()->debug("image downloaded: {} ({}KB)", url, data.size() / 1024);
 
-    // Decode image off the UI thread, then emit and cache on the main thread
-    auto future = QtConcurrent::run([data]() -> QImage {
-      return QImage::fromData(data);
+    // Decode and clamp image off the UI thread, then emit and cache on the main thread
+    int max_dim = max_image_dimension_;
+    auto future = QtConcurrent::run([data, max_dim]() -> QImage {
+      return clamp_image_size(QImage::fromData(data), max_dim);
     });
 
     auto* decode_watcher = new QFutureWatcher<QImage>(this);
@@ -254,13 +295,15 @@ void ImageCache::start_download(const std::string& url) {
         image.height = image.decoded.height();
       }
 
-      add_to_memory(url, image);
-      log::cache()->debug("image ready: {}", url);
-      emit image_ready(QString::fromStdString(url), image);
-
+      // Save to disk first (needs raw bytes)
       QtConcurrent::run([this, url, image]() {
         save_to_disk(url, image);
       });
+
+      // Add to memory (drops raw bytes from the in-memory entry)
+      add_to_memory(url, image);
+      log::cache()->debug("image ready: {}", url);
+      emit image_ready(QString::fromStdString(url), image);
     });
 
     decode_watcher->setFuture(future);

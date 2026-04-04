@@ -33,6 +33,7 @@ class ImageCache : public QObject {
 public:
   explicit ImageCache(const std::filesystem::path& disk_cache_dir = {},
                       int max_memory_items = 500,
+                      int max_image_dimension = 1024,
                       int64_t max_disk_bytes = 100 * 1024 * 1024,
                       QObject* parent = nullptr);
 
@@ -67,9 +68,12 @@ private:
   void add_to_memory(const std::string& url, const CachedImage& image) const;
   void evict_memory_if_needed() const;
 
+  static QImage clamp_image_size(const QImage& image, int max_dim);
+
   mutable std::unordered_map<std::string, MemoryEntry> memory_cache_;
   mutable std::list<std::string> lru_order_;
   int max_memory_items_;
+  int max_image_dimension_;
 
   std::filesystem::path disk_cache_dir_;
   int64_t max_disk_bytes_;

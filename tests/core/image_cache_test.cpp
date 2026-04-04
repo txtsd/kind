@@ -206,3 +206,112 @@ TEST_F(ImageCacheTest, MemoryPromotionOnAccess) {
   // p2 was evicted from memory
   EXPECT_FALSE(cache.get("https://example.com/p2.png").has_value());
 }
+
+TEST_F(ImageCacheTest, OversizedImageClampedOnLoad) {
+  // Create a 256x128 image, store on disk, load with max_dim=64
+  std::string url = "https://example.com/big.png";
+  QImage img(256, 128, QImage::Format_ARGB32);
+  img.fill(Qt::blue);
+  QByteArray png_data;
+  QBuffer buffer(&png_data);
+  buffer.open(QIODevice::WriteOnly);
+  img.save(&buffer, "PNG");
+  buffer.close();
+
+  kind::ImageCache cache(cache_dir_, 500, 64);
+
+  auto hash = QCryptographicHash::hash(
+      QByteArray::fromRawData(url.data(), static_cast<qsizetype>(url.size())),
+      QCryptographicHash::Sha256);
+  auto path = cache_dir_ / hash.toHex().toStdString();
+  QFile file(QString::fromStdString(path.string()));
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  file.write(png_data);
+  file.close();
+
+  QSignalSpy spy(&cache, &kind::ImageCache::image_ready);
+  cache.request(url);
+  ASSERT_TRUE(spy.wait(1000));
+
+  auto cached = cache.get(url);
+  ASSERT_TRUE(cached.has_value());
+  EXPECT_FALSE(cached->decoded.isNull());
+  // Should be scaled to fit within 64x64 while keeping aspect ratio
+  // 256x128 -> 64x32
+  EXPECT_LE(cached->width, 64);
+  EXPECT_LE(cached->height, 64);
+  EXPECT_EQ(cached->width, 64);
+  EXPECT_EQ(cached->height, 32);
+}
+
+TEST_F(ImageCacheTest, SmallImageNotClamped) {
+  // A 32x32 image with max_dim=64 should not be scaled
+  std::string url = "https://example.com/small.png";
+  QImage img(32, 32, QImage::Format_ARGB32);
+  img.fill(Qt::green);
+  QByteArray png_data;
+  QBuffer buffer(&png_data);
+  buffer.open(QIODevice::WriteOnly);
+  img.save(&buffer, "PNG");
+  buffer.close();
+
+  kind::ImageCache cache(cache_dir_, 500, 64);
+
+  auto hash = QCryptographicHash::hash(
+      QByteArray::fromRawData(url.data(), static_cast<qsizetype>(url.size())),
+      QCryptographicHash::Sha256);
+  auto path = cache_dir_ / hash.toHex().toStdString();
+  QFile file(QString::fromStdString(path.string()));
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  file.write(png_data);
+  file.close();
+
+  QSignalSpy spy(&cache, &kind::ImageCache::image_ready);
+  cache.request(url);
+  ASSERT_TRUE(spy.wait(1000));
+
+  auto cached = cache.get(url);
+  ASSERT_TRUE(cached.has_value());
+  EXPECT_EQ(cached->width, 32);
+  EXPECT_EQ(cached->height, 32);
+}
+
+TEST_F(ImageCacheTest, MemoryEntriesDropRawBytes) {
+  // Write a file to disk so request() can load it
+  std::string url = "https://example.com/drop_raw.png";
+  QImage img(2, 2, QImage::Format_ARGB32);
+  img.fill(Qt::red);
+  QByteArray png_data;
+  QBuffer buffer(&png_data);
+  buffer.open(QIODevice::WriteOnly);
+  img.save(&buffer, "PNG");
+  buffer.close();
+
+  kind::ImageCache cache(cache_dir_);
+
+  auto hash = QCryptographicHash::hash(
+      QByteArray::fromRawData(url.data(), static_cast<qsizetype>(url.size())),
+      QCryptographicHash::Sha256);
+  auto path = cache_dir_ / hash.toHex().toStdString();
+  QFile file(QString::fromStdString(path.string()));
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  file.write(png_data);
+  file.close();
+  QSignalSpy spy(&cache, &kind::ImageCache::image_ready);
+  cache.request(url);
+  ASSERT_TRUE(spy.wait(1000));
+
+  // The emitted CachedImage should still have decoded data
+  auto args = spy.takeFirst();
+  auto image = args.at(1).value<kind::CachedImage>();
+  EXPECT_FALSE(image.decoded.isNull());
+
+  // But after settling into memory, get() should return an entry
+  // with empty raw data (bytes dropped after disk save)
+  auto cached = cache.get(url);
+  ASSERT_TRUE(cached.has_value());
+  EXPECT_TRUE(cached->data.isEmpty());
+  EXPECT_FALSE(cached->decoded.isNull());
+  EXPECT_EQ(cached->width, 2);
+  EXPECT_EQ(cached->height, 2);
+}
