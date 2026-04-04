@@ -3,15 +3,13 @@
 #include "cache/image_cache.hpp"
 #include "logging.hpp"
 
-#include <QImage>
 #include <QScrollBar>
 #include <QStyle>
 
 namespace kind::gui {
 
 ServerList::ServerList(QWidget* parent)
-    : QListView(parent), model_(new GuildModel(this)), delegate_(new GuildDelegate(this)),
-      pixmap_cache_(100) {
+    : QListView(parent), model_(new GuildModel(this)), delegate_(new GuildDelegate(this)) {
   setIconSize(QSize(40, 40));
   setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   setModel(model_);
@@ -35,14 +33,11 @@ void ServerList::set_image_cache(kind::ImageCache* cache) {
                 return;
               }
               if (!img.decoded.isNull()) {
-                on_image_ready(url, QPixmap::fromImage(img.decoded));
+                delegate_->set_pixmap(url_str, QPixmap::fromImage(img.decoded));
+                viewport()->update();
               }
             });
   }
-}
-
-void ServerList::set_pixmap_cache_capacity(int capacity) {
-  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
 }
 
 void ServerList::set_guild_display(const std::string& mode) {
@@ -88,32 +83,16 @@ void ServerList::fetch_guild_icons() {
       continue;
     }
     auto url_str = url.toStdString();
-    // Already cached locally? Push to delegate
-    auto cached_px = pixmap_cache_.get(url_str);
-    if (cached_px) {
-      delegate_->set_pixmap(url_str, *cached_px);
-      continue;
-    }
-    // Check image cache memory
     auto cached = image_cache_->get(url_str);
     if (cached) {
       if (!cached->decoded.isNull()) {
-        QPixmap pm = QPixmap::fromImage(cached->decoded);
-        pixmap_cache_.put(url_str, pm);
-        delegate_->set_pixmap(url_str, pm);
+        delegate_->set_pixmap(url_str, QPixmap::fromImage(cached->decoded));
       }
     } else {
       pending_urls_.insert(url_str);
       image_cache_->request(url_str);
     }
   }
-}
-
-void ServerList::on_image_ready(const QString& url, const QPixmap& pixmap) {
-  auto url_str = url.toStdString();
-  pixmap_cache_.put(url_str, pixmap);
-  delegate_->set_pixmap(url_str, pixmap);
-  viewport()->update();
 }
 
 void ServerList::update_width() {

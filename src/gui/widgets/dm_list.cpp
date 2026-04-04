@@ -3,14 +3,12 @@
 #include "cache/image_cache.hpp"
 #include "logging.hpp"
 
-#include <QImage>
 #include <QPushButton>
 
 namespace kind::gui {
 
 DmList::DmList(QWidget* parent)
-    : QListView(parent), model_(new DmListModel(this)), delegate_(new DmDelegate(this)),
-      pixmap_cache_(100) {
+    : QListView(parent), model_(new DmListModel(this)), delegate_(new DmDelegate(this)) {
   setMaximumWidth(200);
   setMinimumWidth(120);
   setModel(model_);
@@ -49,14 +47,11 @@ void DmList::set_image_cache(kind::ImageCache* cache) {
                 return;
               }
               if (!img.decoded.isNull()) {
-                on_image_ready(url, QPixmap::fromImage(img.decoded));
+                delegate_->set_pixmap(url_str, QPixmap::fromImage(img.decoded));
+                viewport()->update();
               }
             });
   }
-}
-
-void DmList::set_pixmap_cache_capacity(int capacity) {
-  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
 }
 
 void DmList::set_display_mode(const std::string& mode) {
@@ -93,30 +88,16 @@ void DmList::fetch_avatars() {
     auto url = idx.data(DmListModel::RecipientAvatarUrlRole).toString();
     if (url.isEmpty()) continue;
     auto url_str = url.toStdString();
-    auto cached_px = pixmap_cache_.get(url_str);
-    if (cached_px) {
-      delegate_->set_pixmap(url_str, *cached_px);
-      continue;
-    }
     auto cached = image_cache_->get(url_str);
     if (cached) {
       if (!cached->decoded.isNull()) {
-        QPixmap pm = QPixmap::fromImage(cached->decoded);
-        pixmap_cache_.put(url_str, pm);
-        delegate_->set_pixmap(url_str, pm);
+        delegate_->set_pixmap(url_str, QPixmap::fromImage(cached->decoded));
       }
     } else {
       pending_urls_.insert(url_str);
       image_cache_->request(url_str);
     }
   }
-}
-
-void DmList::on_image_ready(const QString& url, const QPixmap& pixmap) {
-  auto url_str = url.toStdString();
-  pixmap_cache_.put(url_str, pixmap);
-  delegate_->set_pixmap(url_str, pixmap);
-  viewport()->update();
 }
 
 void DmList::resizeEvent(QResizeEvent* event) {

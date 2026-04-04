@@ -11,8 +11,6 @@
 #include <QResizeEvent>
 #include <QVector>
 
-#include "cache/lru_cache.hpp"
-
 #include <string>
 #include <unordered_set>
 
@@ -33,7 +31,6 @@ public:
 
   void set_image_cache(kind::ImageCache* cache);
   void set_display_mode(const std::string& mode);
-  void set_pixmap_cache_capacity(int capacity);
 
 public slots:
   void set_channels(const QVector<kind::Channel>& channels);
@@ -48,14 +45,12 @@ protected:
 private:
   void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
   void fetch_avatars();
-  void on_image_ready(const QString& url, const QPixmap& pixmap);
 
   DmListModel* model_;
   DmDelegate* delegate_;
   QPushButton* new_dm_button_;
   kind::ImageCache* image_cache_{nullptr};
   std::string display_mode_{"both"};
-  kind::LruCache<std::string, QPixmap> pixmap_cache_;
   std::unordered_set<std::string> pending_urls_;
 };
 

@@ -9,8 +9,6 @@
 #include <QPixmap>
 #include <QVector>
 
-#include "cache/lru_cache.hpp"
-
 #include <string>
 #include <unordered_set>
 
@@ -31,7 +29,6 @@ public:
 
   void set_image_cache(kind::ImageCache* cache);
   void set_guild_display(const std::string& mode);
-  void set_pixmap_cache_capacity(int capacity);
 
 public slots:
   void set_guilds(const QVector<kind::Guild>& guilds);
@@ -42,14 +39,12 @@ signals:
 private:
   void on_selection_changed(const QModelIndex& current, const QModelIndex& previous);
   void fetch_guild_icons();
-  void on_image_ready(const QString& url, const QPixmap& pixmap);
   void update_width();
 
   GuildModel* model_;
   GuildDelegate* delegate_;
   kind::ImageCache* image_cache_{nullptr};
   std::string guild_display_{"text"};
-  kind::LruCache<std::string, QPixmap> pixmap_cache_;
   std::unordered_set<std::string> pending_urls_;
 };
 
