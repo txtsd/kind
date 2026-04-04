@@ -87,6 +87,20 @@ TEST(CdnUrlEdgeTest, AttachmentWithExistingQueryUsesAmpersand) {
   EXPECT_FALSE(result.contains("&&"));
 }
 
+TEST(CdnUrlEdgeTest, AttachmentWithTrailingAmpersandNoDuplicate) {
+  auto result = kind::cdn_url::add_image_size(
+      "https://cdn.discordapp.com/attachments/1/2/img.png?ex=abc&is=def&hm=ghi&", 300, 200);
+  EXPECT_TRUE(result.contains("width=300"));
+  EXPECT_FALSE(result.contains("&&"));
+}
+
+TEST(CdnUrlEdgeTest, ProxyWithTrailingQuestionMark) {
+  auto result = kind::cdn_url::add_image_size(
+      "https://media.discordapp.net/img.png?", 300, 200);
+  EXPECT_TRUE(result.contains("width=300"));
+  EXPECT_FALSE(result.contains("??"));
+}
+
 TEST(CdnUrlEdgeTest, EmptyUrlReturnsEmpty) {
   auto result = kind::cdn_url::add_image_size("", 100);
   EXPECT_EQ(result, "");

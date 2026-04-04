@@ -26,7 +26,16 @@ inline std::string add_image_size(const std::string& url, int display_width, int
     display_height = display_width;
   }
 
-  char sep = url.contains('?') ? '&' : '?';
+  // If URL already has query params, use & as separator.
+  // Skip separator entirely if URL already ends with & or ?.
+  std::string sep;
+  if (url.back() == '&' || url.back() == '?') {
+    sep = "";
+  } else if (url.contains('?')) {
+    sep = "&";
+  } else {
+    sep = "?";
+  }
 
   if (url.contains("cdn.discordapp.com")) {
     // Attachment URLs are pre-signed and ignore ?size=, so they need

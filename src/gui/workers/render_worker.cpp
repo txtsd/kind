@@ -322,7 +322,8 @@ RenderedMessage compute_layout(
     QPixmap att_img;
     if (att.width.has_value() && !att.url.empty()) {
       std::string key;
-      if (att.is_video() && !att.proxy_url.empty()) {
+      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
+      if (att.is_video()) {
         int req_w = att.width.value_or(520);
         int req_h = att.height.value_or(520);
         if (req_w > 520) {
@@ -333,9 +334,9 @@ RenderedMessage compute_layout(
           req_w = req_w * 300 / std::max(req_h, 1);
           req_h = 300;
         }
-        key = kind::cdn_url::add_image_size(att.proxy_url, req_w, req_h) + "&format=webp";
+        key = kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp";
       } else {
-        key = kind::cdn_url::add_image_size(att.url, 520);
+        key = kind::cdn_url::add_image_size(base, 520);
       }
       auto it = images.find(key);
       if (it != images.end()) {
