@@ -1,3 +1,4 @@
+#include "config/cache_budget.hpp"
 #include "config/config_manager.hpp"
 #include "config/platform_paths.hpp"
 
@@ -448,6 +449,129 @@ TEST_F(ConfigTestFixture, KnownAccountsMassEntries) {
   for (uint64_t i = 0; i < 100; ++i) {
     EXPECT_EQ(accounts[i].user_id, i + 1);
     EXPECT_EQ(accounts[i].username, "user_" + std::to_string(i + 1));
+  }
+}
+
+// ============================================================
+// Tier 1: CacheBudget
+// ============================================================
+
+TEST_F(ConfigTestFixture, DefaultMemoryProfileIsStandard) {
+  kind::ConfigManager config(config_path());
+  EXPECT_EQ(config.get<std::string>("behavior.memory_profile"), "standard");
+}
+
+TEST_F(ConfigTestFixture, CacheBudgetFromProfile) {
+  using kind::CacheBudget;
+
+  auto lean = CacheBudget::from_profile("lean");
+  EXPECT_EQ(lean.image_memory_items, 75);
+  EXPECT_EQ(lean.pixmap_cache_items, 100);
+  EXPECT_EQ(lean.dm_pixmap_cache_items, 50);
+  EXPECT_EQ(lean.server_pixmap_cache_items, 50);
+  EXPECT_EQ(lean.channel_buffers, 3);
+  EXPECT_EQ(lean.max_users, 2000);
+  EXPECT_EQ(lean.max_image_dimension, 256);
+
+  auto standard = CacheBudget::from_profile("standard");
+  EXPECT_EQ(standard.image_memory_items, 150);
+  EXPECT_EQ(standard.pixmap_cache_items, 200);
+  EXPECT_EQ(standard.dm_pixmap_cache_items, 100);
+  EXPECT_EQ(standard.server_pixmap_cache_items, 100);
+  EXPECT_EQ(standard.channel_buffers, 5);
+  EXPECT_EQ(standard.max_users, 5000);
+  EXPECT_EQ(standard.max_image_dimension, 520);
+
+  auto generous = CacheBudget::from_profile("generous");
+  EXPECT_EQ(generous.image_memory_items, 300);
+  EXPECT_EQ(generous.pixmap_cache_items, 400);
+  EXPECT_EQ(generous.dm_pixmap_cache_items, 200);
+  EXPECT_EQ(generous.server_pixmap_cache_items, 200);
+  EXPECT_EQ(generous.channel_buffers, 10);
+  EXPECT_EQ(generous.max_users, 10000);
+  EXPECT_EQ(generous.max_image_dimension, 1024);
+
+  // Unknown profile falls back to standard
+  auto unknown = CacheBudget::from_profile("bogus");
+  EXPECT_EQ(unknown.image_memory_items, 150);
+  EXPECT_EQ(unknown.max_image_dimension, 520);
+}
+
+// ============================================================
+// Tier 2: CacheBudget extensive
+// ============================================================
+
+TEST(CacheBudgetTest, TierValuesStrictlyOrdered) {
+  auto lean = kind::CacheBudget::from_profile("lean");
+  auto standard = kind::CacheBudget::from_profile("standard");
+  auto generous = kind::CacheBudget::from_profile("generous");
+
+  EXPECT_LT(lean.image_memory_items, standard.image_memory_items);
+  EXPECT_LT(standard.image_memory_items, generous.image_memory_items);
+  EXPECT_LT(lean.pixmap_cache_items, standard.pixmap_cache_items);
+  EXPECT_LT(standard.pixmap_cache_items, generous.pixmap_cache_items);
+  EXPECT_LT(lean.channel_buffers, standard.channel_buffers);
+  EXPECT_LT(standard.channel_buffers, generous.channel_buffers);
+  EXPECT_LT(lean.max_users, standard.max_users);
+  EXPECT_LT(standard.max_users, generous.max_users);
+}
+
+TEST(CacheBudgetTest, EmptyProfileFallsBackToStandard) {
+  auto budget = kind::CacheBudget::from_profile("");
+  auto standard = kind::CacheBudget::from_profile("standard");
+  EXPECT_EQ(budget, standard);
+}
+
+TEST_F(ConfigTestFixture, MemoryProfileConfigRoundTrip) {
+  {
+    kind::ConfigManager cfg(config_path());
+    cfg.set<std::string>("behavior.memory_profile", "lean");
+    cfg.save();
+  }
+  {
+    kind::ConfigManager cfg(config_path());
+    EXPECT_EQ(cfg.get<std::string>("behavior.memory_profile"), "lean");
+    auto budget = kind::CacheBudget::from_profile(
+        cfg.get<std::string>("behavior.memory_profile"));
+    EXPECT_EQ(budget.image_memory_items, 75);
+  }
+}
+
+// ============================================================
+// Tier 3: CacheBudget unhinged
+// ============================================================
+
+TEST(CacheBudgetTest, VeryLongProfileString) {
+  std::string huge(1024 * 1024, 'x');
+  auto budget = kind::CacheBudget::from_profile(huge);
+  auto standard = kind::CacheBudget::from_profile("standard");
+  EXPECT_EQ(budget, standard);
+}
+
+TEST(CacheBudgetTest, NullBytesInProfile) {
+  std::string with_nulls("sta\0ndard", 9);
+  auto budget = kind::CacheBudget::from_profile(with_nulls);
+  auto standard = kind::CacheBudget::from_profile("standard");
+  // The embedded null makes it NOT match "standard"
+  EXPECT_EQ(budget, standard); // falls back to standard anyway
+}
+
+TEST(CacheBudgetTest, AllFieldsPositive) {
+  for (const auto& profile : {"lean", "standard", "generous", "bogus", ""}) {
+    auto budget = kind::CacheBudget::from_profile(profile);
+    EXPECT_GT(budget.image_memory_items, 0);
+    EXPECT_GT(budget.pixmap_cache_items, 0);
+    EXPECT_GT(budget.dm_pixmap_cache_items, 0);
+    EXPECT_GT(budget.server_pixmap_cache_items, 0);
+    EXPECT_GT(budget.channel_buffers, 0);
+    EXPECT_GT(budget.max_users, 0);
+  }
+}
+
+TEST(CacheBudgetTest, FromProfileMillionCalls) {
+  for (int i = 0; i < 1000000; ++i) {
+    auto budget = kind::CacheBudget::from_profile("standard");
+    EXPECT_EQ(budget.image_memory_items, 150);
   }
 }
 

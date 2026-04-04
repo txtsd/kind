@@ -5,6 +5,7 @@
 #include "cache/database_manager.hpp"
 #include "cache/database_reader.hpp"
 #include "cache/database_writer.hpp"
+#include "config/cache_budget.hpp"
 #include "config/platform_paths.hpp"
 #include "config/config_manager.hpp"
 #include "gateway/gateway_client.hpp"
@@ -779,6 +780,8 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
   auto reconnect_base = config.get_or<int64_t>("behavior.reconnect_base_delay_ms", 1000);
   auto reconnect_max = config.get_or<int64_t>("behavior.reconnect_max_delay_ms", 30000);
   auto reconnect_retries = config.get_or<int64_t>("behavior.reconnect_max_retries", 10);
+  auto profile = config.get_or<std::string>("behavior.memory_profile", "standard");
+  cache_budget_ = CacheBudget::from_profile(profile);
 
   keychain_service_ = keychain_service;
   db_path_override_ = db_path_override;
@@ -803,8 +806,10 @@ Client::Client(ConfigManager& config, const std::string& keychain_service,
   // clang-format on
   gateway_->set_intents(default_intents);
 
-  store_ = std::make_unique<DataStore>(max_messages);
-  image_cache_ = std::make_unique<ImageCache>(platform_paths().cache_dir / "images");
+  store_ = std::make_unique<DataStore>(max_messages, cache_budget_.channel_buffers);
+  image_cache_ = std::make_unique<ImageCache>(
+      platform_paths().cache_dir / "images", cache_budget_.image_memory_items,
+      cache_budget_.max_image_dimension);
   read_state_manager_ = std::make_unique<ReadStateManager>();
   mute_state_manager_ = std::make_unique<MuteStateManager>();
 
@@ -1114,6 +1119,7 @@ void Client::select_guild(Snowflake guild_id) {
 void Client::select_channel(Snowflake channel_id) {
   log::client()->debug("select_channel: channel={}", channel_id);
   active_channel_id_.store(channel_id);
+  store_->touch_channel(channel_id);
 
   std::string path = endpoints::channel_messages(channel_id);
   rest_->get(path, [this, channel_id](RestClient::Response response) {

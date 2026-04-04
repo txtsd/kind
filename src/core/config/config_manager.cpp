@@ -247,6 +247,7 @@ max_messages_per_channel = 500
 reconnect_base_delay_ms = 1000
 reconnect_max_delay_ms = 30000
 reconnect_max_retries = 10
+memory_profile = "standard"
 )"sv);
 }
 

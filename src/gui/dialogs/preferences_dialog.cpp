@@ -101,11 +101,20 @@ void PreferencesDialog::setup_ui() {
   privacy_layout->addStretch();
   pages_->addWidget(privacy_page);
 
-  // -- Advanced page (placeholder) --
+  // -- Advanced page --
   auto* advanced_page = new QWidget();
-  auto* advanced_layout = new QVBoxLayout(advanced_page);
-  advanced_layout->addWidget(new QLabel("No settings available yet"));
-  advanced_layout->addStretch();
+  auto* advanced_form = new QFormLayout(advanced_page);
+
+  memory_profile_combo_ = new QComboBox();
+  memory_profile_combo_->addItem("Lean (~80 MB)", "lean");
+  memory_profile_combo_->addItem("Standard (~155 MB)", "standard");
+  memory_profile_combo_->addItem("Generous (~310 MB)", "generous");
+  advanced_form->addRow("Memory profile:", memory_profile_combo_);
+
+  auto* profile_note = new QLabel("Changes take effect on next launch.");
+  profile_note->setStyleSheet("color: gray; font-size: 11px;");
+  advanced_form->addRow(profile_note);
+
   pages_->addWidget(advanced_page);
 
   // Connect category selection to page switching
@@ -175,6 +184,13 @@ void PreferencesDialog::load_settings() {
   if (mention_idx >= 0) {
     mention_colors_combo_->setCurrentIndex(mention_idx);
   }
+
+  // Memory profile
+  auto profile = config_.get_or<std::string>("behavior.memory_profile", "standard");
+  int profile_idx = memory_profile_combo_->findData(QString::fromStdString(profile));
+  if (profile_idx >= 0) {
+    memory_profile_combo_->setCurrentIndex(profile_idx);
+  }
 }
 
 void PreferencesDialog::save_settings() {
@@ -200,6 +216,10 @@ void PreferencesDialog::save_settings() {
   // Mention colors
   config_.set<std::string>("appearance.mention_colors",
                            mention_colors_combo_->currentData().toString().toStdString());
+
+  // Memory profile
+  config_.set<std::string>("behavior.memory_profile",
+                           memory_profile_combo_->currentData().toString().toStdString());
 
   config_.save();
 }

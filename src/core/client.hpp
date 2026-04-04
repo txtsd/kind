@@ -2,6 +2,7 @@
 
 #include "auth/token_store.hpp"
 #include "cache/image_cache.hpp"
+#include "config/cache_budget.hpp"
 #include "interfaces/auth_observer.hpp"
 #include "interfaces/gateway_observer.hpp"
 #include "interfaces/observer_list.hpp"
@@ -127,6 +128,9 @@ public:
   // Returns the image cache for async image loading.
   ImageCache* image_cache() const { return image_cache_.get(); }
 
+  // Returns the resolved cache budget for the current memory profile.
+  const CacheBudget& cache_budget() const { return cache_budget_; }
+
   // Returns the read state manager for unread/mention tracking.
   ReadStateManager* read_state_manager() const { return read_state_manager_.get(); }
 
@@ -142,6 +146,7 @@ private:
   std::unique_ptr<GatewayClient> gateway_;
   std::unique_ptr<AuthManager> auth_;
   std::unique_ptr<DataStore> store_;
+  CacheBudget cache_budget_;
   std::unique_ptr<ImageCache> image_cache_;
   std::unique_ptr<ReadStateManager> read_state_manager_;
   std::unique_ptr<MuteStateManager> mute_state_manager_;
