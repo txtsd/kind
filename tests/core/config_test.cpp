@@ -466,27 +466,18 @@ TEST_F(ConfigTestFixture, CacheBudgetFromProfile) {
 
   auto lean = CacheBudget::from_profile("lean");
   EXPECT_EQ(lean.image_memory_items, 75);
-  EXPECT_EQ(lean.pixmap_cache_items, 100);
-  EXPECT_EQ(lean.dm_pixmap_cache_items, 50);
-  EXPECT_EQ(lean.server_pixmap_cache_items, 50);
   EXPECT_EQ(lean.channel_buffers, 3);
   EXPECT_EQ(lean.max_users, 2000);
   EXPECT_EQ(lean.max_image_dimension, 256);
 
   auto standard = CacheBudget::from_profile("standard");
   EXPECT_EQ(standard.image_memory_items, 150);
-  EXPECT_EQ(standard.pixmap_cache_items, 200);
-  EXPECT_EQ(standard.dm_pixmap_cache_items, 100);
-  EXPECT_EQ(standard.server_pixmap_cache_items, 100);
   EXPECT_EQ(standard.channel_buffers, 5);
   EXPECT_EQ(standard.max_users, 5000);
   EXPECT_EQ(standard.max_image_dimension, 520);
 
   auto generous = CacheBudget::from_profile("generous");
   EXPECT_EQ(generous.image_memory_items, 300);
-  EXPECT_EQ(generous.pixmap_cache_items, 400);
-  EXPECT_EQ(generous.dm_pixmap_cache_items, 200);
-  EXPECT_EQ(generous.server_pixmap_cache_items, 200);
   EXPECT_EQ(generous.channel_buffers, 10);
   EXPECT_EQ(generous.max_users, 10000);
   EXPECT_EQ(generous.max_image_dimension, 1024);
@@ -508,8 +499,6 @@ TEST(CacheBudgetTest, TierValuesStrictlyOrdered) {
 
   EXPECT_LT(lean.image_memory_items, standard.image_memory_items);
   EXPECT_LT(standard.image_memory_items, generous.image_memory_items);
-  EXPECT_LT(lean.pixmap_cache_items, standard.pixmap_cache_items);
-  EXPECT_LT(standard.pixmap_cache_items, generous.pixmap_cache_items);
   EXPECT_LT(lean.channel_buffers, standard.channel_buffers);
   EXPECT_LT(standard.channel_buffers, generous.channel_buffers);
   EXPECT_LT(lean.max_users, standard.max_users);
@@ -560,9 +549,6 @@ TEST(CacheBudgetTest, AllFieldsPositive) {
   for (const auto& profile : {"lean", "standard", "generous", "bogus", ""}) {
     auto budget = kind::CacheBudget::from_profile(profile);
     EXPECT_GT(budget.image_memory_items, 0);
-    EXPECT_GT(budget.pixmap_cache_items, 0);
-    EXPECT_GT(budget.dm_pixmap_cache_items, 0);
-    EXPECT_GT(budget.server_pixmap_cache_items, 0);
     EXPECT_GT(budget.channel_buffers, 0);
     EXPECT_GT(budget.max_users, 0);
   }

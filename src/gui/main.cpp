@@ -112,16 +112,13 @@ int main(int argc, char* argv[]) {
   auto* channel_list = new kind::gui::ChannelList();
   auto* dm_list = new kind::gui::DmList();
   dm_list->set_image_cache(client.image_cache());
-  dm_list->set_pixmap_cache_capacity(client.cache_budget().dm_pixmap_cache_items);
   dm_list->dm_model()->set_read_state_manager(client.read_state_manager());
   auto* message_view = new kind::gui::MessageView();
   message_view->set_image_cache(client.image_cache());
-  message_view->set_pixmap_cache_capacity(client.cache_budget().pixmap_cache_items);
   message_view->set_read_state_manager(client.read_state_manager());
 
   // Guild display mode preference
   server_list->set_image_cache(client.image_cache());
-  server_list->set_pixmap_cache_capacity(client.cache_budget().server_pixmap_cache_items);
   auto guild_display_pref = config.get_or<std::string>("appearance.guild_display", "text");
   server_list->set_guild_display(guild_display_pref);
 
