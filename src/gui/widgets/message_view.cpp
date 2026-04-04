@@ -106,6 +106,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     }
 
     check_visible_messages();
+    boost_visible_images();
 
     // When scrolled to the very top, request older messages
     if (value == 0 && model_->rowCount() > 0 && !fetching_history_) {
@@ -580,7 +581,7 @@ void MessageView::request_images(const kind::Message& msg) {
       return;
     }
     pending_images_[url].push_back(msg.id);
-    image_cache_->request(url);
+    image_cache_->request_priority(url);
   };
 
   for (const auto& embed : msg.embeds) {
@@ -632,6 +633,35 @@ void MessageView::request_images(const kind::Message& msg) {
       auto url = "https://cdn.discordapp.com/emojis/"
                  + std::to_string(*reaction.emoji_id) + ".webp?size=48";
       request_image(url);
+    }
+  }
+}
+
+void MessageView::boost_visible_images() {
+  if (!image_cache_ || pending_images_.empty()) {
+    return;
+  }
+
+  auto vp = viewport()->rect();
+  std::unordered_set<kind::Snowflake> visible_ids;
+
+  for (int y = vp.top(); y <= vp.bottom(); y += 10) {
+    auto idx = indexAt(QPoint(0, y));
+    if (idx.isValid()) {
+      visible_ids.insert(idx.data(MessageModel::MessageIdRole).value<qulonglong>());
+    }
+  }
+
+  if (visible_ids.empty()) {
+    return;
+  }
+
+  for (const auto& [url, msg_ids] : pending_images_) {
+    for (auto id : msg_ids) {
+      if (visible_ids.contains(id)) {
+        image_cache_->boost_priority(url);
+        break;
+      }
     }
   }
 }

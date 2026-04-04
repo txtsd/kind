@@ -101,6 +101,7 @@ private:
   void check_visible_messages();
   std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
+  void boost_visible_images();
   std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
   void resizeEvent(QResizeEvent* event) override;
   void updateGeometries() override;
