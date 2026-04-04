@@ -10,7 +10,8 @@
 namespace kind::gui {
 
 ServerList::ServerList(QWidget* parent)
-    : QListView(parent), model_(new GuildModel(this)), delegate_(new GuildDelegate(this)) {
+    : QListView(parent), model_(new GuildModel(this)), delegate_(new GuildDelegate(this)),
+      pixmap_cache_(100) {
   setIconSize(QSize(40, 40));
   setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   setModel(model_);
@@ -29,11 +30,19 @@ void ServerList::set_image_cache(kind::ImageCache* cache) {
   if (image_cache_) {
     connect(image_cache_, &kind::ImageCache::image_ready, this,
             [this](const QString& url, const kind::CachedImage& img) {
+              auto url_str = url.toStdString();
+              if (pending_urls_.erase(url_str) == 0) {
+                return;
+              }
               if (!img.decoded.isNull()) {
                 on_image_ready(url, QPixmap::fromImage(img.decoded));
               }
             });
   }
+}
+
+void ServerList::set_pixmap_cache_capacity(int capacity) {
+  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
 }
 
 void ServerList::set_guild_display(const std::string& mode) {
@@ -80,9 +89,9 @@ void ServerList::fetch_guild_icons() {
     }
     auto url_str = url.toStdString();
     // Already cached locally? Push to delegate
-    auto it = pixmap_cache_.find(url_str);
-    if (it != pixmap_cache_.end()) {
-      delegate_->set_pixmap(url_str, it->second);
+    auto cached_px = pixmap_cache_.get(url_str);
+    if (cached_px) {
+      delegate_->set_pixmap(url_str, *cached_px);
       continue;
     }
     // Check image cache memory
@@ -90,10 +99,11 @@ void ServerList::fetch_guild_icons() {
     if (cached) {
       if (!cached->decoded.isNull()) {
         QPixmap pm = QPixmap::fromImage(cached->decoded);
-        pixmap_cache_[url_str] = pm;
+        pixmap_cache_.put(url_str, pm);
         delegate_->set_pixmap(url_str, pm);
       }
     } else {
+      pending_urls_.insert(url_str);
       image_cache_->request(url_str);
     }
   }
@@ -101,7 +111,7 @@ void ServerList::fetch_guild_icons() {
 
 void ServerList::on_image_ready(const QString& url, const QPixmap& pixmap) {
   auto url_str = url.toStdString();
-  pixmap_cache_[url_str] = pixmap;
+  pixmap_cache_.put(url_str, pixmap);
   delegate_->set_pixmap(url_str, pixmap);
   viewport()->update();
 }

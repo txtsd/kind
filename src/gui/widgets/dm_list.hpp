@@ -11,8 +11,10 @@
 #include <QResizeEvent>
 #include <QVector>
 
+#include "cache/lru_cache.hpp"
+
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 namespace kind {
 class ImageCache;
@@ -31,6 +33,7 @@ public:
 
   void set_image_cache(kind::ImageCache* cache);
   void set_display_mode(const std::string& mode);
+  void set_pixmap_cache_capacity(int capacity);
 
 public slots:
   void set_channels(const QVector<kind::Channel>& channels);
@@ -52,7 +55,8 @@ private:
   QPushButton* new_dm_button_;
   kind::ImageCache* image_cache_{nullptr};
   std::string display_mode_{"both"};
-  std::unordered_map<std::string, QPixmap> pixmap_cache_;
+  kind::LruCache<std::string, QPixmap> pixmap_cache_;
+  std::unordered_set<std::string> pending_urls_;
 };
 
 } // namespace kind::gui

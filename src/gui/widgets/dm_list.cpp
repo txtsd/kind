@@ -9,7 +9,8 @@
 namespace kind::gui {
 
 DmList::DmList(QWidget* parent)
-    : QListView(parent), model_(new DmListModel(this)), delegate_(new DmDelegate(this)) {
+    : QListView(parent), model_(new DmListModel(this)), delegate_(new DmDelegate(this)),
+      pixmap_cache_(100) {
   setMaximumWidth(200);
   setMinimumWidth(120);
   setModel(model_);
@@ -43,11 +44,19 @@ void DmList::set_image_cache(kind::ImageCache* cache) {
   if (image_cache_) {
     connect(image_cache_, &kind::ImageCache::image_ready, this,
             [this](const QString& url, const kind::CachedImage& img) {
+              auto url_str = url.toStdString();
+              if (pending_urls_.erase(url_str) == 0) {
+                return;
+              }
               if (!img.decoded.isNull()) {
                 on_image_ready(url, QPixmap::fromImage(img.decoded));
               }
             });
   }
+}
+
+void DmList::set_pixmap_cache_capacity(int capacity) {
+  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
 }
 
 void DmList::set_display_mode(const std::string& mode) {
@@ -84,19 +93,20 @@ void DmList::fetch_avatars() {
     auto url = idx.data(DmListModel::RecipientAvatarUrlRole).toString();
     if (url.isEmpty()) continue;
     auto url_str = url.toStdString();
-    auto it = pixmap_cache_.find(url_str);
-    if (it != pixmap_cache_.end()) {
-      delegate_->set_pixmap(url_str, it->second);
+    auto cached_px = pixmap_cache_.get(url_str);
+    if (cached_px) {
+      delegate_->set_pixmap(url_str, *cached_px);
       continue;
     }
     auto cached = image_cache_->get(url_str);
     if (cached) {
       if (!cached->decoded.isNull()) {
         QPixmap pm = QPixmap::fromImage(cached->decoded);
-        pixmap_cache_[url_str] = pm;
+        pixmap_cache_.put(url_str, pm);
         delegate_->set_pixmap(url_str, pm);
       }
     } else {
+      pending_urls_.insert(url_str);
       image_cache_->request(url_str);
     }
   }
@@ -104,7 +114,7 @@ void DmList::fetch_avatars() {
 
 void DmList::on_image_ready(const QString& url, const QPixmap& pixmap) {
   auto url_str = url.toStdString();
-  pixmap_cache_[url_str] = pixmap;
+  pixmap_cache_.put(url_str, pixmap);
   delegate_->set_pixmap(url_str, pixmap);
   viewport()->update();
 }

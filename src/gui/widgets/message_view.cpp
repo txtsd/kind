@@ -45,7 +45,7 @@ static std::string add_image_size(const std::string& url, int display_width, int
   return url;
 }
 
-MessageView::MessageView(QWidget* parent) : QListView(parent) {
+MessageView::MessageView(QWidget* parent) : QListView(parent), pixmap_cache_(200) {
   model_ = new MessageModel(this);
   delegate_ = new MessageDelegate(this);
 
@@ -229,6 +229,7 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
   std::vector<kind::Message> vec(messages.begin(), messages.end());
   auto layouts = compute_layouts_sync(vec);
   model_->set_messages(vec, std::move(layouts));
+  log_memory_stats();
 
   auto anchor_it = scroll_anchors_.find(channel_id);
   if (anchor_it != scroll_anchors_.end() && !anchor_it->at_bottom) {
@@ -422,6 +423,10 @@ void MessageView::set_accent_color(uint32_t color) {
   accent_color_ = color;
 }
 
+void MessageView::set_pixmap_cache_capacity(int capacity) {
+  pixmap_cache_ = kind::LruCache<std::string, QPixmap>(capacity);
+}
+
 MentionContext MessageView::build_mention_context() const {
   MentionContext ctx;
   ctx.current_user_id = current_user_id_;
@@ -475,7 +480,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
               return;
             }
             QPixmap pixmap = QPixmap::fromImage(image.decoded);
-            pixmap_cache_[std_url] = pixmap;
+            pixmap_cache_.put(std_url, pixmap);
 
             // Find the first visible row to detect if images load above viewport
             int first_visible_row = -1;
@@ -532,9 +537,9 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
     if (url.empty()) {
       return;
     }
-    auto it = pixmap_cache_.find(url);
-    if (it != pixmap_cache_.end()) {
-      images[url] = it->second;
+    auto px = pixmap_cache_.get(url);
+    if (px) {
+      images[url] = *px;
     }
   };
 
@@ -699,6 +704,45 @@ void MessageView::resizeEvent(QResizeEvent* event) {
   resize_timer_->start();
   position_jump_pill();
   position_loading_pill();
+}
+
+void MessageView::log_memory_stats() const {
+  auto logger = kind::log::gui();
+  if (!logger->should_log(spdlog::level::trace)) return;
+
+  kind::log::dump_memory_stats();
+
+  int64_t renderer_pixmap_bytes = 0;
+  int renderer_pixmap_count = 0;
+  int rendered_valid = 0;
+  int total_blocks = 0;
+
+  const auto& rendered = model_->rendered();
+  for (const auto& rm : rendered) {
+    if (!rm.valid) continue;
+    ++rendered_valid;
+    for (const auto& block : rm.blocks) {
+      ++total_blocks;
+      auto bytes = block->pixmap_bytes();
+      if (bytes > 0) {
+        renderer_pixmap_bytes += bytes;
+        ++renderer_pixmap_count;
+      }
+    }
+  }
+
+  int64_t pixmap_cache_bytes = 0;
+  pixmap_cache_.for_each([&](const std::string&, const QPixmap& px) {
+    pixmap_cache_bytes += static_cast<int64_t>(px.width()) * px.height() * px.depth() / 8;
+  });
+
+  logger->trace(
+      "app stats: messages={}, rendered={} valid, blocks={}, "
+      "pixmap_blocks={} ({:.1f}MB), pixmap_cache={} items ({:.1f}MB), pending={}",
+      model_->rowCount(), rendered_valid, total_blocks,
+      renderer_pixmap_count, renderer_pixmap_bytes / (1024.0 * 1024.0),
+      pixmap_cache_.size(), pixmap_cache_bytes / (1024.0 * 1024.0),
+      pending_images_.size());
 }
 
 } // namespace kind::gui
