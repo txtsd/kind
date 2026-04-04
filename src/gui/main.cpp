@@ -33,7 +33,18 @@
 #include <filesystem>
 #include <unordered_map>
 
+#if defined(__linux__) && !defined(KIND_ALLOCATOR_MIMALLOC) && !defined(KIND_ALLOCATOR_JEMALLOC)
+#include <malloc.h>
+#endif
+
 int main(int argc, char* argv[]) {
+#if defined(__linux__) && !defined(KIND_ALLOCATOR_MIMALLOC) && !defined(KIND_ALLOCATOR_JEMALLOC)
+  // Limit glibc malloc arenas to reduce memory fragmentation.
+  // Default is 8*nproc which causes hundreds of MB of freed memory
+  // to be trapped in per-thread arenas instead of returned to the OS.
+  mallopt(M_ARENA_MAX, 2);
+#endif
+
   // Suppress Qt 6 Wayland "supports grabbing the mouse only for popup windows"
   // warnings triggered by menu popups. Known Qt platform plugin bug, not actionable.
   static QtMessageHandler prev_msg_handler = nullptr;

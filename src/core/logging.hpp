@@ -21,6 +21,9 @@ void reinit_for_account(uint64_t user_id);
 // Format: "debug" (global) or "gateway=debug,rest=warn" (per-subsystem)
 void apply_level_spec(const std::string& spec);
 
+// Log process-level memory diagnostics: RSS breakdown, malloc stats, smaps analysis.
+void dump_memory_stats();
+
 // Subsystem loggers. Each can be independently filtered by level.
 std::shared_ptr<spdlog::logger> gateway();
 std::shared_ptr<spdlog::logger> rest();
