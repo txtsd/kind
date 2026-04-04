@@ -13,6 +13,11 @@ public:
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
+  int64_t pixmap_bytes() const override {
+    int64_t total = 0;
+    for (const auto& img : images_) { total += static_cast<int64_t>(img.width()) * img.height() * 4; }
+    return total;
+  }
 
 private:
   static constexpr int padding_ = 4;

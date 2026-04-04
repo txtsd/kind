@@ -24,6 +24,15 @@ public:
   void paint(QPainter* painter, const QRect& rect) const override;
   bool hit_test(const QPoint& pos, HitResult& result) const override;
   QString tooltip_at(const QPoint& pos) const override;
+  int64_t pixmap_bytes() const override {
+    int64_t total = 0;
+    auto px_bytes = [](const QPixmap& px) -> int64_t {
+      return px.isNull() ? 0 : static_cast<int64_t>(px.width()) * px.height() * 4;
+    };
+    total += px_bytes(image_) + px_bytes(thumbnail_);
+    for (const auto& img : extra_images_) { total += px_bytes(img); }
+    return total;
+  }
 
 private:
   static constexpr int sidebar_width_ = 4;

@@ -17,6 +17,9 @@ public:
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
   bool hit_test(const QPoint& pos, HitResult& result) const override;
+  int64_t pixmap_bytes() const override {
+    return image_.isNull() ? 0 : static_cast<int64_t>(image_.width()) * image_.height() * 4;
+  }
 
 private:
   static constexpr int padding_ = 8;

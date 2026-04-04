@@ -2,6 +2,7 @@
 
 #include "models/snowflake.hpp"
 
+#include <cstdint>
 #include <QPainter>
 #include <QPoint>
 #include <QRect>
@@ -24,6 +25,7 @@ public:
   virtual ~BlockRenderer() = default;
   virtual int height(int width) const = 0;
   virtual void paint(QPainter* painter, const QRect& rect) const = 0;
+  virtual int64_t pixmap_bytes() const { return 0; }
   virtual bool hit_test(const QPoint& pos, HitResult& result) const {
     (void)pos;
     (void)result;
