@@ -177,8 +177,8 @@ void MessageView::compute_layouts_async(LayoutBatchInput input, std::function<vo
           [this, watcher, seq, callback = std::move(callback)]() {
     auto result = watcher->result();
     watcher->deleteLater();
-    if (seq != layout_sequence_.load()) {
-      kind::log::gui()->debug("layout_async: discarding stale result (seq={}, current={})", seq, layout_sequence_.load());
+    if (seq != layout_sequence_) {
+      kind::log::gui()->debug("layout_async: discarding stale result (seq={}, current={})", seq, layout_sequence_);
       return;
     }
     callback(std::move(result));

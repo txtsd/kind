@@ -10,7 +10,6 @@
 #include <QPixmap>
 #include <QVector>
 
-#include <atomic>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -145,7 +144,7 @@ private:
 
   void log_memory_stats() const;
 
-  std::atomic<uint64_t> layout_sequence_{0};
+  uint64_t layout_sequence_{0};
 
   kind::ImageCache* image_cache_{nullptr};
   kind::ReadStateManager* read_state_manager_{nullptr};
