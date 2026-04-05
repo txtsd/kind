@@ -4,6 +4,8 @@
 #include <QGuiApplication>
 #include <QPalette>
 
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 
 namespace kind::gui {
@@ -21,7 +23,7 @@ EphemeralNoticeRenderer::EphemeralNoticeRenderer(const QFont& font)
     : font_(font) {
   QFontMetrics fm(font_);
   total_height_ = padding_top_ + fm.height() + padding_bottom_;
-  spdlog::trace("EphemeralNoticeRenderer: height={}", total_height_);
+  kind::log::gui()->trace("EphemeralNoticeRenderer: height={}", total_height_);
 }
 
 int EphemeralNoticeRenderer::height(int /*width*/) const {
@@ -71,7 +73,7 @@ void EphemeralNoticeRenderer::paint(QPainter* painter, const QRect& rect) const 
 bool EphemeralNoticeRenderer::hit_test(const QPoint& pos, HitResult& result) const {
   if (dismiss_rect_.isValid() && dismiss_rect_.contains(pos)) {
     result.type = HitResult::DismissEphemeral;
-    spdlog::trace("EphemeralNoticeRenderer: dismiss hit at ({}, {})", pos.x(), pos.y());
+    kind::log::gui()->trace("EphemeralNoticeRenderer: dismiss hit at ({}, {})", pos.x(), pos.y());
     return true;
   }
   return false;

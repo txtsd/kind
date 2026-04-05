@@ -1,6 +1,7 @@
 #include "workers/render_worker.hpp"
 
 #include "cdn_url.hpp"
+#include "logging.hpp"
 #include "renderers/attachment_block_renderer.hpp"
 #include "renderers/component_block_renderer.hpp"
 #include "renderers/component_v2_block_renderer.hpp"
@@ -45,7 +46,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
       span.is_self_mention = true;
       span.mention_bg = accent_bg_self;
     }
-    spdlog::trace("Resolved user mention: {} -> {}", uid, span.resolved_text);
+    kind::log::gui()->trace("Resolved user mention: {} -> {}", uid, span.resolved_text);
   } else if (span.mention_channel_id.has_value()) {
     auto cid = *span.mention_channel_id;
     std::string name = "unknown-channel";
@@ -58,7 +59,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
     span.resolved_text = "#" + name;
     span.mention_color = accent_fg;
     span.mention_bg = accent_bg;
-    spdlog::trace("Resolved channel mention: {} -> {}", cid, span.resolved_text);
+    kind::log::gui()->trace("Resolved channel mention: {} -> {}", cid, span.resolved_text);
   } else if (span.mention_role_id.has_value()) {
     auto rid = *span.mention_role_id;
     std::string name = "unknown-role";
@@ -82,7 +83,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
         break;
       }
     }
-    spdlog::trace("Resolved role mention: {} -> {}", rid, span.resolved_text);
+    kind::log::gui()->trace("Resolved role mention: {} -> {}", rid, span.resolved_text);
   }
 
   // Handle @everyone and @here
@@ -96,7 +97,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
         span.is_self_mention = true;
         span.mention_bg = accent_bg_self;
       }
-      spdlog::trace("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
+      kind::log::gui()->trace("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
     }
   }
 }
@@ -115,7 +116,7 @@ RenderedMessage compute_layout(
       ? std::max(viewport_width - timestamp_column_width, 100)
       : viewport_width;
 
-  spdlog::trace("compute_layout: show_timestamps={}, column_width={}, effective_width={}",
+  kind::log::gui()->trace("compute_layout: show_timestamps={}, column_width={}, effective_width={}",
                 show_timestamps, timestamp_column_width, effective_width);
 
   // System messages: anything other than Default (0), Reply (19), ChatInputCommand (20)
@@ -404,7 +405,7 @@ RenderedMessage compute_layout(
   if (!message.components.empty()) {
     if (message.flags & (1 << 15)) {
       // Components V2: one renderer per top-level component
-      spdlog::trace("compute_layout: v2 components path, {} top-level components",
+      kind::log::gui()->trace("compute_layout: v2 components path, {} top-level components",
                     message.components.size());
       for (const auto& comp : message.components) {
         result.blocks.push_back(std::make_shared<ComponentV2BlockRenderer>(
@@ -419,7 +420,7 @@ RenderedMessage compute_layout(
 
   // Ephemeral notice
   if (message.flags & (1 << 6)) {
-    spdlog::trace("compute_layout: appending ephemeral notice for message {}", message.id);
+    kind::log::gui()->trace("compute_layout: appending ephemeral notice for message {}", message.id);
     result.blocks.push_back(std::make_shared<EphemeralNoticeRenderer>(font));
   }
 
@@ -430,7 +431,7 @@ RenderedMessage compute_layout(
   }
   result.valid = true;
 
-  spdlog::trace("compute_layout: id={}, blocks={}, embeds={}, components={}, height={}, content='{}'",
+  kind::log::gui()->trace("compute_layout: id={}, blocks={}, embeds={}, components={}, height={}, content='{}'",
                 message.id, result.blocks.size(), message.embeds.size(),
                 message.components.size(), result.height,
                 message.content.substr(0, 80));

@@ -80,9 +80,9 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
       int ts_x = option.rect.left() + 4;
       int ts_y = option.rect.top() + 4 + fm.ascent();
       painter->drawText(ts_x, ts_y, rendered->timestamp_text);
-      if (spdlog::should_log(spdlog::level::trace)) {
-        spdlog::trace("MessageDelegate: painted timestamp '{}' at ({}, {})",
-                      rendered->timestamp_text.toStdString(), ts_x, ts_y);
+      if (kind::log::gui()->should_log(spdlog::level::trace)) {
+        kind::log::gui()->trace("MessageDelegate: painted timestamp '{}' at ({}, {})",
+                                rendered->timestamp_text.toStdString(), ts_x, ts_y);
       }
     }
 

@@ -2,6 +2,8 @@
 
 #include <QFontMetrics>
 
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 
 namespace kind::gui {
@@ -27,7 +29,7 @@ TextBlockRenderer::TextBlockRenderer(const kind::ParsedContent& content, int vie
     total_height_ = base_fm.height() + (2 * padding_);
   }
 
-  spdlog::trace("TextBlockRenderer: height={}, prefix_width={}", total_height_, prefix_width);
+  kind::log::gui()->trace("TextBlockRenderer: height={}, prefix_width={}", total_height_, prefix_width);
 }
 
 int TextBlockRenderer::height(int /*width*/) const {

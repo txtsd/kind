@@ -4,6 +4,8 @@
 #include <QPainterPath>
 #include <QTextOption>
 
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 
 namespace kind::gui {
@@ -38,10 +40,10 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
         auto it = images.find(cdn_url);
         if (it != images.end() && !it->second.isNull()) {
           emoji_pixmap = it->second;
-          spdlog::trace("RichTextLayout: emoji cache hit for '{}' (id={})",
+          kind::log::gui()->trace("RichTextLayout: emoji cache hit for '{}' (id={})",
                         span.custom_emoji_name.value_or("?"), *span.custom_emoji_id);
         } else {
-          spdlog::trace("RichTextLayout: emoji cache miss for '{}' (id={}, url={})",
+          kind::log::gui()->trace("RichTextLayout: emoji cache miss for '{}' (id={}, url={})",
                         span.custom_emoji_name.value_or("?"), *span.custom_emoji_id, cdn_url);
         }
 
@@ -238,7 +240,7 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
 
   compute_span_rects();
 
-  spdlog::trace("RichTextLayout: built layout with {} spans, {} emoji, {} code blocks, height={}",
+  kind::log::gui()->trace("RichTextLayout: built layout with {} spans, {} emoji, {} code blocks, height={}",
                 span_rects_.size(), emoji_infos_.size(), code_blocks_.size(), total_height_);
 }
 
@@ -315,7 +317,7 @@ void RichTextLayout::paint(QPainter* painter, const QPoint& origin) const {
   for (const auto& ei : emoji_infos_) {
     auto line = layout_->lineForTextPosition(ei.text_position);
     if (!line.isValid()) {
-      spdlog::trace("RichTextLayout::paint: invalid line for emoji '{}' at pos {}",
+      kind::log::gui()->trace("RichTextLayout::paint: invalid line for emoji '{}' at pos {}",
                     ei.emoji_name, ei.text_position);
       continue;
     }
@@ -326,7 +328,7 @@ void RichTextLayout::paint(QPainter* painter, const QPoint& origin) const {
     if (!ei.pixmap.isNull()) {
       painter->drawPixmap(static_cast<int>(x), static_cast<int>(y),
                           emoji_size, emoji_size, ei.pixmap);
-      spdlog::trace("RichTextLayout::paint: drew emoji '{}' at ({}, {}) size={}",
+      kind::log::gui()->trace("RichTextLayout::paint: drew emoji '{}' at ({}, {}) size={}",
                     ei.emoji_name, x, y, emoji_size);
     } else {
       // Draw muted :name: placeholder clipped to emoji-sized rect
@@ -341,7 +343,7 @@ void RichTextLayout::paint(QPainter* painter, const QPoint& origin) const {
       QString label = QString::fromStdString(":" + ei.emoji_name + ":");
       painter->drawText(placeholder_rect, Qt::AlignCenter, label);
       painter->restore();
-      spdlog::trace("RichTextLayout::paint: drew placeholder '{}' at ({}, {}) size={}",
+      kind::log::gui()->trace("RichTextLayout::paint: drew placeholder '{}' at ({}, {}) size={}",
                     ei.emoji_name, x, y, emoji_size);
     }
   }
@@ -418,7 +420,7 @@ void RichTextLayout::compute_span_rects() {
     qreal y = line.position().y();
     qreal h = line.height();
     ei.rect = QRectF(x, y, h, h); // Square: height x height
-    spdlog::trace("RichTextLayout: emoji '{}' rect=({}, {}, {}, {})",
+    kind::log::gui()->trace("RichTextLayout: emoji '{}' rect=({}, {}, {}, {})",
                   ei.emoji_name, x, y, h, h);
   }
 }

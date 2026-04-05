@@ -8,6 +8,8 @@
 #include <QPainterPath>
 #include <QPalette>
 
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -57,7 +59,7 @@ ComponentV2BlockRenderer::ComponentV2BlockRenderer(
 
   total_height_ = compute_layout();
 
-  spdlog::trace("ComponentV2BlockRenderer: type={}, height={}, children={}, is_container={}",
+  kind::log::gui()->trace("ComponentV2BlockRenderer: type={}, height={}, children={}, is_container={}",
                 component_.type, total_height_, child_blocks_.size(), is_container_);
 }
 
@@ -80,14 +82,14 @@ int ComponentV2BlockRenderer::compute_layout() {
       return h;
     }
     default:
-      spdlog::trace("ComponentV2BlockRenderer: unknown component type {}, rendering nothing", component_.type);
+      kind::log::gui()->trace("ComponentV2BlockRenderer: unknown component type {}, rendering nothing", component_.type);
       return 0;
   }
 }
 
 int ComponentV2BlockRenderer::layout_text_display(const kind::Component& comp, int width) {
   std::string content = comp.content.value_or("");
-  spdlog::trace("layout_text_display: content_len={}, width={}", content.size(), width);
+  kind::log::gui()->trace("layout_text_display: content_len={}, width={}", content.size(), width);
   if (content.empty()) return 0;
   text_layout_ = parse_v2_text(content, width, font_, mentions_, images_);
   return text_layout_->height();
@@ -96,7 +98,7 @@ int ComponentV2BlockRenderer::layout_text_display(const kind::Component& comp, i
 int ComponentV2BlockRenderer::layout_separator(const kind::Component& comp) {
   int pad = (comp.spacing >= 2) ? separator_large_padding_ : separator_small_padding_;
   int line_h = comp.divider ? 1 : 0;
-  spdlog::trace("layout_separator: divider={}, spacing={}, height={}", comp.divider, comp.spacing, (2 * pad) + line_h);
+  kind::log::gui()->trace("layout_separator: divider={}, spacing={}, height={}", comp.divider, comp.spacing, (2 * pad) + line_h);
   return (2 * pad) + line_h;
 }
 
@@ -123,7 +125,7 @@ int ComponentV2BlockRenderer::layout_section(const kind::Component& comp, int wi
   int accessory_height = has_accessory ? thumbnail_size_ : 0;
   int total = std::max(text_height, accessory_height);
 
-  spdlog::trace("layout_section: children={}, text_height={}, has_accessory={}, total={}",
+  kind::log::gui()->trace("layout_section: children={}, text_height={}, has_accessory={}, total={}",
                 comp.children.size(), text_height, has_accessory, total);
   return total;
 }
@@ -146,7 +148,7 @@ int ComponentV2BlockRenderer::layout_container(const kind::Component& comp, int 
   }
   y += padding_;
 
-  spdlog::trace("layout_container: children={}, content_width={}, total_height={}",
+  kind::log::gui()->trace("layout_container: children={}, content_width={}, total_height={}",
                 child_blocks_.size(), content_width, y);
   return y;
 }
@@ -205,7 +207,7 @@ void ComponentV2BlockRenderer::build_child_blocks(
         break;
       }
       default:
-        spdlog::trace("build_child_blocks: skipping unknown type {}", child.type);
+        kind::log::gui()->trace("build_child_blocks: skipping unknown type {}", child.type);
         continue;
     }
 

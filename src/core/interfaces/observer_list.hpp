@@ -4,6 +4,8 @@
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 #include <vector>
 
@@ -35,9 +37,9 @@ public:
       try {
         fn(observer);
       } catch (const std::exception& e) {
-        spdlog::warn("Observer threw exception: {}", e.what());
+        kind::log::client()->warn("Observer threw exception: {}", e.what());
       } catch (...) {
-        spdlog::warn("Observer threw non-std exception");
+        kind::log::client()->warn("Observer threw non-std exception");
       }
     }
   }

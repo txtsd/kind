@@ -367,7 +367,6 @@ void ImageCache::start_download(const std::string& url) {
     if (reply->error() != QNetworkReply::NoError) {
       log::cache()->warn("Image download failed for {}: {}",
                          url, reply->errorString().toStdString());
-      log::cache()->trace("image download failed: {}: {}", url, reply->errorString().toStdString());
       emit download_finished(QString::fromStdString(url));
       process_queue();
       return;
