@@ -420,11 +420,19 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
           for (const auto& val : data["embeds"].toArray()) {
             auto eobj = val.toObject();
             Embed embed;
+            if (eobj.contains("type")) embed.type = eobj["type"].toString().toStdString();
             if (eobj.contains("title")) embed.title = eobj["title"].toString().toStdString();
             if (eobj.contains("description"))
               embed.description = eobj["description"].toString().toStdString();
             if (eobj.contains("url")) embed.url = eobj["url"].toString().toStdString();
             if (eobj.contains("color")) embed.color = eobj["color"].toInt();
+            if (eobj.contains("provider") && eobj["provider"].isObject()) {
+              auto pobj = eobj["provider"].toObject();
+              EmbedProvider provider;
+              provider.name = pobj["name"].toString().toStdString();
+              if (pobj.contains("url")) provider.url = pobj["url"].toString().toStdString();
+              embed.provider = std::move(provider);
+            }
             if (eobj.contains("author") && eobj["author"].isObject()) {
               auto aobj = eobj["author"].toObject();
               EmbedAuthor author;

@@ -231,10 +231,17 @@ void DatabaseWriteWorker::write_message(kind::Message message) {
     QJsonArray embeds_arr;
     for (const auto& e : message.embeds) {
       QJsonObject eobj;
+      if (!e.type.empty()) eobj["type"] = QString::fromStdString(e.type);
       if (e.title) eobj["title"] = QString::fromStdString(*e.title);
       if (e.description) eobj["description"] = QString::fromStdString(*e.description);
       if (e.url) eobj["url"] = QString::fromStdString(*e.url);
       if (e.color) eobj["color"] = *e.color;
+      if (e.provider) {
+        QJsonObject pobj;
+        pobj["name"] = QString::fromStdString(e.provider->name);
+        if (e.provider->url) pobj["url"] = QString::fromStdString(*e.provider->url);
+        eobj["provider"] = pobj;
+      }
       if (e.author) {
         QJsonObject aobj;
         aobj["name"] = QString::fromStdString(e.author->name);
