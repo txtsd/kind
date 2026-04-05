@@ -48,7 +48,9 @@ void LoginDialog::setup_ui(const std::vector<ConfigManager::KnownAccount>& known
   token_input_->setEchoMode(QLineEdit::Password);
   token_type_combo_ = new QComboBox(token_tab);
   token_type_combo_->addItem("User", "user");
-  token_type_combo_->addItem("Bot", "bot");
+  token_type_combo_->addItem("Bot (not yet supported)", "bot");
+  // Disable bot token option until bot login is tested and fully implemented
+  token_type_combo_->setItemData(1, false, Qt::UserRole - 1);
   token_login_button_ = new QPushButton("Login", token_tab);
   token_layout->addRow("Token:", token_input_);
   token_layout->addRow("Type:", token_type_combo_);
@@ -68,7 +70,9 @@ void LoginDialog::setup_ui(const std::vector<ConfigManager::KnownAccount>& known
   cred_layout->addRow(credential_login_button_);
 
   tab_widget_->addTab(token_tab, "Token");
-  tab_widget_->addTab(cred_tab, "Credentials");
+  tab_widget_->addTab(cred_tab, "Credentials (not yet supported)");
+  // Disable credentials tab until email/password login is tested and fully implemented
+  tab_widget_->setTabEnabled(1, false);
 
   main_layout->addWidget(tab_widget_);
 
