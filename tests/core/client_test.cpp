@@ -648,7 +648,7 @@ TEST_F(ClientTest, SendInteractionPostsToEndpoint) {
         cb(std::string{""});
       });
 
-  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button", {});
+  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button");
   process_async_events(100);
 
   EXPECT_EQ(captured_path, "/interactions");
@@ -660,6 +660,7 @@ TEST_F(ClientTest, SendInteractionPostsToEndpoint) {
   EXPECT_EQ(obj["message_id"].toString(), "12345");
   EXPECT_EQ(obj["guild_id"].toString(), "11111");
   EXPECT_EQ(obj["application_id"].toString(), "99999");
+  EXPECT_EQ(obj["message_flags"].toInt(), 0);
   EXPECT_FALSE(obj["session_id"].toString().isEmpty());
   EXPECT_FALSE(obj["nonce"].toString().isEmpty());
 
@@ -679,7 +680,7 @@ TEST_F(ClientTest, SendInteractionWithValuesIncludesValuesArray) {
         cb(std::string{""});
       });
 
-  client_->send_interaction(67890, 12345, 11111, 99999, 3, "my_select", {"value_a", "value_b"});
+  client_->send_interaction(67890, 12345, 11111, 99999, 3, "my_select", 0, {"value_a", "value_b"});
   process_async_events(100);
 
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
@@ -703,7 +704,7 @@ TEST_F(ClientTest, SendInteractionOmitsGuildIdForDMs) {
         cb(std::string{""});
       });
 
-  client_->send_interaction(67890, 12345, 0, 99999, 2, "dm_button", {});
+  client_->send_interaction(67890, 12345, 0, 99999, 2, "dm_button");
   process_async_events(100);
 
   auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
@@ -717,6 +718,25 @@ TEST_F(ClientTest, SendInteractionDropsWhenNoSession) {
 
   EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_)).Times(0);
 
-  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button", {});
+  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button");
   process_async_events(100);
+}
+
+TEST_F(ClientTest, SendInteractionPassesEphemeralFlags) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillRepeatedly(::testing::Return("test-session-id"));
+
+  std::string captured_body;
+  EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_))
+      .WillOnce([&](std::string_view, const std::string& body, kind::RestClient::Callback cb) {
+        captured_body = body;
+        cb(std::string{""});
+      });
+
+  client_->send_interaction(67890, 12345, 11111, 99999, 2, "ephemeral_btn", 64);
+  process_async_events(100);
+
+  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
+  auto obj = doc.object();
+  EXPECT_EQ(obj["message_flags"].toInt(), 64);
 }

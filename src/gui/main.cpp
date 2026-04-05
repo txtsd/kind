@@ -585,7 +585,7 @@ int main(int argc, char* argv[]) {
                              auto app_id = target->application_id.value_or(target->author.id);
                              auto guild_id = client.guild_id_for_channel(channel_id);
                              client.send_interaction(channel_id, message_id, guild_id, app_id,
-                                                     2, *child.custom_id);
+                                                     2, *child.custom_id, target->flags);
                              return;
                            }
                            ++idx;
@@ -626,6 +626,7 @@ int main(int argc, char* argv[]) {
 
                      auto app_id = target->application_id.value_or(target->author.id);
                      auto guild_id = client.guild_id_for_channel(channel_id);
+                     int msg_flags = target->flags;
                      int max_values = select_comp->max_values.value_or(1);
 
                      // Styled popup matching the rendered select menu bar
@@ -681,7 +682,7 @@ int main(int argc, char* argv[]) {
 
                        QObject::connect(done_btn, &QPushButton::clicked, popup,
                          [&client, channel_id, message_id, guild_id, app_id, custom_id,
-                          list, popup]() {
+                          msg_flags, list, popup]() {
                            std::vector<std::string> selected;
                            for (int row = 0; row < list->count(); ++row) {
                              if (list->item(row)->checkState() == Qt::Checked) {
@@ -691,17 +692,17 @@ int main(int argc, char* argv[]) {
                            }
                            client.send_interaction(channel_id, message_id, guild_id,
                                                    app_id, 3,
-                                                   custom_id.toStdString(), selected);
+                                                   custom_id.toStdString(), msg_flags, selected);
                            popup->close();
                          });
                      } else {
                        QObject::connect(list, &QListWidget::itemClicked, popup,
                          [&client, channel_id, message_id, guild_id, app_id, custom_id,
-                          popup](QListWidgetItem* item) {
+                          msg_flags, popup](QListWidgetItem* item) {
                            std::string value = item->data(Qt::UserRole).toString().toStdString();
                            client.send_interaction(channel_id, message_id, guild_id,
                                                    app_id, 3,
-                                                   custom_id.toStdString(), {value});
+                                                   custom_id.toStdString(), msg_flags, {value});
                            popup->close();
                          });
                      }

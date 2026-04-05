@@ -82,6 +82,7 @@ public:
   void send_interaction(Snowflake channel_id, Snowflake message_id,
                         Snowflake guild_id, Snowflake application_id,
                         int component_type, const std::string& custom_id,
+                        int message_flags = 0,
                         const std::vector<std::string>& values = {});
   void create_dm(Snowflake recipient_id);
   void select_guild(Snowflake guild_id);

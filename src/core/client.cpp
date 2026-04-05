@@ -945,9 +945,10 @@ void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
 void Client::send_interaction(Snowflake channel_id, Snowflake message_id,
                               Snowflake guild_id, Snowflake application_id,
                               int component_type, const std::string& custom_id,
+                              int message_flags,
                               const std::vector<std::string>& values) {
-  log::client()->debug("send_interaction: channel={}, message={}, guild={}, app={}, type={}, custom_id={}, values={}",
-                       channel_id, message_id, guild_id, application_id, component_type, custom_id, values.size());
+  log::client()->debug("send_interaction: channel={}, message={}, guild={}, app={}, type={}, custom_id={}, flags={}, values={}",
+                       channel_id, message_id, guild_id, application_id, component_type, custom_id, message_flags, values.size());
 
   auto session = gateway_->session_id();
   if (session.empty()) {
@@ -974,7 +975,7 @@ void Client::send_interaction(Snowflake channel_id, Snowflake message_id,
   body["application_id"] = QString::number(application_id);
   body["channel_id"] = QString::number(channel_id);
   body["message_id"] = QString::number(message_id);
-  body["message_flags"] = 0;
+  body["message_flags"] = message_flags;
   body["session_id"] = QString::fromStdString(session);
   body["nonce"] = QString::fromStdString(generate_nonce());
   body["data"] = data;
