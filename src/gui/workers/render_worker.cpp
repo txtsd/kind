@@ -304,7 +304,7 @@ RenderedMessage compute_layout(
       && first_same_url_embed_idx < static_cast<int>(result.blocks.size())) {
     // Re-create the embed renderer with the extra images
     // We need the original embed data, so grab it from the message
-    auto& first_embed = message.embeds[0]; // The first embed with a URL
+    auto& first_embed = message.embeds[first_same_url_embed_idx];
     QPixmap first_img, first_thumb;
     if (first_embed.image) {
       auto [img_w, img_h] = kind::cdn_url::constrain_dimensions(
