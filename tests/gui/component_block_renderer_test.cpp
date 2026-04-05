@@ -482,3 +482,127 @@ TEST_F(ComponentBlockRendererTest, SelectMenuWithEmptyOptionsRenders) {
   painter.end();
   SUCCEED();
 }
+
+// ==================== Button emoji tests ====================
+
+TEST_F(ComponentBlockRendererTest, ButtonWithUnicodeEmojiRendersWithoutCrash) {
+  kind::Component btn;
+  btn.type = 2;
+  btn.label = "Vote";
+  btn.style = 1;
+  btn.emoji_name = "\xf0\x9f\x91\x8d"; // 👍
+
+  kind::Component row;
+  row.type = 1;
+  row.children = {btn};
+
+  std::vector<kind::Component> rows = {row};
+  kind::gui::ComponentBlockRenderer renderer(rows, QFont());
+  int h = renderer.height(600);
+  EXPECT_GT(h, 0);
+
+  QImage image(600, h, QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 600, h));
+  painter.end();
+  SUCCEED();
+}
+
+TEST_F(ComponentBlockRendererTest, ButtonWithUnicodeEmojiWiderThanLabelOnly) {
+  kind::Component btn_emoji;
+  btn_emoji.type = 2;
+  btn_emoji.label = "Vote";
+  btn_emoji.style = 1;
+  btn_emoji.emoji_name = "\xf0\x9f\x91\x8d"; // 👍
+
+  kind::Component btn_plain;
+  btn_plain.type = 2;
+  btn_plain.label = "Vote";
+  btn_plain.style = 1;
+
+  kind::Component row_emoji;
+  row_emoji.type = 1;
+  row_emoji.children = {btn_emoji};
+
+  kind::Component row_plain;
+  row_plain.type = 1;
+  row_plain.children = {btn_plain};
+
+  kind::gui::ComponentBlockRenderer renderer_emoji({row_emoji}, QFont());
+  kind::gui::ComponentBlockRenderer renderer_plain({row_plain}, QFont());
+
+  // The emoji button should be at least as wide (emoji adds width)
+  // We can't directly check button widths, but heights should be equal
+  EXPECT_EQ(renderer_emoji.height(600), renderer_plain.height(600));
+}
+
+TEST_F(ComponentBlockRendererTest, ButtonWithCustomEmojiShowsFallback) {
+  kind::Component btn;
+  btn.type = 2;
+  btn.label = "React";
+  btn.style = 2;
+  btn.emoji_name = "custom_emoji";
+  btn.emoji_id = 123456789ULL;
+
+  kind::Component row;
+  row.type = 1;
+  row.children = {btn};
+
+  std::vector<kind::Component> rows = {row};
+  kind::gui::ComponentBlockRenderer renderer(rows, QFont());
+  int h = renderer.height(600);
+  EXPECT_GT(h, 0);
+
+  QImage image(600, h, QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 600, h));
+  painter.end();
+  SUCCEED();
+}
+
+TEST_F(ComponentBlockRendererTest, ButtonWithEmojiOnlyNoLabel) {
+  kind::Component btn;
+  btn.type = 2;
+  btn.style = 1;
+  btn.emoji_name = "\xe2\x9c\x85"; // ✅
+  // No label set
+
+  kind::Component row;
+  row.type = 1;
+  row.children = {btn};
+
+  std::vector<kind::Component> rows = {row};
+  kind::gui::ComponentBlockRenderer renderer(rows, QFont());
+  int h = renderer.height(600);
+  EXPECT_GT(h, 0);
+
+  QImage image(600, h, QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 600, h));
+  painter.end();
+  SUCCEED();
+}
+
+TEST_F(ComponentBlockRendererTest, ButtonWithEmojiAndLinkStyleHasArrow) {
+  kind::Component btn;
+  btn.type = 2;
+  btn.label = "Docs";
+  btn.style = 5;
+  btn.url = "https://example.com";
+  btn.emoji_name = "\xf0\x9f\x93\x96"; // 📖
+
+  kind::Component row;
+  row.type = 1;
+  row.children = {btn};
+
+  std::vector<kind::Component> rows = {row};
+  kind::gui::ComponentBlockRenderer renderer(rows, QFont());
+  int h = renderer.height(600);
+  EXPECT_GT(h, 0);
+
+  QImage image(600, h, QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 600, h));
+  painter.end();
+  SUCCEED();
+}

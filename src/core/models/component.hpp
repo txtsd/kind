@@ -26,6 +26,9 @@ struct Component {
 
   // Button-specific
   std::optional<std::string> url;  // Link buttons (style 5)
+  std::optional<std::string> emoji_name;  // Unicode emoji or custom emoji name
+  std::optional<uint64_t> emoji_id;       // Custom emoji snowflake (0 for Unicode)
+  bool emoji_animated{false};             // Custom emoji animation flag
 
   // Select menu-specific
   std::optional<std::string> placeholder;
@@ -57,6 +60,9 @@ struct Component {
     if (disabled != other.disabled) return false;
     if (children != other.children) return false;
     if (url != other.url) return false;
+    if (emoji_name != other.emoji_name) return false;
+    if (emoji_id != other.emoji_id) return false;
+    if (emoji_animated != other.emoji_animated) return false;
     if (placeholder != other.placeholder) return false;
     if (options != other.options) return false;
     if (min_values != other.min_values) return false;

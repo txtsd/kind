@@ -304,6 +304,13 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     comp.style = cobj["style"].toInt(0);
     comp.disabled = cobj["disabled"].toBool(false);
     if (cobj.contains("url")) comp.url = cobj["url"].toString().toStdString();
+    if (cobj.contains("emoji") && cobj["emoji"].isObject()) {
+      auto emoji_obj = cobj["emoji"].toObject();
+      comp.emoji_name = emoji_obj["name"].toString().toStdString();
+      if (emoji_obj.contains("id") && !emoji_obj["id"].isNull())
+        comp.emoji_id = static_cast<Snowflake>(emoji_obj["id"].toString().toULongLong());
+      comp.emoji_animated = emoji_obj["animated"].toBool(false);
+    }
     if (cobj.contains("placeholder")) comp.placeholder = cobj["placeholder"].toString().toStdString();
     if (cobj.contains("min_values")) comp.min_values = cobj["min_values"].toInt();
     if (cobj.contains("max_values")) comp.max_values = cobj["max_values"].toInt();
@@ -350,11 +357,12 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
           parse_component(cobj["accessory"].toObject()));
     }
 
-    log::client()->trace("parse_component: type={}, children={}, content_len={}, has_accessory={}, has_media={}",
+    log::client()->trace("parse_component: type={}, children={}, content_len={}, has_accessory={}, has_media={}, has_emoji={}",
                          comp.type, comp.children.size(),
                          comp.content.has_value() ? comp.content->size() : 0,
                          comp.accessory != nullptr,
-                         comp.media_url.has_value());
+                         comp.media_url.has_value(),
+                         comp.emoji_name.has_value());
 
     return comp;
   };

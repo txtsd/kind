@@ -40,10 +40,22 @@ void ComponentBlockRenderer::compute_layout() {
     int x = 0;
     for (const auto& child : action_row.children) {
       if (child.type == 2) {
-        // Button handling
-        QString label = child.label.has_value()
-            ? QString::fromStdString(*child.label)
-            : QString();
+        // Button handling: build label with optional emoji prefix
+        QString label;
+        if (child.emoji_name.has_value()) {
+          if (child.emoji_id.has_value() && *child.emoji_id != 0) {
+            // Custom emoji: show :name: fallback until image rendering exists
+            label = ":" + QString::fromStdString(*child.emoji_name) + ":";
+          } else {
+            // Unicode emoji: the name field is the emoji character itself
+            label = QString::fromStdString(*child.emoji_name);
+          }
+          if (child.label.has_value() && !child.label->empty()) {
+            label += " " + QString::fromStdString(*child.label);
+          }
+        } else if (child.label.has_value()) {
+          label = QString::fromStdString(*child.label);
+        }
 
         if (child.style == 5) {
           label += QString::fromUtf8(" \xe2\x86\x97"); // ↗
