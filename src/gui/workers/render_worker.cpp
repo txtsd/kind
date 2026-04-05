@@ -3,6 +3,7 @@
 #include "cdn_url.hpp"
 #include "renderers/attachment_block_renderer.hpp"
 #include "renderers/component_block_renderer.hpp"
+#include "renderers/component_v2_block_renderer.hpp"
 #include "renderers/embed_block_renderer.hpp"
 #include "renderers/image_strip_renderer.hpp"
 #include "renderers/reaction_block_renderer.hpp"
@@ -391,10 +392,21 @@ RenderedMessage compute_layout(
         sticker, font, sticker_img));
   }
 
-  // Components (action rows with buttons)
+  // Components
   if (!message.components.empty()) {
-    result.blocks.push_back(std::make_shared<ComponentBlockRenderer>(
-        message.components, font));
+    if (message.flags & (1 << 15)) {
+      // Components V2: one renderer per top-level component
+      spdlog::trace("compute_layout: v2 components path, {} top-level components",
+                    message.components.size());
+      for (const auto& comp : message.components) {
+        result.blocks.push_back(std::make_shared<ComponentV2BlockRenderer>(
+            comp, viewport_width, font, images, mentions));
+      }
+    } else {
+      // Legacy: single renderer for all action rows
+      result.blocks.push_back(std::make_shared<ComponentBlockRenderer>(
+          message.components, font));
+    }
   }
 
   // Sum block heights

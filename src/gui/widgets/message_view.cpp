@@ -13,6 +13,7 @@
 #include "workers/render_worker.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <QDateTime>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -636,6 +637,26 @@ void MessageView::request_images(const kind::Message& msg) {
       auto url = "https://cdn.discordapp.com/emojis/"
                  + std::to_string(*reaction.emoji_id) + ".webp?size=48";
       request_image(url);
+    }
+  }
+
+  // Components V2: thumbnail and media images
+  if (msg.flags & (1 << 15)) {
+    std::function<void(const kind::Component&)> scan_v2_images;
+    scan_v2_images = [&](const kind::Component& comp) {
+      if (comp.media_url && !comp.media_url->empty()) {
+        kind::log::gui()->debug("request_images: v2 media url={}", *comp.media_url);
+        request_image(*comp.media_url);
+      }
+      if (comp.accessory) {
+        scan_v2_images(*comp.accessory);
+      }
+      for (const auto& child : comp.children) {
+        scan_v2_images(child);
+      }
+    };
+    for (const auto& comp : msg.components) {
+      scan_v2_images(comp);
     }
   }
 }
