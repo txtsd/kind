@@ -4,8 +4,11 @@
 #include "text/markdown_parser.hpp"
 
 #include <QFont>
+#include <QPixmap>
 #include <QTextLayout>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kind::gui {
@@ -15,6 +18,7 @@ public:
   // Build a layout for the given content at the given width.
   // prefix_width reserves space on the first line (for author/timestamp).
   RichTextLayout(const kind::ParsedContent& content, int width, const QFont& font,
+                 const std::unordered_map<std::string, QPixmap>& images = {},
                  int prefix_width = 0);
 
   int height() const;
@@ -34,9 +38,17 @@ private:
     int length{0};
   };
 
+  struct EmojiInfo {
+    int text_position{0};
+    QPixmap pixmap;
+    std::string emoji_name;
+    QRectF rect;
+  };
+
   std::shared_ptr<QTextLayout> layout_;
   std::vector<SpanInfo> span_rects_;
   std::vector<CodeBlockInfo> code_blocks_;
+  std::vector<EmojiInfo> emoji_infos_;
   int total_height_{0};
   int width_{0};
 
