@@ -22,8 +22,8 @@
 
 namespace kind::gui {
 
-void resolve_mention(kind::TextSpan& span, const kind::Message& message,
-                     const MentionContext& ctx) {
+void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
+  span.is_self_mention = false;
   uint32_t accent = ctx.use_discord_colors ? 0x5894FF : ctx.accent_color;
   uint32_t accent_fg = 0xFF000000 | accent;
   uint32_t accent_bg = (accent & 0x00FFFFFF) | 0x1E000000;  // alpha ~30
@@ -32,11 +32,9 @@ void resolve_mention(kind::TextSpan& span, const kind::Message& message,
   if (span.mention_user_id.has_value()) {
     auto uid = *span.mention_user_id;
     std::string name = "Unknown User";
-    for (const auto& m : message.mentions) {
-      if (m.id == uid) {
-        name = m.username;
-        break;
-      }
+    auto it = ctx.user_mentions.find(uid);
+    if (it != ctx.user_mentions.end()) {
+      name = it->second;
     }
     span.resolved_text = "@" + name;
     span.mention_color = accent_fg;
@@ -92,7 +90,7 @@ void resolve_mention(kind::TextSpan& span, const kind::Message& message,
       span.resolved_text = span.text;
       span.mention_color = accent_fg;
       span.mention_bg = accent_bg;
-      if (message.mention_everyone) {
+      if (ctx.mention_everyone) {
         span.is_self_mention = true;
         span.mention_bg = accent_bg_self;
       }
@@ -150,17 +148,28 @@ RenderedMessage compute_layout(
     // Parse content with markdown
     auto parsed = kind::markdown::parse(message.content);
 
-    // Replace emoji shortcodes in parsed spans
+    // Replace emoji shortcodes and custom emoji fallback in parsed spans
     for (auto& block : parsed.blocks) {
       if (auto* span = std::get_if<kind::TextSpan>(&block)) {
         kind::replace_emoji_shortcodes(span->text);
+        // Show custom emoji as :name: until image rendering is implemented
+        if (span->custom_emoji_name.has_value()) {
+          span->text = ":" + *span->custom_emoji_name + ":";
+        }
       }
     }
+
+    // Build self-contained mention context from message + caller context
+    MentionContext full_ctx = mentions;
+    for (const auto& m : message.mentions) {
+      full_ctx.user_mentions[m.id] = m.username;
+    }
+    full_ctx.mention_everyone = message.mention_everyone;
 
     // Resolve mentions in parsed content
     for (auto& block : parsed.blocks) {
       if (auto* span = std::get_if<kind::TextSpan>(&block)) {
-        resolve_mention(*span, message, mentions);
+        resolve_mention(*span, full_ctx);
       }
     }
 

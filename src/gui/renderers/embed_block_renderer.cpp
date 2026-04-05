@@ -52,10 +52,8 @@ static std::unique_ptr<RichTextLayout> parse_embed_text(
     if (auto* span = std::get_if<kind::TextSpan>(&block)) {
       kind::replace_emoji_shortcodes(span->text);
       // Mentions in embeds use the same format as message content.
-      // We pass a dummy Message since embeds don't carry mention metadata,
-      // but the shortcode/channel/role resolution still works via context.
-      kind::Message dummy;
-      resolve_mention(*span, dummy, mentions);
+      // MentionContext is self-contained, so no Message object is needed.
+      resolve_mention(*span, mentions);
     }
   }
 

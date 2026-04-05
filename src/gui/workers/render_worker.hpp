@@ -21,12 +21,13 @@ struct MentionContext {
   std::vector<kind::Snowflake> current_user_role_ids;
   std::vector<kind::Role> guild_roles;
   std::vector<kind::Channel> guild_channels;
+  std::unordered_map<kind::Snowflake, std::string> user_mentions;
+  bool mention_everyone{false};
   bool use_discord_colors{false};
   uint32_t accent_color{0x89B4FA};  // default theme accent (Catppuccin blue)
 };
 
-void resolve_mention(kind::TextSpan& span, const kind::Message& message,
-                     const MentionContext& ctx);
+void resolve_mention(kind::TextSpan& span, const MentionContext& ctx);
 
 RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
