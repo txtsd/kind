@@ -185,3 +185,198 @@ TEST(CdnUrlUnhingedTest, NegativeWidthOnAttachmentUrlClampedTo1) {
   EXPECT_TRUE(result.contains("width=1"));
   EXPECT_TRUE(result.contains("height=1"));
 }
+
+// =============================================================================
+// constrain_dimensions tests
+// =============================================================================
+
+// =============================================================================
+// Tier 1: Basic functionality
+// =============================================================================
+
+TEST(ConstrainDimensionsTest, NoScalingWhenWithinBounds) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(400, 300, 520, 520);
+  EXPECT_EQ(w, 400);
+  EXPECT_EQ(h, 300);
+}
+
+TEST(ConstrainDimensionsTest, ScalesDownWidthPreservingAspectRatio) {
+  // 1920x1080 capped at 520 wide: 520 x 293
+  auto [w, h] = kind::cdn_url::constrain_dimensions(1920, 1080, 520, 520);
+  EXPECT_EQ(w, 520);
+  EXPECT_EQ(h, 292); // 1080 * 520 / 1920 = 292.5 -> truncated to 292
+}
+
+TEST(ConstrainDimensionsTest, ScalesDownHeightPreservingAspectRatio) {
+  // 400x2000 capped at 520x520: width first: fine (400 <= 520), height: 2000 > 520
+  // -> w = 400 * 520 / 2000 = 104, h = 520
+  auto [w, h] = kind::cdn_url::constrain_dimensions(400, 2000, 520, 520);
+  EXPECT_EQ(w, 104);
+  EXPECT_EQ(h, 520);
+}
+
+TEST(ConstrainDimensionsTest, VideoMaxHeightCap) {
+  // 1920x1080 capped at 520x300 (video): width first -> 520x292, height fine
+  auto [w, h] = kind::cdn_url::constrain_dimensions(1920, 1080, 520, 300);
+  EXPECT_EQ(w, 520);
+  EXPECT_EQ(h, 292);
+}
+
+TEST(ConstrainDimensionsTest, TallVideoScaledByHeight) {
+  // 400x800 capped at 520x300: width fine, height 800 > 300 -> w = 400*300/800 = 150
+  auto [w, h] = kind::cdn_url::constrain_dimensions(400, 800, 520, 300);
+  EXPECT_EQ(w, 150);
+  EXPECT_EQ(h, 300);
+}
+
+// =============================================================================
+// Tier 2: Edge cases
+// =============================================================================
+
+TEST(ConstrainDimensionsEdgeTest, ExactMaxReturnsUnchanged) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(520, 520, 520, 520);
+  EXPECT_EQ(w, 520);
+  EXPECT_EQ(h, 520);
+}
+
+TEST(ConstrainDimensionsEdgeTest, SquareImageStaysSquare) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(1000, 1000, 520, 520);
+  EXPECT_EQ(w, 520);
+  EXPECT_EQ(h, 520);
+}
+
+TEST(ConstrainDimensionsEdgeTest, VeryWideImageMinHeightClampedTo1) {
+  // 10000x1 capped at 520: h = 1*520/10000 = 0 -> clamped to 1
+  auto [w, h] = kind::cdn_url::constrain_dimensions(10000, 1, 520, 520);
+  EXPECT_EQ(w, 520);
+  EXPECT_GE(h, 1);
+}
+
+// =============================================================================
+// Tier 3: Unhinged scenarios
+// =============================================================================
+
+TEST(ConstrainDimensionsUnhingedTest, ZeroDimensionsClampedTo1) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(0, 0, 520, 520);
+  EXPECT_GE(w, 1);
+  EXPECT_GE(h, 1);
+}
+
+TEST(ConstrainDimensionsUnhingedTest, NegativeDimensionsClampedTo1) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(-100, -50, 520, 520);
+  EXPECT_GE(w, 1);
+  EXPECT_GE(h, 1);
+}
+
+TEST(ConstrainDimensionsUnhingedTest, ExtremelyLargeValues) {
+  auto [w, h] = kind::cdn_url::constrain_dimensions(100000, 50000, 520, 520);
+  EXPECT_LE(w, 520);
+  EXPECT_LE(h, 520);
+  EXPECT_GE(w, 1);
+  EXPECT_GE(h, 1);
+}
+
+TEST(ConstrainDimensionsUnhingedTest, BothDimensionsExceedDifferentMaxes) {
+  // 800x600 with max 400x300: width caps first -> 400x300, then height is exactly 300
+  auto [w, h] = kind::cdn_url::constrain_dimensions(800, 600, 400, 300);
+  EXPECT_LE(w, 400);
+  EXPECT_LE(h, 300);
+}
+
+// =============================================================================
+// normalize_cache_key tests
+// =============================================================================
+
+// =============================================================================
+// Tier 1: Basic functionality
+// =============================================================================
+
+TEST(CdnUrlTest, NormalizeCacheKeyStripsSignatureKeepsSizeParams) {
+  auto result = kind::cdn_url::normalize_cache_key(
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?ex=abc123&is=def456&hm=ghi789&width=520&height=400");
+  EXPECT_EQ(result,
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?width=520&height=400");
+}
+
+TEST(CdnUrlTest, NormalizeCacheKeyNonAttachmentCdnUrlUnchanged) {
+  std::string url = "https://cdn.discordapp.com/icons/123/abc.png?size=128";
+  EXPECT_EQ(kind::cdn_url::normalize_cache_key(url), url);
+}
+
+TEST(CdnUrlTest, NormalizeCacheKeyProxyAttachmentWithOnlyContentParams) {
+  std::string url = "https://media.discordapp.net/attachments/111/222/image.png"
+                    "?width=400&height=300";
+  // Discord proxy with /attachments/ is normalized, but only has content params so unchanged
+  auto result = kind::cdn_url::normalize_cache_key(url);
+  EXPECT_EQ(result, url);
+}
+
+TEST(CdnUrlTest, NormalizeCacheKeyExternalUrlUnchanged) {
+  std::string url = "https://example.com/image.png?token=abc123";
+  EXPECT_EQ(kind::cdn_url::normalize_cache_key(url), url);
+}
+
+// =============================================================================
+// Tier 2: Edge cases
+// =============================================================================
+
+TEST(CdnUrlEdgeTest, NormalizeCacheKeyNoQueryParamsUnchanged) {
+  std::string url = "https://cdn.discordapp.com/attachments/111/222/image.png";
+  EXPECT_EQ(kind::cdn_url::normalize_cache_key(url), url);
+}
+
+TEST(CdnUrlEdgeTest, NormalizeCacheKeyOnlySignatureParamsReturnsPathOnly) {
+  auto result = kind::cdn_url::normalize_cache_key(
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?ex=abc123&is=def456&hm=ghi789");
+  EXPECT_EQ(result,
+      "https://cdn.discordapp.com/attachments/111/222/image.png");
+}
+
+TEST(CdnUrlEdgeTest, NormalizeCacheKeyFormatParamPreserved) {
+  auto result = kind::cdn_url::normalize_cache_key(
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?ex=abc&is=def&hm=ghi&format=webp&width=300");
+  EXPECT_EQ(result,
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?format=webp&width=300");
+}
+
+TEST(CdnUrlEdgeTest, NormalizeCacheKeySameAttachmentDifferentSignaturesSameKey) {
+  auto key1 = kind::cdn_url::normalize_cache_key(
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?ex=aaa111&is=bbb222&hm=ccc333&width=400&height=300");
+  auto key2 = kind::cdn_url::normalize_cache_key(
+      "https://cdn.discordapp.com/attachments/111/222/image.png"
+      "?ex=xxx999&is=yyy888&hm=zzz777&width=400&height=300");
+  EXPECT_EQ(key1, key2);
+}
+
+// =============================================================================
+// Tier 3: Unhinged scenarios
+// =============================================================================
+
+TEST(CdnUrlUnhingedTest, NormalizeCacheKeyEmptyStringReturnsEmpty) {
+  EXPECT_EQ(kind::cdn_url::normalize_cache_key(""), "");
+}
+
+TEST(CdnUrlUnhingedTest, NormalizeCacheKeyVeryLongAttachmentUrl) {
+  std::string url = "https://cdn.discordapp.com/attachments/111/222/";
+  url += std::string(100000, 'x');
+  url += ".png?ex=abc&is=def&hm=ghi&width=1920&height=1080";
+  auto result = kind::cdn_url::normalize_cache_key(url);
+  EXPECT_TRUE(result.contains("width=1920"));
+  EXPECT_TRUE(result.contains("height=1080"));
+  EXPECT_FALSE(result.contains("ex="));
+  EXPECT_FALSE(result.contains("is="));
+  EXPECT_FALSE(result.contains("hm="));
+}
+
+TEST(CdnUrlUnhingedTest, NormalizeCacheKeyNonDiscordAttachmentsPathUnchanged) {
+  // Non-Discord URL with "attachments" in path should NOT be normalized
+  std::string url = "https://weird.example.com/foo/attachments/bar/image.png"
+                    "?ex=abc&is=def&hm=ghi&width=640";
+  EXPECT_EQ(kind::cdn_url::normalize_cache_key(url), url);
+}

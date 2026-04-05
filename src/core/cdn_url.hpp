@@ -2,8 +2,26 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 namespace kind::cdn_url {
+
+/// Scale dimensions to fit within max_w x max_h while preserving aspect ratio.
+/// Returns the constrained {width, height} pair.
+inline std::pair<int, int> constrain_dimensions(int width, int height,
+                                                 int max_w, int max_h) {
+  width = std::max(width, 1);
+  height = std::max(height, 1);
+  if (width > max_w) {
+    height = height * max_w / width;
+    width = max_w;
+  }
+  if (height > max_h) {
+    width = width * max_h / height;
+    height = max_h;
+  }
+  return {std::max(width, 1), std::max(height, 1)};
+}
 
 /// Append appropriate size/dimension parameters to Discord image URLs.
 ///
@@ -62,6 +80,48 @@ inline std::string add_image_size(const std::string& url, int display_width, int
   }
 
   return url;
+}
+
+/// Strip volatile signature parameters from Discord attachment URLs to produce
+/// a stable cache key. The path plus size params (width, height, format)
+/// uniquely identify the content. Non-attachment URLs are returned unchanged.
+inline std::string normalize_cache_key(const std::string& url) {
+  // Only normalize Discord attachment URLs (they have rotating signatures)
+  bool is_discord = url.contains("cdn.discordapp.com")
+                    || url.contains("discordapp.net")
+                    || url.contains("discord.com");
+  if (!is_discord || !url.contains("/attachments/")) {
+    return url;
+  }
+
+  auto qpos = url.find('?');
+  if (qpos == std::string::npos) {
+    return url;
+  }
+
+  std::string base = url.substr(0, qpos);
+  std::string_view query(url.data() + qpos + 1, url.size() - qpos - 1);
+
+  // Keep only content-affecting params: width, height, format
+  std::string kept;
+  size_t pos = 0;
+  while (pos < query.size()) {
+    auto amp = query.find('&', pos);
+    auto param = query.substr(pos, amp == std::string_view::npos
+                                       ? std::string_view::npos
+                                       : amp - pos);
+
+    if (param.starts_with("width=") || param.starts_with("height=")
+        || param.starts_with("format=")) {
+      if (!kept.empty()) kept += '&';
+      kept += param;
+    }
+
+    if (amp == std::string_view::npos) break;
+    pos = amp + 1;
+  }
+
+  return kept.empty() ? base : base + "?" + kept;
 }
 
 } // namespace kind::cdn_url
