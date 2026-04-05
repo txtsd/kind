@@ -33,6 +33,8 @@ RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
     const std::unordered_map<std::string, QPixmap>& images = {},
     EditedIndicator edited_style = EditedIndicator::Text,
-    const MentionContext& mentions = {});
+    const MentionContext& mentions = {},
+    bool show_timestamps = true,
+    int timestamp_column_width = 0);
 
 } // namespace kind::gui

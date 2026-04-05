@@ -15,8 +15,7 @@ namespace kind::gui {
 class TextBlockRenderer : public BlockRenderer {
 public:
   TextBlockRenderer(const kind::ParsedContent& content, int viewport_width,
-                    const QFont& font, const QString& author, const QString& timestamp,
-                    const QString& timestamp_tooltip = {},
+                    const QFont& font, const QString& author,
                     const std::unordered_map<std::string, QPixmap>& images = {});
 
   int height(int width) const override;
@@ -28,12 +27,8 @@ private:
   static constexpr int padding_ = 4;
 
   QString author_;
-  QString timestamp_;
-  QString timestamp_tooltip_;
   int author_width_{0};
-  int timestamp_width_{0};
   int total_height_{0};
-  QRect timestamp_rect_;
   QFont font_;
 
   std::unique_ptr<RichTextLayout> content_layout_;

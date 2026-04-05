@@ -105,9 +105,18 @@ RenderedMessage compute_layout(
     const kind::Message& message, int viewport_width, const QFont& font,
     const std::unordered_map<std::string, QPixmap>& images,
     EditedIndicator edited_style,
-    const MentionContext& mentions) {
+    const MentionContext& mentions,
+    bool show_timestamps,
+    int timestamp_column_width) {
   RenderedMessage result;
   result.viewport_width = viewport_width;
+
+  int effective_width = show_timestamps
+      ? std::max(viewport_width - timestamp_column_width, 100)
+      : viewport_width;
+
+  spdlog::debug("compute_layout: show_timestamps={}, column_width={}, effective_width={}",
+                show_timestamps, timestamp_column_width, effective_width);
 
   // System messages: anything other than Default (0), Reply (19), ChatInputCommand (20)
   bool is_system = (message.type != 0 && message.type != 19 && message.type != 20);
@@ -115,7 +124,7 @@ RenderedMessage compute_layout(
   if (is_system) {
     auto author = QString::fromStdString(message.author.username);
     result.blocks.push_back(std::make_shared<SystemMessageRenderer>(
-        message.type, author, viewport_width, font));
+        message.type, author, effective_width, font));
   } else {
     // Timestamp
     auto raw_ts = QString::fromStdString(message.timestamp);
@@ -131,11 +140,12 @@ RenderedMessage compute_layout(
         : QString();
     auto author = QString::fromStdString(message.author.username) + ": ";
 
-    // Reply block before text (indented to align with author name below)
-    if (message.referenced_message_id.has_value()) {
-      QFontMetrics ts_fm(font);
-      int timestamp_indent = ts_fm.horizontalAdvance(time_str);
+    // Store timestamp on result (the column handles alignment now)
+    result.timestamp_text = time_str;
+    result.timestamp_tooltip = time_tooltip;
 
+    // Reply block before text
+    if (message.referenced_message_id.has_value()) {
       QString ref_author = message.referenced_message_author
           ? QString::fromStdString(*message.referenced_message_author)
           : QString("Unknown");
@@ -144,7 +154,7 @@ RenderedMessage compute_layout(
           : QString("...");
       result.blocks.push_back(std::make_shared<ReplyBlockRenderer>(
           ref_author, ref_content,
-          *message.referenced_message_id, viewport_width, font, timestamp_indent));
+          *message.referenced_message_id, effective_width, font, 0));
     }
 
     // Parse content with markdown
@@ -185,6 +195,7 @@ RenderedMessage compute_layout(
     if (message.edited_timestamp.has_value()
         && (edited_style == EditedIndicator::Icon || edited_style == EditedIndicator::Both)) {
       time_str = QString::fromUtf8("\u270f ") + time_str;
+      result.timestamp_text = time_str;
     }
 
     // Hide message text when content is a single URL that produced an image/gifv embed
@@ -204,12 +215,12 @@ RenderedMessage compute_layout(
 
     if (!suppress_text) {
       result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-          parsed, viewport_width, font, author, time_str, time_tooltip, images));
+          parsed, effective_width, font, author, images));
     } else {
-      // Still need timestamp + author line, just with empty content
+      // Still need author line, just with empty content
       kind::ParsedContent empty_content;
       result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-          empty_content, viewport_width, font, author, time_str, time_tooltip, images));
+          empty_content, effective_width, font, author, images));
     }
   }
 
@@ -284,7 +295,7 @@ RenderedMessage compute_layout(
     }
 
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
-        embed, viewport_width, font, embed_img, embed_thumb,
+        embed, effective_width, font, embed_img, embed_thumb,
         std::vector<QPixmap>{}, mentions, images));
   }
 
@@ -319,7 +330,7 @@ RenderedMessage compute_layout(
       if (img_it != images.end()) first_thumb = img_it->second;
     }
     result.blocks[first_same_url_embed_idx] = std::make_shared<EmbedBlockRenderer>(
-        first_embed, viewport_width, font, first_img, first_thumb,
+        first_embed, effective_width, font, first_img, first_thumb,
         std::move(extra_same_url_images), mentions, images);
   }
 
@@ -332,7 +343,7 @@ RenderedMessage compute_layout(
     indicator.style = kind::TextSpan::Normal;
     extra_content.blocks.push_back(std::move(indicator));
     result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-        extra_content, viewport_width, font, QString(), QString()));
+        extra_content, effective_width, font, QString()));
   }
 
   // Attachments
@@ -397,7 +408,7 @@ RenderedMessage compute_layout(
                     message.components.size());
       for (const auto& comp : message.components) {
         result.blocks.push_back(std::make_shared<ComponentV2BlockRenderer>(
-            comp, viewport_width, font, images, mentions));
+            comp, effective_width, font, images, mentions));
       }
     } else {
       // Legacy: single renderer for all action rows
@@ -415,7 +426,7 @@ RenderedMessage compute_layout(
   // Sum block heights
   result.height = 0;
   for (const auto& block : result.blocks) {
-    result.height += block->height(viewport_width);
+    result.height += block->height(effective_width);
   }
   result.valid = true;
 
