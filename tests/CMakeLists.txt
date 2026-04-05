@@ -106,6 +106,7 @@ kind_add_test_executable(kind-test-renderers
   gui/sticker_block_renderer_test.cpp
   gui/component_block_renderer_test.cpp
   gui/component_v2_block_renderer_test.cpp
+  gui/ephemeral_notice_renderer_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/rich_text_layout.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
@@ -116,6 +117,7 @@ kind_add_test_executable(kind-test-renderers
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/sticker_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_v2_block_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/ephemeral_notice_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/workers/render_worker.cpp
 )
 
@@ -142,6 +144,7 @@ kind_add_test_executable(kind-test-mentions
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/sticker_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_v2_block_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/ephemeral_notice_renderer.cpp
 )
 
 # --- Integration tests ---

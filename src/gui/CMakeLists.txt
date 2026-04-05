@@ -69,6 +69,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   renderers/component_v2_block_renderer.cpp
   renderers/divider_renderer.hpp
   renderers/divider_renderer.cpp
+  renderers/ephemeral_notice_renderer.hpp
+  renderers/ephemeral_notice_renderer.cpp
   workers/render_worker.hpp
   workers/render_worker.cpp
 )

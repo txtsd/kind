@@ -36,6 +36,7 @@ signals:
   void select_menu_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
                            const QString& custom_id, const QRect& bar_rect);
   void channel_mention_clicked(kind::Snowflake channel_id);
+  void dismiss_ephemeral(kind::Snowflake channel_id, kind::Snowflake message_id);
 
 private:
   static constexpr int padding_ = 4;

@@ -5,6 +5,7 @@
 #include "renderers/component_block_renderer.hpp"
 #include "renderers/component_v2_block_renderer.hpp"
 #include "renderers/embed_block_renderer.hpp"
+#include "renderers/ephemeral_notice_renderer.hpp"
 #include "renderers/image_strip_renderer.hpp"
 #include "renderers/reaction_block_renderer.hpp"
 #include "renderers/reply_block_renderer.hpp"
@@ -407,6 +408,12 @@ RenderedMessage compute_layout(
       result.blocks.push_back(std::make_shared<ComponentBlockRenderer>(
           message.components, font, images));
     }
+  }
+
+  // Ephemeral notice
+  if (message.flags & (1 << 6)) {
+    spdlog::trace("compute_layout: appending ephemeral notice for message {}", message.id);
+    result.blocks.push_back(std::make_shared<EphemeralNoticeRenderer>(font));
   }
 
   // Sum block heights

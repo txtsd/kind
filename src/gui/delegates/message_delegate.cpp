@@ -216,6 +216,10 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     }
     break;
 
+  case HitResult::DismissEphemeral:
+    emit dismiss_ephemeral(channel_id, message_id);
+    return true;
+
   case HitResult::None:
   case HitResult::Mention:
     break;
