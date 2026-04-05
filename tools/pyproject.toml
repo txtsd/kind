@@ -1,0 +1,16 @@
+[project]
+name = "kind-analyze"
+version = "0.1.0"
+description = "Log analysis and diagnostics for Kind"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+kind-analyze = "kind_analyze.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kind_analyze"]
