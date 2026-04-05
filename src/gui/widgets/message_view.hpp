@@ -45,6 +45,7 @@ public:
   void set_member_roles(const std::vector<kind::Snowflake>& role_ids);
   void set_mention_color_preference(bool use_discord_colors);
   void set_accent_color(uint32_t color);
+  void set_show_timestamps(bool show);
   void switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages);
 
   void scroll_to_message(kind::Snowflake message_id);
@@ -117,6 +118,8 @@ private:
   std::vector<kind::Snowflake> member_role_ids_;
   bool use_discord_mention_colors_{false};
   uint32_t accent_color_{0x89B4FA};
+  bool show_timestamps_{true};
+  int timestamp_column_width_{0};
 
   kind::gui::MentionContext build_mention_context() const;
 

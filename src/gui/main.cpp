@@ -136,6 +136,10 @@ int main(int argc, char* argv[]) {
     message_view->set_edited_indicator(kind::gui::EditedIndicator::Text);
   }
 
+  // Timestamp preference
+  auto show_ts = config.get_or<bool>("appearance.show_timestamps", true);
+  message_view->set_show_timestamps(show_ts);
+
   // Mention color preference
   auto mention_pref = config.get_or<std::string>("appearance.mention_colors", "theme");
   message_view->set_mention_color_preference(mention_pref == "discord");
@@ -371,6 +375,10 @@ int main(int argc, char* argv[]) {
         auto perms = compute_channel_permissions(current_guild_id, qvec);
         channel_list->set_channels(qvec, perms, hide_locked);
       }
+
+      // Re-apply timestamp preference
+      auto show_ts = config.get_or<bool>("appearance.show_timestamps", true);
+      message_view->set_show_timestamps(show_ts);
 
       // Re-apply mention color preference
       auto mention_pref = config.get_or<std::string>("appearance.mention_colors", "theme");

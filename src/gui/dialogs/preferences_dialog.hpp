@@ -51,6 +51,9 @@ private:
   // Mention colors
   QComboBox* mention_colors_combo_{};
 
+  // Timestamps
+  QCheckBox* show_timestamps_{};
+
   // Advanced page controls
   QComboBox* memory_profile_combo_{};
 };

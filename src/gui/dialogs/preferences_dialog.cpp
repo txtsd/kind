@@ -85,6 +85,12 @@ void PreferencesDialog::setup_ui() {
   mention_colors_combo_->addItem("Discord (blue)", "discord");
   appearance_layout->addRow("Mention colors:", mention_colors_combo_);
 
+  // -- Timestamps --
+  appearance_layout->addRow(new QLabel("<b>Timestamps</b>"));
+
+  show_timestamps_ = new QCheckBox("Show message timestamps");
+  appearance_layout->addRow(show_timestamps_);
+
   pages_->addWidget(appearance_page);
 
   // -- Network page (placeholder) --
@@ -185,6 +191,9 @@ void PreferencesDialog::load_settings() {
     mention_colors_combo_->setCurrentIndex(mention_idx);
   }
 
+  // Timestamps
+  show_timestamps_->setChecked(config_.get_or<bool>("appearance.show_timestamps", true));
+
   // Memory profile
   auto profile = config_.get_or<std::string>("behavior.memory_profile", "standard");
   int profile_idx = memory_profile_combo_->findData(QString::fromStdString(profile));
@@ -216,6 +225,9 @@ void PreferencesDialog::save_settings() {
   // Mention colors
   config_.set<std::string>("appearance.mention_colors",
                            mention_colors_combo_->currentData().toString().toStdString());
+
+  // Timestamps
+  config_.set<bool>("appearance.show_timestamps", show_timestamps_->isChecked());
 
   // Memory profile
   config_.set<std::string>("behavior.memory_profile",

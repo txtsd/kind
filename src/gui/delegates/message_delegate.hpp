@@ -2,6 +2,7 @@
 
 #include "models/snowflake.hpp"
 
+#include <QFont>
 #include <QStyledItemDelegate>
 #include <QString>
 
@@ -15,6 +16,10 @@ public:
 
   void set_highlight(kind::Snowflake message_id, qreal opacity);
   void clear_highlight();
+
+  void set_show_timestamps(bool show);
+  void set_timestamp_column_width(int width);
+  void set_font(const QFont& font);
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
@@ -42,6 +47,9 @@ private:
   static constexpr int padding_ = 4;
   kind::Snowflake highlight_id_{0};
   qreal highlight_opacity_{0.0};
+  bool show_timestamps_{true};
+  int timestamp_column_width_{0};
+  QFont font_;
 };
 
 } // namespace kind::gui

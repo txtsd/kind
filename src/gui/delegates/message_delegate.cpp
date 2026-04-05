@@ -4,6 +4,8 @@
 #include "models/reaction.hpp"
 #include "models/rendered_message.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <QAbstractItemView>
 #include <QFontMetrics>
 #include <QHelpEvent>
@@ -23,6 +25,20 @@ void MessageDelegate::set_highlight(kind::Snowflake message_id, qreal opacity) {
 void MessageDelegate::clear_highlight() {
   highlight_id_ = 0;
   highlight_opacity_ = 0.0;
+}
+
+void MessageDelegate::set_show_timestamps(bool show) {
+  show_timestamps_ = show;
+  spdlog::debug("MessageDelegate: show_timestamps={}", show);
+}
+
+void MessageDelegate::set_timestamp_column_width(int width) {
+  timestamp_column_width_ = width;
+  spdlog::debug("MessageDelegate: timestamp_column_width={}", width);
+}
+
+void MessageDelegate::set_font(const QFont& font) {
+  font_ = font;
 }
 
 void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
@@ -52,23 +68,38 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
   auto* rendered = static_cast<const RenderedMessage*>(ptr);
 
   if (rendered && rendered->valid && !rendered->blocks.empty()) {
+    int col_offset = (show_timestamps_ && timestamp_column_width_ > 0) ? timestamp_column_width_ : 0;
+
+    // Draw timestamp in left column
+    if (col_offset > 0 && !rendered->timestamp_text.isEmpty()) {
+      painter->setFont(font_);
+      painter->setPen(QColor(128, 128, 128));
+      QFontMetrics fm(font_);
+      int ts_x = option.rect.left() + 4;
+      int ts_y = option.rect.top() + 4 + fm.ascent();
+      painter->drawText(ts_x, ts_y, rendered->timestamp_text);
+      spdlog::trace("MessageDelegate: painted timestamp '{}' at ({}, {})",
+                    rendered->timestamp_text.toStdString(), ts_x, ts_y);
+    }
+
     int y = option.rect.top();
     for (const auto& block : rendered->blocks) {
-      int block_h = block->height(option.rect.width());
-      QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+      int block_h = block->height(option.rect.width() - col_offset);
+      QRect block_rect(option.rect.left() + col_offset, y, option.rect.width() - col_offset, block_h);
       block->paint(painter, block_rect);
       y += block_h;
     }
   } else {
     // Fallback placeholder while layout is being computed
+    int col_offset = (show_timestamps_ && timestamp_column_width_ > 0) ? timestamp_column_width_ : 0;
     painter->setFont(option.font);
     painter->setPen(option.palette.color(QPalette::Normal, QPalette::Text));
     auto author = index.data(MessageModel::AuthorRole).toString();
     auto content = index.data(MessageModel::ContentRole).toString();
     QString text = author + ": " + content;
     QFontMetrics fm(option.font);
-    QString elided = fm.elidedText(text, Qt::ElideRight, option.rect.width() - 2 * padding_);
-    painter->drawText(option.rect.left() + padding_,
+    QString elided = fm.elidedText(text, Qt::ElideRight, option.rect.width() - col_offset - 2 * padding_);
+    painter->drawText(option.rect.left() + col_offset + padding_,
                       option.rect.top() + padding_ + fm.ascent(), elided);
   }
 
@@ -106,14 +137,16 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     return false;
   }
 
+  int col_offset = (show_timestamps_ && timestamp_column_width_ > 0) ? timestamp_column_width_ : 0;
+
   // Hit test to find what's under the cursor
   HitResult hit_result;
   bool hit_found = false;
   QRect hit_block_rect;
   int y = option.rect.top();
   for (const auto& block : rendered->blocks) {
-    int block_h = block->height(option.rect.width());
-    QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+    int block_h = block->height(option.rect.width() - col_offset);
+    QRect block_rect(option.rect.left() + col_offset, y, option.rect.width() - col_offset, block_h);
     if (block_rect.contains(click)) {
       QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
       if (block->hit_test(local, hit_result)) {
@@ -241,11 +274,23 @@ bool MessageDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
     return true;
   }
 
+  int col_offset = (show_timestamps_ && timestamp_column_width_ > 0) ? timestamp_column_width_ : 0;
+
   QPoint click = event->pos();
+
+  // Check timestamp column for tooltip
+  if (col_offset > 0 && !rendered->timestamp_text.isEmpty() && !rendered->timestamp_tooltip.isEmpty()) {
+    QRect ts_rect(option.rect.left(), option.rect.top(), col_offset, option.rect.height());
+    if (ts_rect.contains(click)) {
+      QToolTip::showText(event->globalPos(), rendered->timestamp_tooltip, view);
+      return true;
+    }
+  }
+
   int y = option.rect.top();
   for (const auto& block : rendered->blocks) {
-    int block_h = block->height(option.rect.width());
-    QRect block_rect(option.rect.left(), y, option.rect.width(), block_h);
+    int block_h = block->height(option.rect.width() - col_offset);
+    QRect block_rect(option.rect.left() + col_offset, y, option.rect.width() - col_offset, block_h);
     if (block_rect.contains(click)) {
       QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
       QString tip = block->tooltip_at(local);

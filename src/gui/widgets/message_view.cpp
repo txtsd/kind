@@ -40,7 +40,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
     layouts.reserve(msgs.size());
     for (const auto& msg : msgs) {
       auto images = cached_pixmaps_for(msg);
-      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
+      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
     }
     model_->set_messages(msgs, std::move(layouts));
   });
@@ -154,7 +154,7 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
   layouts.reserve(messages.size());
   for (const auto& msg : messages) {
     auto images = cached_pixmaps_for(msg);
-    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
+    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
     request_images(msg);
 
     // Try to resolve reply context from locally loaded messages
@@ -283,7 +283,7 @@ void MessageView::add_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context()));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
   request_images(msg);
 
   if (!auto_scroll_) {
@@ -299,7 +299,7 @@ void MessageView::update_message(const kind::Message& msg) {
 
   int width = viewport()->width() > 0 ? viewport()->width() : 400;
   auto images = cached_pixmaps_for(msg);
-  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context()));
+  model_->on_layout_ready(msg.id, compute_layout(msg, width, font(), images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
   request_images(msg);
 }
 
@@ -410,6 +410,20 @@ void MessageView::set_accent_color(uint32_t color) {
   accent_color_ = color;
 }
 
+void MessageView::set_show_timestamps(bool show) {
+  show_timestamps_ = show;
+
+  // Compute column width from font metrics
+  QFontMetrics fm(font());
+  timestamp_column_width_ = show ? fm.horizontalAdvance("[00:00] ") + 4 : 0;
+
+  delegate_->set_show_timestamps(show);
+  delegate_->set_timestamp_column_width(timestamp_column_width_);
+  delegate_->set_font(font());
+
+  kind::log::gui()->debug("MessageView: show_timestamps={}, column_width={}", show, timestamp_column_width_);
+}
+
 MentionContext MessageView::build_mention_context() const {
   MentionContext ctx;
   ctx.current_user_id = current_user_id_;
@@ -491,7 +505,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
 
               const auto& msg = model_->messages()[row_idx];
               auto images = cached_pixmaps_for(msg);
-              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context()));
+              model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
 
               // Measure new height after re-render
               int new_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();
