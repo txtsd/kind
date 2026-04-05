@@ -32,3 +32,11 @@ Thumbs.db
 moc_*.cpp
 ui_*.h
 qrc_*.cpp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Worktrees
+.worktrees/
