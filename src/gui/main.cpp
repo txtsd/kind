@@ -20,10 +20,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QDesktopServices>
+#include <QGuiApplication>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QNetworkAccessManager>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -595,7 +598,7 @@ int main(int argc, char* argv[]) {
   // Wire select menu clicks to show popup and send interaction
   QObject::connect(message_view, &kind::gui::MessageView::select_menu_clicked,
                    [&client, message_view](kind::Snowflake channel_id, kind::Snowflake message_id,
-                              const QString& custom_id, const QPoint& global_pos) {
+                              const QString& custom_id, const QRect& bar_rect) {
                      auto messages = client.messages(channel_id);
                      const kind::Message* target = nullptr;
                      for (const auto& msg : messages) {
@@ -623,57 +626,96 @@ int main(int argc, char* argv[]) {
 
                      auto app_id = target->application_id.value_or(target->author.id);
                      auto guild_id = client.guild_id_for_channel(channel_id);
-
-                     auto* menu = new QMenu(message_view);
-                     menu->setAttribute(Qt::WA_DeleteOnClose);
-
                      int max_values = select_comp->max_values.value_or(1);
 
-                     if (max_values <= 1) {
-                       // Single-select: clicking an option immediately sends
-                       for (const auto& opt : select_comp->options) {
-                         auto* action = menu->addAction(QString::fromStdString(opt.label));
-                         if (!opt.description.empty()) {
-                           action->setToolTip(QString::fromStdString(opt.description));
-                         }
-                         action->setCheckable(true);
-                         action->setChecked(opt.default_selected);
-                         QObject::connect(action, &QAction::triggered,
-                                          [&client, channel_id, message_id, guild_id,
-                                           app_id, custom_id, value = opt.value]() {
-                                            client.send_interaction(channel_id, message_id, guild_id,
-                                                                    app_id, 3,
-                                                                    custom_id.toStdString(), {value});
-                                          });
+                     // Styled popup matching the rendered select menu bar
+                     auto* popup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
+                     popup->setAttribute(Qt::WA_DeleteOnClose);
+
+                     auto* layout = new QVBoxLayout(popup);
+                     layout->setContentsMargins(0, 0, 0, 0);
+                     layout->setSpacing(0);
+
+                     auto* list = new QListWidget(popup);
+                     list->setFrameShape(QFrame::NoFrame);
+                     list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+                     // Style to match the rendered select menu bar
+                     QPalette pal = QGuiApplication::palette();
+                     QColor bg = pal.color(QPalette::Base).lighter(150);
+                     QColor text_color = pal.color(QPalette::Text);
+                     QColor hover_color = bg.darker(120);
+                     QString style = QStringLiteral(
+                       "QListWidget { background: %1; color: %2; border: none; "
+                       "border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }"
+                       "QListWidget::item { padding: 6px 12px; }"
+                       "QListWidget::item:hover { background: %3; }"
+                       "QListWidget::item:selected { background: %3; }")
+                       .arg(bg.name(), text_color.name(), hover_color.name());
+                     list->setStyleSheet(style);
+
+                     for (const auto& opt : select_comp->options) {
+                       auto* item = new QListWidgetItem(QString::fromStdString(opt.label));
+                       item->setData(Qt::UserRole, QString::fromStdString(opt.value));
+                       if (!opt.description.empty()) {
+                         item->setToolTip(QString::fromStdString(opt.description));
                        }
-                     } else {
-                       // Multi-select: checkable items with a "Done" action
-                       std::vector<QAction*> option_actions;
-                       for (const auto& opt : select_comp->options) {
-                         auto* action = menu->addAction(QString::fromStdString(opt.label));
-                         action->setCheckable(true);
-                         action->setChecked(opt.default_selected);
-                         action->setData(QString::fromStdString(opt.value));
-                         option_actions.push_back(action);
+                       if (max_values > 1) {
+                         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+                         item->setCheckState(opt.default_selected ? Qt::Checked : Qt::Unchecked);
                        }
-                       menu->addSeparator();
-                       auto* done_action = menu->addAction(QStringLiteral("Done"));
-                       QObject::connect(done_action, &QAction::triggered,
-                                        [&client, channel_id, message_id, guild_id,
-                                         app_id, custom_id, option_actions]() {
-                                          std::vector<std::string> selected;
-                                          for (auto* act : option_actions) {
-                                            if (act->isChecked()) {
-                                              selected.push_back(act->data().toString().toStdString());
-                                            }
-                                          }
-                                          client.send_interaction(channel_id, message_id, guild_id,
-                                                                  app_id, 3,
-                                                                  custom_id.toStdString(), selected);
-                                        });
+                       list->addItem(item);
                      }
 
-                     menu->popup(global_pos);
+                     layout->addWidget(list);
+
+                     if (max_values > 1) {
+                       auto* done_btn = new QPushButton(QStringLiteral("Done"), popup);
+                       done_btn->setStyleSheet(QStringLiteral(
+                         "QPushButton { background: %1; color: %2; border: none; "
+                         "padding: 8px; border-bottom-left-radius: 4px; "
+                         "border-bottom-right-radius: 4px; }"
+                         "QPushButton:hover { background: %3; }")
+                         .arg(bg.name(), text_color.name(), hover_color.name()));
+                       layout->addWidget(done_btn);
+
+                       QObject::connect(done_btn, &QPushButton::clicked, popup,
+                         [&client, channel_id, message_id, guild_id, app_id, custom_id,
+                          list, popup]() {
+                           std::vector<std::string> selected;
+                           for (int row = 0; row < list->count(); ++row) {
+                             if (list->item(row)->checkState() == Qt::Checked) {
+                               selected.push_back(
+                                 list->item(row)->data(Qt::UserRole).toString().toStdString());
+                             }
+                           }
+                           client.send_interaction(channel_id, message_id, guild_id,
+                                                   app_id, 3,
+                                                   custom_id.toStdString(), selected);
+                           popup->close();
+                         });
+                     } else {
+                       QObject::connect(list, &QListWidget::itemClicked, popup,
+                         [&client, channel_id, message_id, guild_id, app_id, custom_id,
+                          popup](QListWidgetItem* item) {
+                           std::string value = item->data(Qt::UserRole).toString().toStdString();
+                           client.send_interaction(channel_id, message_id, guild_id,
+                                                   app_id, 3,
+                                                   custom_id.toStdString(), {value});
+                           popup->close();
+                         });
+                     }
+
+                     // Size to fit options, matching the bar width
+                     int item_height = list->sizeHintForRow(0);
+                     if (item_height <= 0) item_height = 30;
+                     int list_height = item_height * list->count();
+                     int total_height = list_height + (max_values > 1 ? 36 : 0);
+                     popup->setFixedSize(bar_rect.width(), total_height);
+
+                     // Position directly below the collapsed bar
+                     popup->move(bar_rect.bottomLeft());
+                     popup->show();
                    });
 
   // TODO: wire spoiler_toggled to spoiler reveal state management
