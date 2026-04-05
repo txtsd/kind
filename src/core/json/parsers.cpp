@@ -319,6 +319,43 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     for (const auto& child : cobj["components"].toArray()) {
       comp.children.push_back(parse_component(child.toObject()));
     }
+
+    // Components V2 fields
+    if (cobj.contains("content"))
+      comp.content = cobj["content"].toString().toStdString();
+    if (cobj.contains("accent_color") && !cobj["accent_color"].isNull())
+      comp.accent_color = cobj["accent_color"].toInt();
+    if (cobj.contains("spoiler"))
+      comp.spoiler = cobj["spoiler"].toBool(false);
+    if (cobj.contains("divider"))
+      comp.divider = cobj["divider"].toBool(true);
+    if (cobj.contains("spacing"))
+      comp.spacing = cobj["spacing"].toInt(1);
+
+    // Thumbnail / media (unfurled media item)
+    if (cobj.contains("media") && cobj["media"].isObject()) {
+      auto media_obj = cobj["media"].toObject();
+      comp.media_url = media_obj["url"].toString().toStdString();
+      if (media_obj.contains("proxy_url"))
+        comp.media_proxy_url = media_obj["proxy_url"].toString().toStdString();
+      if (media_obj.contains("width") && !media_obj["width"].isNull())
+        comp.media_width = media_obj["width"].toInt();
+      if (media_obj.contains("height") && !media_obj["height"].isNull())
+        comp.media_height = media_obj["height"].toInt();
+    }
+
+    // Section accessory (Thumbnail or Button)
+    if (cobj.contains("accessory") && cobj["accessory"].isObject()) {
+      comp.accessory = std::make_shared<kind::Component>(
+          parse_component(cobj["accessory"].toObject()));
+    }
+
+    log::client()->trace("parse_component: type={}, children={}, content_len={}, has_accessory={}, has_media={}",
+                         comp.type, comp.children.size(),
+                         comp.content.has_value() ? comp.content->size() : 0,
+                         comp.accessory != nullptr,
+                         comp.media_url.has_value());
+
     return comp;
   };
   for (const auto& val : obj["components"].toArray()) {
