@@ -53,3 +53,64 @@ TEST_F(ReplyBlockRendererTest, LongContentTruncated) {
                                          QFont());
   EXPECT_GT(renderer.height(400), 0);
 }
+
+// ---------------------------------------------------------------------------
+// Tier 2: Extensive edge cases
+// ---------------------------------------------------------------------------
+
+TEST_F(ReplyBlockRendererTest, EmptyAuthorAndContent) {
+  kind::gui::ReplyBlockRenderer renderer("", "", 1, 400, QFont());
+  EXPECT_GT(renderer.height(400), 0);
+  QImage image(400, renderer.height(400), QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
+  SUCCEED();
+}
+
+TEST_F(ReplyBlockRendererTest, NarrowViewport) {
+  kind::gui::ReplyBlockRenderer renderer("Author", "Content", 1, 50, QFont());
+  EXPECT_GT(renderer.height(50), 0);
+  QImage image(50, renderer.height(50), QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 50, renderer.height(50)));
+  SUCCEED();
+}
+
+TEST_F(ReplyBlockRendererTest, WithLeftIndent) {
+  kind::gui::ReplyBlockRenderer renderer("Author", "Content", 1, 400, QFont(), 40);
+  EXPECT_GT(renderer.height(400), 0);
+  QImage image(400, renderer.height(400), QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
+  SUCCEED();
+}
+
+TEST_F(ReplyBlockRendererTest, UnicodeContent) {
+  kind::gui::ReplyBlockRenderer renderer(
+      QString::fromUtf8("日本語ユーザー"),
+      QString::fromUtf8("これはテスト返信です"), 1, 400, QFont());
+  EXPECT_GT(renderer.height(400), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Tier 3: Absolutely unhinged scenarios
+// ---------------------------------------------------------------------------
+
+TEST_F(ReplyBlockRendererTest, ZeroWidth) {
+  kind::gui::ReplyBlockRenderer renderer("Author", "Content", 1, 0, QFont());
+  EXPECT_GT(renderer.height(0), 0);
+}
+
+TEST_F(ReplyBlockRendererTest, GiantContent) {
+  std::string huge(10000, 'A');
+  kind::gui::ReplyBlockRenderer renderer("Author", QString::fromStdString(huge), 1, 400, QFont());
+  EXPECT_GT(renderer.height(400), 0);
+}
+
+TEST_F(ReplyBlockRendererTest, RefIdZero) {
+  kind::gui::ReplyBlockRenderer renderer("Author", "Content", 0, 400, QFont());
+  QImage image(400, renderer.height(400), QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
+  SUCCEED();
+}
