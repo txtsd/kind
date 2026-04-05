@@ -150,7 +150,7 @@ std::vector<Channel> DataStore::private_channels() const {
 }
 
 void DataStore::upsert_private_channel(Channel channel) {
-  log::store()->debug("upsert_private_channel: id={}, type={}", channel.id, channel.type);
+  log::store()->trace("upsert_private_channel: id={}, type={}", channel.id, channel.type);
   std::vector<Channel> snapshot;
   {
     std::unique_lock lock(mutex_);
@@ -171,7 +171,7 @@ void DataStore::upsert_private_channel(Channel channel) {
 }
 
 void DataStore::remove_private_channel(Snowflake id) {
-  log::store()->debug("remove_private_channel: id={}", id);
+  log::store()->trace("remove_private_channel: id={}", id);
   std::vector<Channel> snapshot;
   {
     std::unique_lock lock(mutex_);
@@ -224,7 +224,7 @@ void DataStore::update_private_channel_last_message(Snowflake channel_id, Snowfl
     }
   }
   if (updated && !suppress_observers_) {
-    log::store()->debug("update_private_channel_last_message: channel={}, msg={}", channel_id, message_id);
+    log::store()->trace("update_private_channel_last_message: channel={}, msg={}", channel_id, message_id);
     observers_.notify([&snapshot](StoreObserver* o) { o->on_private_channels_updated(snapshot); });
   }
 }

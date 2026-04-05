@@ -4,6 +4,8 @@
 #include "models/reaction.hpp"
 #include "models/rendered_message.hpp"
 
+#include "logging.hpp"
+
 #include <spdlog/spdlog.h>
 
 #include <QAbstractItemView>
@@ -29,12 +31,12 @@ void MessageDelegate::clear_highlight() {
 
 void MessageDelegate::set_show_timestamps(bool show) {
   show_timestamps_ = show;
-  spdlog::debug("MessageDelegate: show_timestamps={}", show);
+  kind::log::gui()->debug("MessageDelegate: show_timestamps={}", show);
 }
 
 void MessageDelegate::set_timestamp_column_width(int width) {
   timestamp_column_width_ = width;
-  spdlog::debug("MessageDelegate: timestamp_column_width={}", width);
+  kind::log::gui()->debug("MessageDelegate: timestamp_column_width={}", width);
 }
 
 void MessageDelegate::set_font(const QFont& font) {
@@ -78,8 +80,10 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
       int ts_x = option.rect.left() + 4;
       int ts_y = option.rect.top() + 4 + fm.ascent();
       painter->drawText(ts_x, ts_y, rendered->timestamp_text);
-      spdlog::trace("MessageDelegate: painted timestamp '{}' at ({}, {})",
-                    rendered->timestamp_text.toStdString(), ts_x, ts_y);
+      if (spdlog::should_log(spdlog::level::trace)) {
+        spdlog::trace("MessageDelegate: painted timestamp '{}' at ({}, {})",
+                      rendered->timestamp_text.toStdString(), ts_x, ts_y);
+      }
     }
 
     int y = option.rect.top();

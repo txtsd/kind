@@ -238,7 +238,7 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
 
   compute_span_rects();
 
-  spdlog::debug("RichTextLayout: built layout with {} spans, {} emoji, {} code blocks, height={}",
+  spdlog::trace("RichTextLayout: built layout with {} spans, {} emoji, {} code blocks, height={}",
                 span_rects_.size(), emoji_infos_.size(), code_blocks_.size(), total_height_);
 }
 

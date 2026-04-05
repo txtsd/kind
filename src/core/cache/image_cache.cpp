@@ -77,7 +77,7 @@ void ImageCache::request_priority(const std::string& url) {
 void ImageCache::boost_priority(const std::string& url) {
   auto it = std::find(download_queue_.begin(), download_queue_.end(), url);
   if (it != download_queue_.end()) {
-    log::cache()->debug("image boost priority: {} (moved to front from position {})",
+    log::cache()->trace("image boost priority: {} (moved to front from position {})",
                         url, std::distance(download_queue_.begin(), it));
     download_queue_.erase(it);
     download_queue_.push_front(url);
@@ -126,7 +126,7 @@ void ImageCache::request_impl(const std::string& url, bool priority) {
     auto result = watcher->result();
 
     if (result) {
-      log::cache()->debug("image disk hit: {}", url);
+      log::cache()->trace("image disk hit: {}", url);
       in_flight_.erase(url);
       add_to_memory(url, *result);
       emit image_ready(QString::fromStdString(url), *result);
@@ -136,10 +136,10 @@ void ImageCache::request_impl(const std::string& url, bool priority) {
     // Not on disk: queue for network download
     if (priority) {
       download_queue_.push_front(url);
-      log::cache()->debug("image queued at front (priority): {}", url);
+      log::cache()->trace("image queued at front (priority): {}", url);
     } else {
       download_queue_.push_back(url);
-      log::cache()->debug("image queued at back: {}", url);
+      log::cache()->trace("image queued at back: {}", url);
     }
     process_queue();
   });
@@ -201,7 +201,7 @@ void ImageCache::save_to_disk(const std::string& url, const CachedImage& image) 
   }
 
   file.write(image.data);
-  log::cache()->debug("image saved to disk: {}", url);
+  log::cache()->trace("image saved to disk: {}", url);
 }
 
 void ImageCache::save_metadata(const std::string& url, const CachedImage& image) const {
@@ -332,7 +332,7 @@ void ImageCache::start_download(const std::string& url) {
 
     // 304 Not Modified: use cached version from disk (off main thread)
     if (status == 304) {
-      log::cache()->debug("image not modified (304): {}", url);
+      log::cache()->trace("image not modified (304): {}", url);
       emit download_finished(QString::fromStdString(url));
       auto disk_future = QtConcurrent::run([this, url, existing]() -> std::optional<CachedImage> {
         auto cached = load_from_disk(url);
@@ -367,7 +367,7 @@ void ImageCache::start_download(const std::string& url) {
     if (reply->error() != QNetworkReply::NoError) {
       log::cache()->warn("Image download failed for {}: {}",
                          url, reply->errorString().toStdString());
-      log::cache()->debug("image download failed: {}: {}", url, reply->errorString().toStdString());
+      log::cache()->trace("image download failed: {}: {}", url, reply->errorString().toStdString());
       emit download_finished(QString::fromStdString(url));
       process_queue();
       return;
@@ -387,7 +387,7 @@ void ImageCache::start_download(const std::string& url) {
     auto etag = reply->rawHeader("ETag").toStdString();
     auto last_modified = reply->rawHeader("Last-Modified").toStdString();
 
-    log::cache()->debug("image downloaded: {} ({}KB, etag={}, modified={})",
+    log::cache()->trace("image downloaded: {} ({}KB, etag={}, modified={})",
                         url, data.size() / 1024, etag, last_modified);
 
     // Decode and clamp image off the UI thread, then emit and cache on the main thread
@@ -398,7 +398,7 @@ void ImageCache::start_download(const std::string& url) {
       auto decoded = clamp_image_size(QImage::fromData(data), max_dim);
       auto decode_ms = decode_timer.elapsed();
       if (decode_ms > 10) {
-        log::cache()->debug("image decode from network: {}ms ({}KB, {})", decode_ms, data.size() / 1024, url);
+        log::cache()->trace("image decode from network: {}ms ({}KB, {})", decode_ms, data.size() / 1024, url);
       }
       return decoded;
     });
@@ -427,7 +427,7 @@ void ImageCache::start_download(const std::string& url) {
 
       // Add to memory (drops raw bytes from the in-memory entry)
       add_to_memory(url, image);
-      log::cache()->debug("image ready: {}", url);
+      log::cache()->trace("image ready: {}", url);
       emit download_finished(QString::fromStdString(url));
       emit image_ready(QString::fromStdString(url), image);
     });
