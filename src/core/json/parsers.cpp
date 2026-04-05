@@ -303,6 +303,19 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
     if (cobj.contains("label")) comp.label = cobj["label"].toString().toStdString();
     comp.style = cobj["style"].toInt(0);
     comp.disabled = cobj["disabled"].toBool(false);
+    if (cobj.contains("url")) comp.url = cobj["url"].toString().toStdString();
+    if (cobj.contains("placeholder")) comp.placeholder = cobj["placeholder"].toString().toStdString();
+    if (cobj.contains("min_values")) comp.min_values = cobj["min_values"].toInt();
+    if (cobj.contains("max_values")) comp.max_values = cobj["max_values"].toInt();
+    for (const auto& opt_val : cobj["options"].toArray()) {
+      auto opt_obj = opt_val.toObject();
+      SelectOption opt;
+      opt.label = opt_obj["label"].toString().toStdString();
+      opt.value = opt_obj["value"].toString().toStdString();
+      opt.description = opt_obj["description"].toString().toStdString();
+      opt.default_selected = opt_obj["default"].toBool(false);
+      comp.options.push_back(std::move(opt));
+    }
     for (const auto& child : cobj["components"].toArray()) {
       comp.children.push_back(parse_component(child.toObject()));
     }
@@ -311,6 +324,11 @@ std::optional<Message> parse_message(const QJsonObject& obj) {
   for (const auto& val : obj["components"].toArray()) {
     msg.components.push_back(parse_component(val.toObject()));
   }
+
+  if (obj.contains("application_id")) {
+    msg.application_id = static_cast<Snowflake>(obj["application_id"].toString().toULongLong());
+  }
+  msg.flags = obj["flags"].toInt(0);
 
   return msg;
 }

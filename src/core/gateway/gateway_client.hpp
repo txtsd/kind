@@ -19,6 +19,7 @@ public:
   virtual void set_event_callback(EventCallback cb) = 0;
   virtual bool is_connected() const = 0;
   virtual int latency_ms() const { return -1; }
+  virtual std::string session_id() const = 0;
 
   // Intent flags for IDENTIFY (bot tokens only)
   virtual void set_intents(uint32_t intents) = 0;

@@ -22,6 +22,7 @@ public:
   void set_event_callback(EventCallback cb) override;
   bool is_connected() const override;
   int latency_ms() const override;
+  std::string session_id() const override { return session_id_; }
   void set_intents(uint32_t intents) override;
   void set_bot_mode(bool is_bot) override;
 

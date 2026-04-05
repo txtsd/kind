@@ -37,6 +37,8 @@ struct Message {
   std::vector<Reaction> reactions;
   std::vector<StickerItem> sticker_items;
   std::vector<Component> components;
+  std::optional<Snowflake> application_id;
+  int flags{0};
 
   bool operator==(const Message&) const = default;
 };
