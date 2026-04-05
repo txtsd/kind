@@ -7,6 +7,7 @@
 
 #include <QCryptographicHash>
 #include <QDataStream>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
 #include <QNetworkReply>
@@ -61,6 +62,7 @@ std::optional<CachedImage> ImageCache::get(const std::string& url) const {
     log::cache()->debug("image memory hit: {}", url);
     return it->second.image;
   }
+  log::cache()->debug("image memory miss: {}", url);
   return std::nullopt;
 }
 
@@ -170,7 +172,13 @@ std::optional<CachedImage> ImageCache::load_from_disk(const std::string& url) co
 
   CachedImage image;
   image.data = data;
+  QElapsedTimer decode_timer;
+  decode_timer.start();
   image.decoded = clamp_image_size(QImage::fromData(data), max_image_dimension_);
+  auto decode_ms = decode_timer.elapsed();
+  if (decode_ms > 10) {
+    log::cache()->debug("image decode from disk: {}ms ({}KB)", decode_ms, data.size() / 1024);
+  }
   if (!image.decoded.isNull()) {
     image.width = image.decoded.width();
     image.height = image.decoded.height();
@@ -272,6 +280,7 @@ void ImageCache::add_to_memory(const std::string& url, const CachedImage& image)
 void ImageCache::evict_memory_if_needed() const {
   while (static_cast<int>(memory_cache_.size()) >= max_memory_items_) {
     auto& oldest_url = lru_order_.back();
+    log::cache()->trace("image evicted: {} (cache_size={})", oldest_url, memory_cache_.size());
     memory_cache_.erase(oldest_url);
     lru_order_.pop_back();
   }
@@ -287,7 +296,8 @@ void ImageCache::process_queue() {
 
 void ImageCache::start_download(const std::string& url) {
   ++active_downloads_;
-  log::cache()->debug("image downloading: {} (active={}/{})", url, active_downloads_, max_concurrent_);
+  emit download_started(QString::fromStdString(url));
+  log::cache()->debug("image downloading: {} (active={}/{}, queued={})", url, active_downloads_, max_concurrent_, download_queue_.size());
 
   // Load metadata off the main thread to get conditional headers
   auto meta_future = QtConcurrent::run([this, url]() -> CachedImage {
@@ -323,6 +333,7 @@ void ImageCache::start_download(const std::string& url) {
     // 304 Not Modified: use cached version from disk (off main thread)
     if (status == 304) {
       log::cache()->debug("image not modified (304): {}", url);
+      emit download_finished(QString::fromStdString(url));
       auto disk_future = QtConcurrent::run([this, url, existing]() -> std::optional<CachedImage> {
         auto cached = load_from_disk(url);
         if (cached) {
@@ -357,6 +368,7 @@ void ImageCache::start_download(const std::string& url) {
       log::cache()->warn("Image download failed for {}: {}",
                          url, reply->errorString().toStdString());
       log::cache()->debug("image download failed: {}: {}", url, reply->errorString().toStdString());
+      emit download_finished(QString::fromStdString(url));
       process_queue();
       return;
     }
@@ -364,6 +376,7 @@ void ImageCache::start_download(const std::string& url) {
     QByteArray data = reply->readAll();
     if (data.isEmpty()) {
       log::cache()->warn("Empty response for image {}", url);
+      emit download_finished(QString::fromStdString(url));
       process_queue();
       return;
     }
@@ -379,8 +392,15 @@ void ImageCache::start_download(const std::string& url) {
 
     // Decode and clamp image off the UI thread, then emit and cache on the main thread
     int max_dim = max_image_dimension_;
-    auto future = QtConcurrent::run([data, max_dim]() -> QImage {
-      return clamp_image_size(QImage::fromData(data), max_dim);
+    auto future = QtConcurrent::run([data, max_dim, url]() -> QImage {
+      QElapsedTimer decode_timer;
+      decode_timer.start();
+      auto decoded = clamp_image_size(QImage::fromData(data), max_dim);
+      auto decode_ms = decode_timer.elapsed();
+      if (decode_ms > 10) {
+        log::cache()->debug("image decode from network: {}ms ({}KB, {})", decode_ms, data.size() / 1024, url);
+      }
+      return decoded;
     });
 
     auto* decode_watcher = new QFutureWatcher<QImage>(this);
@@ -408,6 +428,7 @@ void ImageCache::start_download(const std::string& url) {
       // Add to memory (drops raw bytes from the in-memory entry)
       add_to_memory(url, image);
       log::cache()->debug("image ready: {}", url);
+      emit download_finished(QString::fromStdString(url));
       emit image_ready(QString::fromStdString(url), image);
     });
 

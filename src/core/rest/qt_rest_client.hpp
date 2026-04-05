@@ -29,6 +29,7 @@ public:
 signals:
   void request_started(QString label);
   void request_finished(QString label);
+  void rate_limited(int retry_after_ms, bool is_global);
 
 private:
   enum class HttpMethod { Get, Post, Put, Patch, Delete };

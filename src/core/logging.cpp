@@ -3,6 +3,8 @@
 #include "config/platform_paths.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -34,6 +36,64 @@ static spdlog::level::level_enum parse_level(std::string_view str) {
   return spdlog::level::info;
 }
 
+// 250MB total log retention per directory (matches old 10 x 25MB capacity).
+static constexpr uintmax_t MAX_LOG_BYTES = 250ULL * 1024 * 1024;
+
+// Session timestamp for log filenames, generated once at startup.
+static std::string& session_timestamp() {
+  static std::string ts;
+  return ts;
+}
+
+static void ensure_session_timestamp() {
+  if (!session_timestamp().empty()) return;
+  auto now = std::chrono::system_clock::now();
+  auto tt = std::chrono::system_clock::to_time_t(now);
+  std::tm tm_buf{};
+  localtime_r(&tt, &tm_buf);
+  char buf[20];
+  std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H-%M-%S", &tm_buf);
+  session_timestamp() = buf;
+}
+
+// Remove oldest log files until total size is within budget.
+static void cleanup_old_logs(const std::filesystem::path& log_dir) {
+  struct LogFile {
+    std::filesystem::path path;
+    std::filesystem::file_time_type mtime;
+    uintmax_t size;
+  };
+  std::vector<LogFile> files;
+
+  std::error_code ec;
+  for (const auto& entry : std::filesystem::directory_iterator(log_dir, ec)) {
+    if (!entry.is_regular_file()) continue;
+    auto name = entry.path().filename().string();
+    if (name.starts_with("kind-") && name.ends_with(".log")) {
+      files.push_back({entry.path(), entry.last_write_time(ec), entry.file_size(ec)});
+    }
+  }
+
+  // Sort newest first by modification time
+  std::sort(files.begin(), files.end(),
+    [](const auto& a, const auto& b) { return a.mtime > b.mtime; });
+
+  uintmax_t total = 0;
+  for (const auto& f : files) total += f.size;
+
+  // Remove oldest files until under budget
+  while (total > MAX_LOG_BYTES && !files.empty()) {
+    total -= files.back().size;
+    std::filesystem::remove(files.back().path, ec);
+    files.pop_back();
+  }
+}
+
+// Build the session log filename: kind-TIMESTAMP.log
+static std::string session_log_filename() {
+  return "kind-" + session_timestamp() + ".log";
+}
+
 // Shared sinks: terminal (color) + optional rotating file
 static std::vector<spdlog::sink_ptr>& sinks() {
   static std::vector<spdlog::sink_ptr> instance;
@@ -52,14 +112,18 @@ static void init_sinks(const std::string& log_dir_path) {
 
   // File sink (only when a log directory is provided)
   if (!log_dir_path.empty()) {
-    std::filesystem::create_directories(log_dir_path);
-    auto log_path = (std::filesystem::path(log_dir_path) / "kind.log").string();
+    ensure_session_timestamp();
+    auto log_dir = std::filesystem::path(log_dir_path);
+    std::filesystem::create_directories(log_dir);
+    auto log_path = (log_dir / session_log_filename()).string();
 
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         log_path, 25 * 1024 * 1024, 10);
     file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
     file_sink->set_level(spdlog::level::trace);
     sinks().push_back(file_sink);
+
+    cleanup_old_logs(log_dir);
   }
 }
 
@@ -102,9 +166,10 @@ void init_console_only() {
 }
 
 void reinit_for_account(uint64_t user_id) {
+  ensure_session_timestamp();
   auto log_dir = platform_paths().state_dir / "accounts" / std::to_string(user_id) / "logs";
   std::filesystem::create_directories(log_dir);
-  auto log_path = (log_dir / "kind.log").string();
+  auto log_path = (log_dir / session_log_filename()).string();
 
   auto new_file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
       log_path, 25 * 1024 * 1024, 10);
@@ -132,6 +197,7 @@ void reinit_for_account(uint64_t user_id) {
     logger->set_level(level);
   });
 
+  cleanup_old_logs(log_dir);
   config()->info("Log file sink reinitialized for account {} at {}", user_id, log_path);
 }
 

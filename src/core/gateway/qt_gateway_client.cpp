@@ -228,8 +228,8 @@ void QtGatewayClient::handle_invalid_session(bool resumable) {
 }
 
 void QtGatewayClient::handle_heartbeat_ack() {
-  log::gateway()->debug(" heartbeat ACK received");
   heartbeat_->ack_received();
+  log::gateway()->debug(" heartbeat ACK received ({}ms)", heartbeat_->latency_ms());
 }
 
 void QtGatewayClient::send_identify() {
@@ -319,6 +319,8 @@ void QtGatewayClient::send_heartbeat(std::optional<int64_t> sequence) {
   payload["op"] = static_cast<int>(gateway::Opcode::Heartbeat);
   payload["d"] = sequence.has_value() ? QJsonValue(static_cast<qint64>(*sequence)) : QJsonValue::Null;
 
+  log::gateway()->debug(" sending heartbeat (seq={})",
+                        sequence.has_value() ? std::to_string(*sequence) : "null");
   QJsonDocument doc(payload);
   send(doc.toJson(QJsonDocument::Compact).toStdString());
 }

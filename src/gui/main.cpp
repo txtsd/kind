@@ -279,7 +279,15 @@ int main(int argc, char* argv[]) {
                      status_bar, &kind::gui::StatusBar::on_request_started);
     QObject::connect(rest_qt, &kind::QtRestClient::request_finished,
                      status_bar, &kind::gui::StatusBar::on_request_finished);
+    QObject::connect(rest_qt, &kind::QtRestClient::rate_limited,
+                     status_bar, &kind::gui::StatusBar::on_rate_limited);
   }
+
+  // Wire image download tracking to status bar
+  QObject::connect(client.image_cache(), &kind::ImageCache::download_started,
+                   status_bar, &kind::gui::StatusBar::on_download_started);
+  QObject::connect(client.image_cache(), &kind::ImageCache::download_finished,
+                   status_bar, &kind::gui::StatusBar::on_download_finished);
 
   // Login dialog with known accounts
   auto known_accounts = config.known_accounts();

@@ -57,6 +57,8 @@ public:
 
 signals:
   void image_ready(QString url, kind::CachedImage image);
+  void download_started(QString url);
+  void download_finished(QString url);
 
 private:
   struct MemoryEntry {

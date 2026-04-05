@@ -2,6 +2,9 @@
 
 #include "client.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 #include <QEvent>
 #include <QHelpEvent>
 #include <QToolTip>
@@ -12,17 +15,22 @@ StatusBar::StatusBar(kind::Client& client, QWidget* parent)
     : QStatusBar(parent), client_(client) {
   user_ = new QLabel(this);
   loading_ = new QLabel(this);
+  rate_limit_ = new QLabel(this);
   latency_ = new QLabel(this);
   connectivity_ = new QLabel(this);
 
   addWidget(user_);
   addPermanentWidget(loading_);
+  addPermanentWidget(rate_limit_);
   addPermanentWidget(latency_);
   addPermanentWidget(connectivity_);
 
   loading_->setVisible(false);
   loading_->setMouseTracking(true);
   loading_->installEventFilter(this);
+
+  rate_limit_->setVisible(false);
+  rate_limit_->setStyleSheet("color: #faa61a;");
 
   hide_loading_timer_ = new QTimer(this);
   hide_loading_timer_->setSingleShot(true);
@@ -32,6 +40,10 @@ StatusBar::StatusBar(kind::Client& client, QWidget* parent)
       loading_->setVisible(false);
     }
   });
+
+  rate_limit_timer_ = new QTimer(this);
+  rate_limit_timer_->setInterval(100);
+  connect(rate_limit_timer_, &QTimer::timeout, this, &StatusBar::update_rate_limit);
 
   set_disconnected();
 
@@ -126,6 +138,68 @@ bool StatusBar::eventFilter(QObject* obj, QEvent* event) {
     return true; // consume the event
   }
   return QStatusBar::eventFilter(obj, event);
+}
+
+void StatusBar::on_rate_limited(int retry_after_ms, bool is_global) {
+  rate_limit_is_global_ = rate_limit_is_global_ || is_global;
+  rate_limit_hold_ms_ = 2000;
+
+  // Estimate total remaining wait from pending queue depth and per-request delay.
+  // Each new signal recalculates, so the estimate naturally shrinks as requests complete.
+  int estimated_ms = std::max(1, total_pending_) * retry_after_ms;
+  rate_limit_remaining_ms_ = estimated_ms;
+
+  update_rate_limit_display();
+  rate_limit_->setVisible(true);
+  rate_limit_timer_->start();
+}
+
+void StatusBar::on_download_started(const QString& /*url*/) {
+  on_request_started(QStringLiteral("Images"));
+}
+
+void StatusBar::on_download_finished(const QString& /*url*/) {
+  on_request_finished(QStringLiteral("Images"));
+}
+
+void StatusBar::update_rate_limit() {
+  if (rate_limit_remaining_ms_ > 0) {
+    int prev_secs = (rate_limit_remaining_ms_ + 999) / 1000;
+    rate_limit_remaining_ms_ = std::max(0, rate_limit_remaining_ms_ - 100);
+    int curr_secs = (rate_limit_remaining_ms_ + 999) / 1000;
+    // Only update display when crossing a whole-second boundary.
+    // Sub-second values keep their frozen "~Xs" text from on_rate_limited.
+    if (rate_limit_remaining_ms_ > 1000 && curr_secs != prev_secs) {
+      update_rate_limit_display();
+    }
+    return;
+  }
+
+  // Countdown done: hold visible briefly so it doesn't flicker
+  rate_limit_hold_ms_ -= 100;
+  if (rate_limit_hold_ms_ <= 0) {
+    rate_limit_hold_ms_ = 0;
+    rate_limit_is_global_ = false;
+    rate_limit_timer_->stop();
+    rate_limit_->setVisible(false);
+  }
+}
+
+void StatusBar::update_rate_limit_display() {
+  QString text;
+  if (rate_limit_remaining_ms_ > 1000) {
+    int secs = (rate_limit_remaining_ms_ + 999) / 1000;
+    text = QString("\u23F1 Rate limited (~%1s)").arg(secs);
+  } else if (rate_limit_remaining_ms_ > 0) {
+    double approx = std::ceil(rate_limit_remaining_ms_ / 100.0) / 10.0;
+    text = QString("\u23F1 Rate limited (~%1s)").arg(approx, 0, 'f', 1);
+  } else {
+    text = QStringLiteral("\u23F1 Rate limited");
+  }
+  if (rate_limit_is_global_) {
+    text += QStringLiteral(" [global]");
+  }
+  rate_limit_->setText(text);
 }
 
 void StatusBar::update_latency() {
