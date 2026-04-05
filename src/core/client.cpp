@@ -17,6 +17,7 @@
 #include "store/data_store.hpp"
 
 #include "json/parsers.hpp"
+#include "utils/nonce.hpp"
 #include "discord_user_settings.qpb.h"
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -939,6 +940,57 @@ void Client::toggle_reaction(Snowflake channel_id, Snowflake message_id,
       }
     });
   }
+}
+
+void Client::send_interaction(Snowflake channel_id, Snowflake message_id,
+                              Snowflake guild_id, Snowflake application_id,
+                              int component_type, const std::string& custom_id,
+                              const std::vector<std::string>& values) {
+  log::client()->debug("send_interaction: channel={}, message={}, guild={}, app={}, type={}, custom_id={}, values={}",
+                       channel_id, message_id, guild_id, application_id, component_type, custom_id, values.size());
+
+  auto session = gateway_->session_id();
+  if (session.empty()) {
+    log::client()->warn("send_interaction: no active session, dropping interaction for custom_id={}", custom_id);
+    return;
+  }
+
+  QJsonObject data;
+  data["component_type"] = component_type;
+  data["custom_id"] = QString::fromStdString(custom_id);
+
+  if (!values.empty()) {
+    // Select menu: include values and redundant type field
+    data["type"] = component_type;
+    QJsonArray vals;
+    for (const auto& val : values) {
+      vals.append(QString::fromStdString(val));
+    }
+    data["values"] = vals;
+  }
+
+  QJsonObject body;
+  body["type"] = 3;  // MESSAGE_COMPONENT
+  body["application_id"] = QString::number(application_id);
+  body["channel_id"] = QString::number(channel_id);
+  body["message_id"] = QString::number(message_id);
+  body["message_flags"] = 0;
+  body["session_id"] = QString::fromStdString(session);
+  body["nonce"] = QString::fromStdString(generate_nonce());
+  body["data"] = data;
+
+  if (guild_id != 0) {
+    body["guild_id"] = QString::number(guild_id);
+  }
+
+  std::string payload = QJsonDocument(body).toJson(QJsonDocument::Compact).toStdString();
+
+  rest_->post(endpoints::interactions, payload, [channel_id, message_id, custom_id](RestClient::Response response) {
+    if (!response) {
+      log::client()->warn("send_interaction failed: channel={}, message={}, custom_id={}: {}",
+                          channel_id, message_id, custom_id, response.error().message);
+    }
+  });
 }
 
 void Client::ack_message(Snowflake channel_id, Snowflake message_id) {

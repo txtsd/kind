@@ -79,6 +79,10 @@ public:
   void send_message(Snowflake channel_id, std::string_view content);
   void ack_message(Snowflake channel_id, Snowflake message_id);
   void toggle_reaction(Snowflake channel_id, Snowflake message_id, const std::string& emoji, bool add);
+  void send_interaction(Snowflake channel_id, Snowflake message_id,
+                        Snowflake guild_id, Snowflake application_id,
+                        int component_type, const std::string& custom_id,
+                        const std::vector<std::string>& values = {});
   void create_dm(Snowflake recipient_id);
   void select_guild(Snowflake guild_id);
   void select_channel(Snowflake channel_id);

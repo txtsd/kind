@@ -36,4 +36,7 @@ inline std::string reaction_url(Snowflake channel_id, Snowflake message_id, cons
          emoji + "/@me";
 }
 
+// Interactions (user-client sends component interactions)
+inline constexpr std::string_view interactions = "/interactions";
+
 } // namespace kind::endpoints
