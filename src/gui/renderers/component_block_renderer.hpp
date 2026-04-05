@@ -4,14 +4,18 @@
 #include "renderers/block_renderer.hpp"
 
 #include <QFont>
+#include <QPixmap>
 #include <QRect>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kind::gui {
 
 class ComponentBlockRenderer : public BlockRenderer {
 public:
-  ComponentBlockRenderer(const std::vector<kind::Component>& action_rows, const QFont& font);
+  ComponentBlockRenderer(const std::vector<kind::Component>& action_rows, const QFont& font,
+                         const std::unordered_map<std::string, QPixmap>& images = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -29,6 +33,9 @@ private:
   static constexpr int select_padding_h_ = 12;
   static constexpr int chevron_width_ = 20;
 
+  static constexpr int emoji_size_ = 20;
+  static constexpr int emoji_label_gap_ = 4;
+
   struct ButtonInfo {
     int global_index{0};
     int row{0};
@@ -37,6 +44,7 @@ private:
     int style{0};
     bool disabled{false};
     QString label;
+    QPixmap emoji_pixmap;  // Custom emoji image (empty for Unicode or missing)
   };
 
   struct SelectMenuInfo {
@@ -51,6 +59,7 @@ private:
   };
 
   std::vector<kind::Component> action_rows_;
+  std::unordered_map<std::string, QPixmap> images_;
   std::vector<ButtonInfo> buttons_;
   std::vector<SelectMenuInfo> select_menus_;
   std::vector<int> row_y_offsets_;  // Pre-computed Y offset for each row

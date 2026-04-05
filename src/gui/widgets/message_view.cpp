@@ -572,6 +572,32 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
     }
   }
 
+  // Component button custom emoji and v2 media
+  {
+    std::function<void(const kind::Component&)> scan_component_images;
+    scan_component_images = [&](const kind::Component& comp) {
+      // Button custom emoji
+      if (comp.type == 2 && comp.emoji_id.has_value() && *comp.emoji_id != 0) {
+        auto url = "https://cdn.discordapp.com/emojis/"
+                   + std::to_string(*comp.emoji_id) + ".webp?size=48";
+        try_get(url);
+      }
+      // V2 media thumbnails
+      if (comp.media_url && !comp.media_url->empty()) {
+        try_get(*comp.media_url);
+      }
+      if (comp.accessory) {
+        scan_component_images(*comp.accessory);
+      }
+      for (const auto& child : comp.children) {
+        scan_component_images(child);
+      }
+    };
+    for (const auto& comp : msg.components) {
+      scan_component_images(comp);
+    }
+  }
+
   return images;
 }
 
@@ -637,6 +663,25 @@ void MessageView::request_images(const kind::Message& msg) {
       auto url = "https://cdn.discordapp.com/emojis/"
                  + std::to_string(*reaction.emoji_id) + ".webp?size=48";
       request_image(url);
+    }
+  }
+
+  // Component button custom emoji images
+  {
+    std::function<void(const kind::Component&)> scan_button_emoji;
+    scan_button_emoji = [&](const kind::Component& comp) {
+      if (comp.type == 2 && comp.emoji_id.has_value() && *comp.emoji_id != 0) {
+        auto url = "https://cdn.discordapp.com/emojis/"
+                   + std::to_string(*comp.emoji_id) + ".webp?size=48";
+        kind::log::gui()->debug("request_images: button emoji url={}", url);
+        request_image(url);
+      }
+      for (const auto& child : comp.children) {
+        scan_button_emoji(child);
+      }
+    };
+    for (const auto& comp : msg.components) {
+      scan_button_emoji(comp);
     }
   }
 

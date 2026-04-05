@@ -405,7 +405,7 @@ RenderedMessage compute_layout(
     } else {
       // Legacy: single renderer for all action rows
       result.blocks.push_back(std::make_shared<ComponentBlockRenderer>(
-          message.components, font));
+          message.components, font, images));
     }
   }
 

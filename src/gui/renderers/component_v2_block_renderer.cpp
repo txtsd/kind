@@ -71,7 +71,7 @@ int ComponentV2BlockRenderer::compute_layout() {
     case 17: return layout_container(component_, viewport_width_);
     case 1: {
       auto legacy = std::make_shared<ComponentBlockRenderer>(
-          std::vector<kind::Component>{component_}, font_);
+          std::vector<kind::Component>{component_}, font_, images_);
       int h = legacy->height(viewport_width_);
       ChildBlock block;
       block.y_offset = 0;
@@ -196,7 +196,7 @@ void ComponentV2BlockRenderer::build_child_blocks(
       }
       case 1: {
         cb.renderer = std::make_shared<ComponentBlockRenderer>(
-            std::vector<kind::Component>{child}, font_);
+            std::vector<kind::Component>{child}, font_, images_);
         cb.block_height = cb.renderer->height(content_width);
         break;
       }

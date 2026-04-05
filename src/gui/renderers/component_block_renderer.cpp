@@ -10,8 +10,9 @@ namespace kind::gui {
 static const QColor button_text_color(0xff, 0xff, 0xff);
 
 ComponentBlockRenderer::ComponentBlockRenderer(const std::vector<kind::Component>& action_rows,
-                                               const QFont& font)
-    : action_rows_(action_rows), font_(font) {
+                                               const QFont& font,
+                                               const std::unordered_map<std::string, QPixmap>& images)
+    : action_rows_(action_rows), images_(images), font_(font) {
   compute_layout();
 }
 
@@ -42,16 +43,31 @@ void ComponentBlockRenderer::compute_layout() {
       if (child.type == 2) {
         // Button handling: build label with optional emoji prefix
         QString label;
+        QPixmap emoji_pixmap;
+
         if (child.emoji_name.has_value()) {
           if (child.emoji_id.has_value() && *child.emoji_id != 0) {
-            // Custom emoji: show :name: fallback until image rendering exists
-            label = ":" + QString::fromStdString(*child.emoji_name) + ":";
+            // Custom emoji: try to resolve from image cache
+            auto url = "https://cdn.discordapp.com/emojis/"
+                       + std::to_string(*child.emoji_id) + ".webp?size=48";
+            auto img_it = images_.find(url);
+            if (img_it != images_.end() && !img_it->second.isNull()) {
+              emoji_pixmap = img_it->second.scaled(
+                  emoji_size_, emoji_size_, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            } else {
+              // Fallback: show :name: text
+              label = ":" + QString::fromStdString(*child.emoji_name) + ":";
+            }
           } else {
             // Unicode emoji: the name field is the emoji character itself
             label = QString::fromStdString(*child.emoji_name);
           }
           if (child.label.has_value() && !child.label->empty()) {
-            label += " " + QString::fromStdString(*child.label);
+            if (!label.isEmpty()) {
+              label += " " + QString::fromStdString(*child.label);
+            } else {
+              label = QString::fromStdString(*child.label);
+            }
           }
         } else if (child.label.has_value()) {
           label = QString::fromStdString(*child.label);
@@ -62,7 +78,8 @@ void ComponentBlockRenderer::compute_layout() {
         }
 
         int text_width = fm.horizontalAdvance(label);
-        int btn_width = text_width + 2 * button_padding_h_;
+        int emoji_width = emoji_pixmap.isNull() ? 0 : emoji_size_ + emoji_label_gap_;
+        int btn_width = text_width + emoji_width + (2 * button_padding_h_);
 
         buttons_.push_back({
           .global_index = global_index,
@@ -72,6 +89,7 @@ void ComponentBlockRenderer::compute_layout() {
           .style = child.style,
           .disabled = child.disabled,
           .label = label,
+          .emoji_pixmap = emoji_pixmap,
         });
 
         x += btn_width + button_h_gap_;
@@ -161,9 +179,23 @@ void ComponentBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     btn_path.addRoundedRect(btn_rect, button_radius_, button_radius_);
     painter->fillPath(btn_path, fill_color_for_style(btn.style));
 
-    // Draw button label
+    // Draw button emoji and label
     painter->setPen(button_text_color);
-    painter->drawText(btn_rect, Qt::AlignCenter, btn.label);
+    if (!btn.emoji_pixmap.isNull()) {
+      // Calculate total content width (emoji + gap + text)
+      int text_w = fm.horizontalAdvance(btn.label);
+      int content_w = emoji_size_ + (btn.label.isEmpty() ? 0 : emoji_label_gap_ + text_w);
+      int content_x = static_cast<int>(btn_rect.left()) + (static_cast<int>(btn_rect.width()) - content_w) / 2;
+      int emoji_y = static_cast<int>(btn_rect.top()) + (button_height_ - emoji_size_) / 2;
+      painter->drawPixmap(content_x, emoji_y, emoji_size_, emoji_size_, btn.emoji_pixmap);
+      if (!btn.label.isEmpty()) {
+        QRectF text_rect(content_x + emoji_size_ + emoji_label_gap_, btn_rect.top(),
+                         text_w, btn_rect.height());
+        painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, btn.label);
+      }
+    } else {
+      painter->drawText(btn_rect, Qt::AlignCenter, btn.label);
+    }
 
     painter->restore();
   }
