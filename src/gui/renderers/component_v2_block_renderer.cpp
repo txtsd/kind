@@ -19,18 +19,16 @@ constexpr int corner_radius = 4;
 
 std::unique_ptr<RichTextLayout> parse_v2_text(
     const std::string& text, int width, const QFont& font,
-    const MentionContext& mentions) {
+    const MentionContext& mentions,
+    const std::unordered_map<std::string, QPixmap>& images) {
   auto parsed = kind::markdown::parse(text);
   for (auto& block : parsed.blocks) {
     if (auto* span = std::get_if<kind::TextSpan>(&block)) {
       kind::replace_emoji_shortcodes(span->text);
-      if (span->custom_emoji_name.has_value()) {
-        span->text = ":" + *span->custom_emoji_name + ":";
-      }
       resolve_mention(*span, mentions);
     }
   }
-  return std::make_unique<RichTextLayout>(parsed, width, font);
+  return std::make_unique<RichTextLayout>(parsed, width, font, images);
 }
 
 } // anonymous namespace
@@ -91,7 +89,7 @@ int ComponentV2BlockRenderer::layout_text_display(const kind::Component& comp, i
   std::string content = comp.content.value_or("");
   spdlog::trace("layout_text_display: content_len={}, width={}", content.size(), width);
   if (content.empty()) return 0;
-  text_layout_ = parse_v2_text(content, width, font_, mentions_);
+  text_layout_ = parse_v2_text(content, width, font_, mentions_, images_);
   return text_layout_->height();
 }
 
@@ -114,7 +112,7 @@ int ComponentV2BlockRenderer::layout_section(const kind::Component& comp, int wi
       ChildBlock cb;
       cb.y_offset = text_height;
       cb.component_type = 10;
-      cb.text_layout = parse_v2_text(*child.content, text_width, font_, mentions_);
+      cb.text_layout = parse_v2_text(*child.content, text_width, font_, mentions_, images_);
       cb.block_height = cb.text_layout->height();
       text_height += cb.block_height + child_gap_;
       child_blocks_.push_back(std::move(cb));
@@ -163,7 +161,7 @@ void ComponentV2BlockRenderer::build_child_blocks(
       case 10: {
         std::string content = child.content.value_or("");
         if (!content.empty()) {
-          cb.text_layout = parse_v2_text(content, content_width, font_, mentions_);
+          cb.text_layout = parse_v2_text(content, content_width, font_, mentions_, images_);
           cb.block_height = cb.text_layout->height();
         }
         break;
@@ -187,7 +185,7 @@ void ComponentV2BlockRenderer::build_child_blocks(
           }
         }
         if (!combined.empty()) {
-          cb.text_layout = parse_v2_text(combined, text_w, font_, mentions_);
+          cb.text_layout = parse_v2_text(combined, text_w, font_, mentions_, images_);
           text_h = cb.text_layout->height();
         }
         int acc_h = has_acc ? thumbnail_size_ : 0;

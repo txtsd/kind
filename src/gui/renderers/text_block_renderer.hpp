@@ -5,7 +5,10 @@
 #include "text/markdown_parser.hpp"
 
 #include <QFont>
+#include <QPixmap>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace kind::gui {
 
@@ -13,7 +16,8 @@ class TextBlockRenderer : public BlockRenderer {
 public:
   TextBlockRenderer(const kind::ParsedContent& content, int viewport_width,
                     const QFont& font, const QString& author, const QString& timestamp,
-                    const QString& timestamp_tooltip = {});
+                    const QString& timestamp_tooltip = {},
+                    const std::unordered_map<std::string, QPixmap>& images = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;

@@ -154,10 +154,6 @@ RenderedMessage compute_layout(
     for (auto& block : parsed.blocks) {
       if (auto* span = std::get_if<kind::TextSpan>(&block)) {
         kind::replace_emoji_shortcodes(span->text);
-        // Show custom emoji as :name: until image rendering is implemented
-        if (span->custom_emoji_name.has_value()) {
-          span->text = ":" + *span->custom_emoji_name + ":";
-        }
       }
     }
 
@@ -208,12 +204,12 @@ RenderedMessage compute_layout(
 
     if (!suppress_text) {
       result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-          parsed, viewport_width, font, author, time_str, time_tooltip));
+          parsed, viewport_width, font, author, time_str, time_tooltip, images));
     } else {
       // Still need timestamp + author line, just with empty content
       kind::ParsedContent empty_content;
       result.blocks.push_back(std::make_shared<TextBlockRenderer>(
-          empty_content, viewport_width, font, author, time_str, time_tooltip));
+          empty_content, viewport_width, font, author, time_str, time_tooltip, images));
     }
   }
 
@@ -289,7 +285,7 @@ RenderedMessage compute_layout(
 
     result.blocks.push_back(std::make_shared<EmbedBlockRenderer>(
         embed, viewport_width, font, embed_img, embed_thumb,
-        std::vector<QPixmap>{}, mentions));
+        std::vector<QPixmap>{}, mentions, images));
   }
 
   // Attach extra same-URL images to the first embed that had that URL
@@ -324,7 +320,7 @@ RenderedMessage compute_layout(
     }
     result.blocks[first_same_url_embed_idx] = std::make_shared<EmbedBlockRenderer>(
         first_embed, viewport_width, font, first_img, first_thumb,
-        std::move(extra_same_url_images), mentions);
+        std::move(extra_same_url_images), mentions, images);
   }
 
   // Show indicator for skipped bare-image embeds

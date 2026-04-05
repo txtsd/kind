@@ -37,31 +37,29 @@ static bool is_thumbnail_squareish(const std::optional<kind::EmbedImage>& thumb_
 // then build a RichTextLayout for it.
 static std::unique_ptr<RichTextLayout> parse_embed_text(
     const std::string& text, int width, const QFont& font,
-    const MentionContext& mentions) {
+    const MentionContext& mentions,
+    const std::unordered_map<std::string, QPixmap>& images) {
   auto parsed = kind::markdown::parse(text);
 
   // Resolve emoji shortcodes, custom emoji, and mentions in parsed spans
   for (auto& block : parsed.blocks) {
     if (auto* span = std::get_if<kind::TextSpan>(&block)) {
       kind::replace_emoji_shortcodes(span->text);
-      // Show custom emoji as :name: until image rendering is implemented
-      if (span->custom_emoji_name.has_value()) {
-        span->text = ":" + *span->custom_emoji_name + ":";
-      }
       // Mentions in embeds use the same format as message content.
       // MentionContext is self-contained, so no Message object is needed.
       resolve_mention(*span, mentions);
     }
   }
 
-  return std::make_unique<RichTextLayout>(parsed, width, font);
+  return std::make_unique<RichTextLayout>(parsed, width, font, images);
 }
 
 EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_width,
                                        const QFont& font, const QPixmap& image,
                                        const QPixmap& thumbnail,
                                        std::vector<QPixmap> extra_images,
-                                       const MentionContext& mentions)
+                                       const MentionContext& mentions,
+                                       const std::unordered_map<std::string, QPixmap>& images)
     : embed_(embed), font_(font), image_(image), thumbnail_(thumbnail),
       extra_images_(std::move(extra_images)), mentions_(mentions) {
   bold_font_ = font_;
@@ -95,7 +93,7 @@ EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_wi
     embed_width_ = 100;
   }
 
-  total_height_ = compute_layout();
+  total_height_ = compute_layout(images);
 
   // Count inline vs non-inline fields for diagnostics
   int inline_count = 0, non_inline_count = 0;
@@ -116,7 +114,7 @@ int EmbedBlockRenderer::height(int /*width*/) const {
   return total_height_;
 }
 
-int EmbedBlockRenderer::compute_layout() {
+int EmbedBlockRenderer::compute_layout(const std::unordered_map<std::string, QPixmap>& images) {
   // Bare image embeds (image/gifv): just the image, no card
   if (bare_image_) {
     int max_w = embed_width_;
@@ -176,14 +174,14 @@ int EmbedBlockRenderer::compute_layout() {
 
   // Title (now with RichTextLayout for markdown/mentions)
   if (embed_.title.has_value() && !embed_.title->empty()) {
-    title_layout_ = parse_embed_text(*embed_.title, text_area_width, bold_font_, mentions_);
+    title_layout_ = parse_embed_text(*embed_.title, text_area_width, bold_font_, mentions_, images);
     spdlog::debug("  layout: title height={}, text_area_width={}", title_layout_->height(), text_area_width);
     y += title_layout_->height() + section_spacing_;
   }
 
   // Description (now with RichTextLayout for markdown/mentions)
   if (embed_.description.has_value() && !embed_.description->empty()) {
-    description_layout_ = parse_embed_text(*embed_.description, text_area_width, font_, mentions_);
+    description_layout_ = parse_embed_text(*embed_.description, text_area_width, font_, mentions_, images);
     spdlog::debug("  layout: desc height={}, text_area_width={}, desc_len={}",
                   description_layout_->height(), text_area_width, embed_.description->size());
     y += description_layout_->height() + section_spacing_;
@@ -212,7 +210,7 @@ int EmbedBlockRenderer::compute_layout() {
         FieldRow::FieldCol col;
         col.x_offset = 0;
         col.field = &embed_.fields[i];
-        col.value_layout = parse_embed_text(embed_.fields[i].value, content_width, small_font_, mentions_);
+        col.value_layout = parse_embed_text(embed_.fields[i].value, content_width, small_font_, mentions_, images);
 
         QString name = QString::fromStdString(embed_.fields[i].name);
         int name_h = small_bold_fm.boundingRect(0, 0, content_width, 0,
@@ -232,7 +230,7 @@ int EmbedBlockRenderer::compute_layout() {
           FieldRow::FieldCol col;
           col.x_offset = x_off;
           col.field = &embed_.fields[i];
-          col.value_layout = parse_embed_text(embed_.fields[i].value, field_width, small_font_, mentions_);
+          col.value_layout = parse_embed_text(embed_.fields[i].value, field_width, small_font_, mentions_, images);
 
           QString name = QString::fromStdString(embed_.fields[i].name);
           int name_h = small_bold_fm.boundingRect(0, 0, field_width, 0,

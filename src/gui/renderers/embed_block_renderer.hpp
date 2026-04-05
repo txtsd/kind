@@ -11,6 +11,8 @@
 #include <QRect>
 #include <memory>
 #include <optional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kind::gui {
@@ -20,7 +22,8 @@ public:
   EmbedBlockRenderer(const kind::Embed& embed, int viewport_width, const QFont& font,
                      const QPixmap& image = {}, const QPixmap& thumbnail = {},
                      std::vector<QPixmap> extra_images = {},
-                     const MentionContext& mentions = {});
+                     const MentionContext& mentions = {},
+                     const std::unordered_map<std::string, QPixmap>& images = {});
 
   int height(int width) const override;
   void paint(QPainter* painter, const QRect& rect) const override;
@@ -94,7 +97,7 @@ private:
 
   MentionContext mentions_;
 
-  int compute_layout();
+  int compute_layout(const std::unordered_map<std::string, QPixmap>& images);
 };
 
 } // namespace kind::gui

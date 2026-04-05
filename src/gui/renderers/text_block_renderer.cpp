@@ -8,7 +8,9 @@ namespace kind::gui {
 
 TextBlockRenderer::TextBlockRenderer(const kind::ParsedContent& content, int viewport_width,
                                      const QFont& font, const QString& author,
-                                     const QString& timestamp, const QString& timestamp_tooltip)
+                                     const QString& timestamp,
+                                     const QString& timestamp_tooltip,
+                                     const std::unordered_map<std::string, QPixmap>& images)
     : author_(author), timestamp_(timestamp), timestamp_tooltip_(timestamp_tooltip),
       font_(font) {
   QFont bold_font = font;
@@ -23,7 +25,7 @@ TextBlockRenderer::TextBlockRenderer(const kind::ParsedContent& content, int vie
   int usable_width = viewport_width - (2 * padding_);
   int prefix_width = timestamp_width_ + author_width_;
 
-  content_layout_ = std::make_unique<RichTextLayout>(content, usable_width, font, prefix_width);
+  content_layout_ = std::make_unique<RichTextLayout>(content, usable_width, font, images, prefix_width);
 
   total_height_ = content_layout_->height() + (2 * padding_);
   if (total_height_ < base_fm.height() + (2 * padding_)) {
