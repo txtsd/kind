@@ -7,6 +7,7 @@
 #include "models/message_model.hpp"
 #include "models/sticker_item.hpp"
 #include "read_state_manager.hpp"
+#include "text/markdown_parser.hpp"
 #include "renderers/divider_renderer.hpp"
 #include "widgets/jump_pill.hpp"
 #include "widgets/loading_pill.hpp"
@@ -509,6 +510,54 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
           });
 }
 
+std::vector<std::string> MessageView::collect_custom_emoji_urls(const kind::Message& msg) {
+  std::vector<std::string> urls;
+
+  auto scan_text = [&](const std::string& text) {
+    auto parsed = kind::markdown::parse(text);
+    for (const auto& block : parsed.blocks) {
+      if (auto* span = std::get_if<kind::TextSpan>(&block)) {
+        if (span->custom_emoji_id.has_value() && *span->custom_emoji_id != 0) {
+          std::string ext = span->animated_emoji ? ".gif" : ".webp";
+          urls.push_back("https://cdn.discordapp.com/emojis/"
+                         + std::to_string(*span->custom_emoji_id) + ext + "?size=48");
+        }
+      }
+    }
+  };
+
+  // Message content
+  if (!msg.content.empty()) {
+    scan_text(msg.content);
+  }
+
+  // Embed text fields
+  for (const auto& embed : msg.embeds) {
+    if (embed.title) scan_text(*embed.title);
+    if (embed.description) scan_text(*embed.description);
+    for (const auto& field : embed.fields) {
+      scan_text(field.value);
+    }
+  }
+
+  // Components V2 text content
+  std::function<void(const kind::Component&)> scan_comp_text;
+  scan_comp_text = [&](const kind::Component& comp) {
+    if (comp.content && !comp.content->empty()) {
+      scan_text(*comp.content);
+    }
+    if (comp.accessory) scan_comp_text(*comp.accessory);
+    for (const auto& child : comp.children) {
+      scan_comp_text(child);
+    }
+  };
+  for (const auto& comp : msg.components) {
+    scan_comp_text(comp);
+  }
+
+  return urls;
+}
+
 std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const kind::Message& msg) {
   std::unordered_map<std::string, QPixmap> images;
 
@@ -597,6 +646,11 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
     for (const auto& comp : msg.components) {
       scan_component_images(comp);
     }
+  }
+
+  // Custom emoji in message content, embed text, and component text
+  for (const auto& url : collect_custom_emoji_urls(msg)) {
+    try_get(url);
   }
 
   return images;
@@ -704,6 +758,12 @@ void MessageView::request_images(const kind::Message& msg) {
     for (const auto& comp : msg.components) {
       scan_v2_images(comp);
     }
+  }
+
+  // Custom emoji in message content, embed text, and component text
+  for (const auto& url : collect_custom_emoji_urls(msg)) {
+    kind::log::gui()->debug("request_images: text emoji url={}", url);
+    request_image(url);
   }
 }
 

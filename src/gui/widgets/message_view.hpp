@@ -101,6 +101,7 @@ private:
   void position_jump_pill();
   void position_loading_pill();
   void check_visible_messages();
+  std::vector<std::string> collect_custom_emoji_urls(const kind::Message& msg);
   std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
   void boost_visible_images();
