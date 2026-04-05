@@ -39,7 +39,10 @@ std::vector<Guild> DatabaseReader::guilds() const {
   std::vector<Guild> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT id, name, icon, owner_id FROM guilds");
+  if (!q.exec("SELECT id, name, icon, owner_id FROM guilds")) {
+    log::cache()->warn("DB read failed (guilds): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     Guild guild;
     guild.id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -56,7 +59,10 @@ std::vector<Snowflake> DatabaseReader::guild_order() const {
   std::vector<Snowflake> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT guild_id FROM guild_order ORDER BY position ASC");
+  if (!q.exec("SELECT guild_id FROM guild_order ORDER BY position ASC")) {
+    log::cache()->warn("DB read failed (guild_order): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     result.push_back(static_cast<Snowflake>(q.value(0).toLongLong()));
   }
@@ -71,7 +77,10 @@ std::vector<Channel> DatabaseReader::channels(Snowflake guild_id) const {
   q.prepare("SELECT id, guild_id, type, name, position, parent_id, last_message_id "
             "FROM channels WHERE guild_id = :gid");
   q.bindValue(":gid", static_cast<qint64>(guild_id));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (channels for guild {}): {}", guild_id, q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     Channel ch;
     ch.id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -94,8 +103,11 @@ DatabaseReader::all_guild_channels() const {
   std::unordered_map<Snowflake, std::vector<Channel>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT id, guild_id, type, name, position, parent_id, last_message_id "
-         "FROM channels WHERE guild_id != 0");
+  if (!q.exec("SELECT id, guild_id, type, name, position, parent_id, last_message_id "
+              "FROM channels WHERE guild_id != 0")) {
+    log::cache()->warn("DB read failed (all_guild_channels): {}", q.lastError().text().toStdString());
+    return result;
+  }
   int count = 0;
   while (q.next()) {
     Channel ch;
@@ -121,7 +133,10 @@ std::vector<Role> DatabaseReader::roles(Snowflake guild_id) const {
   QSqlQuery q(db);
   q.prepare("SELECT id, name, permissions, position, color FROM roles WHERE guild_id = :gid");
   q.bindValue(":gid", static_cast<qint64>(guild_id));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (roles for guild {}): {}", guild_id, q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     Role role;
     role.id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -140,7 +155,10 @@ DatabaseReader::all_roles() const {
   std::unordered_map<Snowflake, std::vector<Role>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT guild_id, id, name, permissions, position, color FROM roles");
+  if (!q.exec("SELECT guild_id, id, name, permissions, position, color FROM roles")) {
+    log::cache()->warn("DB read failed (all_roles): {}", q.lastError().text().toStdString());
+    return result;
+  }
   int count = 0;
   while (q.next()) {
     auto guild_id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -165,7 +183,10 @@ std::vector<PermissionOverwrite> DatabaseReader::permission_overwrites(
   q.prepare("SELECT target_id, type, allow, deny "
             "FROM permission_overwrites WHERE channel_id = :cid");
   q.bindValue(":cid", static_cast<qint64>(channel_id));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (overwrites for channel {}): {}", channel_id, q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     PermissionOverwrite ow;
     ow.id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -183,7 +204,10 @@ DatabaseReader::all_permission_overwrites() const {
   std::unordered_map<Snowflake, std::vector<PermissionOverwrite>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT channel_id, target_id, type, allow, deny FROM permission_overwrites");
+  if (!q.exec("SELECT channel_id, target_id, type, allow, deny FROM permission_overwrites")) {
+    log::cache()->warn("DB read failed (all_permission_overwrites): {}", q.lastError().text().toStdString());
+    return result;
+  }
   int count = 0;
   while (q.next()) {
     auto channel_id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -205,7 +229,10 @@ std::vector<Snowflake> DatabaseReader::member_roles(Snowflake guild_id) const {
   QSqlQuery q(db);
   q.prepare("SELECT roles FROM members WHERE guild_id = :gid AND user_id = 0");
   q.bindValue(":gid", static_cast<qint64>(guild_id));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (member_roles for guild {}): {}", guild_id, q.lastError().text().toStdString());
+    return result;
+  }
   if (q.next()) {
     auto json_str = q.value(0).toString();
     auto doc = QJsonDocument::fromJson(json_str.toUtf8());
@@ -224,7 +251,10 @@ DatabaseReader::all_member_roles() const {
   std::unordered_map<Snowflake, std::vector<Snowflake>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT guild_id, roles FROM members WHERE user_id = 0");
+  if (!q.exec("SELECT guild_id, roles FROM members WHERE user_id = 0")) {
+    log::cache()->warn("DB read failed (all_member_roles): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     auto guild_id = static_cast<Snowflake>(q.value(0).toLongLong());
     auto json_str = q.value(1).toString();
@@ -247,7 +277,10 @@ std::vector<Channel> DatabaseReader::dm_channels() const {
   std::vector<Channel> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT id, type, name, last_message_id FROM channels WHERE guild_id = 0 AND type = 1");
+  if (!q.exec("SELECT id, type, name, last_message_id FROM channels WHERE guild_id = 0 AND type = 1")) {
+    log::cache()->warn("DB read failed (dm_channels): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     Channel ch;
     ch.id = static_cast<Snowflake>(q.value(0).toLongLong());
@@ -260,13 +293,16 @@ std::vector<Channel> DatabaseReader::dm_channels() const {
     QSqlQuery rq(db);
     rq.prepare("SELECT user_id, username, avatar FROM dm_recipients WHERE channel_id = :cid");
     rq.bindValue(":cid", static_cast<qint64>(ch.id));
-    rq.exec();
-    while (rq.next()) {
-      User user;
-      user.id = static_cast<Snowflake>(rq.value(0).toLongLong());
-      user.username = rq.value(1).toString().toStdString();
-      user.avatar_hash = rq.value(2).toString().toStdString();
-      ch.recipients.push_back(std::move(user));
+    if (!rq.exec()) {
+      log::cache()->warn("DB read failed (dm_recipients for channel {}): {}", ch.id, rq.lastError().text().toStdString());
+    } else {
+      while (rq.next()) {
+        User user;
+        user.id = static_cast<Snowflake>(rq.value(0).toLongLong());
+        user.username = rq.value(1).toString().toStdString();
+        user.avatar_hash = rq.value(2).toString().toStdString();
+        ch.recipients.push_back(std::move(user));
+      }
     }
     result.push_back(std::move(ch));
   }
@@ -279,7 +315,10 @@ std::optional<User> DatabaseReader::current_user() const {
 
   QSqlQuery sq(db);
   sq.prepare("SELECT value FROM app_state WHERE key = 'current_user_id'");
-  sq.exec();
+  if (!sq.exec()) {
+    log::cache()->warn("DB read failed (current_user_id): {}", sq.lastError().text().toStdString());
+    return std::nullopt;
+  }
   if (!sq.next()) {
     log::cache()->debug("DB read: no current user");
     return std::nullopt;
@@ -290,7 +329,10 @@ std::optional<User> DatabaseReader::current_user() const {
   QSqlQuery q(db);
   q.prepare("SELECT id, username, discriminator, avatar, bot FROM users WHERE id = :id");
   q.bindValue(":id", static_cast<qint64>(user_id));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (user {}): {}", user_id, q.lastError().text().toStdString());
+    return std::nullopt;
+  }
   if (!q.next()) {
     log::cache()->debug("DB read: no current user");
     return std::nullopt;
@@ -337,7 +379,10 @@ std::vector<Message> DatabaseReader::messages(Snowflake channel_id,
   }
   q.bindValue(":cid", static_cast<qint64>(channel_id));
   q.bindValue(":limit", limit);
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (messages for channel {}): {}", channel_id, q.lastError().text().toStdString());
+    return result;
+  }
 
   while (q.next()) {
     Message msg;
@@ -503,8 +548,11 @@ std::vector<std::pair<Snowflake, ReadState>> DatabaseReader::read_states() const
   std::vector<std::pair<Snowflake, ReadState>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT channel_id, last_read_id, mention_count, unread_count, last_message_id "
-         "FROM read_state");
+  if (!q.exec("SELECT channel_id, last_read_id, mention_count, unread_count, last_message_id "
+              "FROM read_state")) {
+    log::cache()->warn("DB read failed (read_states): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     auto channel_id = static_cast<Snowflake>(q.value(0).toLongLong());
     ReadState rs;
@@ -522,7 +570,10 @@ std::vector<std::tuple<Snowflake, int, bool>> DatabaseReader::mute_states() cons
   std::vector<std::tuple<Snowflake, int, bool>> result;
   QSqlDatabase db = QSqlDatabase::database(connection_name_);
   QSqlQuery q(db);
-  q.exec("SELECT id, type, muted FROM mute_state");
+  if (!q.exec("SELECT id, type, muted FROM mute_state")) {
+    log::cache()->warn("DB read failed (mute_states): {}", q.lastError().text().toStdString());
+    return result;
+  }
   while (q.next()) {
     auto id = static_cast<Snowflake>(q.value(0).toLongLong());
     int type = q.value(1).toInt();
@@ -538,7 +589,10 @@ std::optional<std::string> DatabaseReader::app_state(const std::string& key) con
   QSqlQuery q(db);
   q.prepare("SELECT value FROM app_state WHERE key = :key");
   q.bindValue(":key", QString::fromStdString(key));
-  q.exec();
+  if (!q.exec()) {
+    log::cache()->warn("DB read failed (app_state[{}]): {}", key, q.lastError().text().toStdString());
+    return std::nullopt;
+  }
   if (q.next()) {
     auto val = q.value(0).toString().toStdString();
     log::cache()->debug("DB read: app_state[{}] = {}", key, val);
