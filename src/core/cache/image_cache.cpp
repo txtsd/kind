@@ -1,10 +1,12 @@
 #include "cache/image_cache.hpp"
 
+#include "cdn_url.hpp"
 #include "logging.hpp"
 
 #include <algorithm>
 
 #include <QCryptographicHash>
+#include <QDataStream>
 #include <QFile>
 #include <QImage>
 #include <QNetworkReply>
@@ -49,7 +51,8 @@ ImageCache::ImageCache(const std::filesystem::path& disk_cache_dir,
 }
 
 std::optional<CachedImage> ImageCache::get(const std::string& url) const {
-  // Memory-only lookup. No disk I/O.
+  // Memory-only lookup. Disk fallback is handled asynchronously by request_impl()
+  // to avoid blocking the UI thread during layout/paint.
   auto it = memory_cache_.find(url);
   if (it != memory_cache_.end()) {
     lru_order_.erase(it->second.lru_it);
@@ -107,7 +110,11 @@ void ImageCache::request_impl(const std::string& url, bool priority) {
 
   // Try disk cache on a worker thread
   auto future = QtConcurrent::run([this, url]() -> std::optional<CachedImage> {
-    return load_from_disk(url);
+    auto result = load_from_disk(url);
+    if (result) {
+      load_metadata(url, *result);
+    }
+    return result;
   });
 
   auto* watcher = new QFutureWatcher<std::optional<CachedImage>>(this);
@@ -139,8 +146,9 @@ void ImageCache::request_impl(const std::string& url, bool priority) {
 }
 
 std::string ImageCache::url_to_filename(const std::string& url) const {
+  auto key = kind::cdn_url::normalize_cache_key(url);
   QCryptographicHash hash(QCryptographicHash::Sha256);
-  hash.addData(QByteArray::fromRawData(url.data(), static_cast<qsizetype>(url.size())));
+  hash.addData(QByteArray::fromRawData(key.data(), static_cast<qsizetype>(key.size())));
   return hash.result().toHex().toStdString();
 }
 
@@ -186,6 +194,41 @@ void ImageCache::save_to_disk(const std::string& url, const CachedImage& image) 
 
   file.write(image.data);
   log::cache()->debug("image saved to disk: {}", url);
+}
+
+void ImageCache::save_metadata(const std::string& url, const CachedImage& image) const {
+  if (disk_cache_dir_.empty()) return;
+  if (image.etag.empty() && image.last_modified.empty()) return;
+  auto path = disk_cache_dir_ / (url_to_filename(url) + ".meta");
+  QFile file(QString::fromStdString(path.string()));
+  if (!file.open(QIODevice::WriteOnly)) {
+    log::cache()->debug("failed to write metadata for {}", url);
+    return;
+  }
+  QDataStream out(&file);
+  out << quint32(1) // version
+      << QString::fromStdString(image.etag)
+      << QString::fromStdString(image.last_modified);
+}
+
+void ImageCache::load_metadata(const std::string& url, CachedImage& image) const {
+  if (disk_cache_dir_.empty()) return;
+  auto path = disk_cache_dir_ / (url_to_filename(url) + ".meta");
+  QFile file(QString::fromStdString(path.string()));
+  if (!file.open(QIODevice::ReadOnly)) return;
+  QDataStream in(&file);
+  quint32 version = 0;
+  in >> version;
+  if (version != 1) return; // Unknown version, skip
+  QString etag, last_modified;
+  in >> etag >> last_modified;
+  if (in.status() != QDataStream::Ok) {
+    image.etag.clear();
+    image.last_modified.clear();
+    return;
+  }
+  image.etag = etag.toStdString();
+  image.last_modified = last_modified.toStdString();
 }
 
 void ImageCache::add_to_memory(const std::string& url, const CachedImage& image) const {
@@ -246,13 +289,69 @@ void ImageCache::start_download(const std::string& url) {
   ++active_downloads_;
   log::cache()->debug("image downloading: {} (active={}/{})", url, active_downloads_, max_concurrent_);
 
-  QNetworkRequest req(QUrl(QString::fromStdString(url)));
-  auto* reply = network_->get(req);
+  // Load metadata off the main thread to get conditional headers
+  auto meta_future = QtConcurrent::run([this, url]() -> CachedImage {
+    CachedImage existing;
+    load_metadata(url, existing);
+    return existing;
+  });
 
-  connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
+  auto* meta_watcher = new QFutureWatcher<CachedImage>(this);
+  connect(meta_watcher, &QFutureWatcher<CachedImage>::finished,
+          this, [this, meta_watcher, url]() {
+    meta_watcher->deleteLater();
+    auto existing = meta_watcher->result();
+
+    QNetworkRequest req(QUrl(QString::fromStdString(url)));
+
+    if (!existing.etag.empty()) {
+      req.setRawHeader("If-None-Match", QByteArray::fromStdString(existing.etag));
+    }
+    if (!existing.last_modified.empty()) {
+      req.setRawHeader("If-Modified-Since", QByteArray::fromStdString(existing.last_modified));
+    }
+
+    auto* reply = network_->get(req);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, url, existing]() {
     reply->deleteLater();
     --active_downloads_;
     in_flight_.erase(url);
+
+    int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    // 304 Not Modified: use cached version from disk (off main thread)
+    if (status == 304) {
+      log::cache()->debug("image not modified (304): {}", url);
+      auto disk_future = QtConcurrent::run([this, url, existing]() -> std::optional<CachedImage> {
+        auto cached = load_from_disk(url);
+        if (cached) {
+          cached->etag = existing.etag;
+          cached->last_modified = existing.last_modified;
+        }
+        return cached;
+      });
+
+      auto* disk_watcher = new QFutureWatcher<std::optional<CachedImage>>(this);
+      connect(disk_watcher, &QFutureWatcher<std::optional<CachedImage>>::finished,
+              this, [this, disk_watcher, url]() {
+        disk_watcher->deleteLater();
+        auto cached = disk_watcher->result();
+        if (cached) {
+          add_to_memory(url, *cached);
+          emit image_ready(QString::fromStdString(url), *cached);
+        } else {
+          log::cache()->warn("304 but disk file missing for {}, re-downloading", url);
+          // Delete stale metadata so the next attempt is unconditional
+          auto meta_path = disk_cache_dir_ / (url_to_filename(url) + ".meta");
+          std::filesystem::remove(meta_path);
+          download_queue_.push_front(url);
+        }
+        process_queue();
+      });
+      disk_watcher->setFuture(disk_future);
+      return;
+    }
 
     if (reply->error() != QNetworkReply::NoError) {
       log::cache()->warn("Image download failed for {}: {}",
@@ -272,8 +371,11 @@ void ImageCache::start_download(const std::string& url) {
     auto mime_type = reply->header(QNetworkRequest::ContentTypeHeader)
                          .toString()
                          .toStdString();
+    auto etag = reply->rawHeader("ETag").toStdString();
+    auto last_modified = reply->rawHeader("Last-Modified").toStdString();
 
-    log::cache()->debug("image downloaded: {} ({}KB)", url, data.size() / 1024);
+    log::cache()->debug("image downloaded: {} ({}KB, etag={}, modified={})",
+                        url, data.size() / 1024, etag, last_modified);
 
     // Decode and clamp image off the UI thread, then emit and cache on the main thread
     int max_dim = max_image_dimension_;
@@ -283,21 +385,24 @@ void ImageCache::start_download(const std::string& url) {
 
     auto* decode_watcher = new QFutureWatcher<QImage>(this);
     connect(decode_watcher, &QFutureWatcher<QImage>::finished,
-            this, [this, decode_watcher, url, data, mime_type]() {
+            this, [this, decode_watcher, url, data, mime_type, etag, last_modified]() {
       decode_watcher->deleteLater();
 
       CachedImage image;
       image.data = data;
       image.decoded = decode_watcher->result();
       image.mime_type = mime_type;
+      image.etag = etag;
+      image.last_modified = last_modified;
       if (!image.decoded.isNull()) {
         image.width = image.decoded.width();
         image.height = image.decoded.height();
       }
 
-      // Save to disk first (needs raw bytes)
+      // Save to disk and metadata (needs raw bytes)
       QtConcurrent::run([this, url, image]() {
         save_to_disk(url, image);
+        save_metadata(url, image);
       });
 
       // Add to memory (drops raw bytes from the in-memory entry)
@@ -311,6 +416,9 @@ void ImageCache::start_download(const std::string& url) {
     // Start next downloads immediately; this download slot is already free
     process_queue();
   });
+  }); // meta_watcher finished
+
+  meta_watcher->setFuture(meta_future);
 }
 
 } // namespace kind

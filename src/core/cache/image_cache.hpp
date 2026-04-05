@@ -25,6 +25,8 @@ struct CachedImage {
   int width{0};
   int height{0};
   std::string mime_type;
+  std::string etag;          // ETag from response header
+  std::string last_modified; // Last-Modified from response header
 };
 
 class ImageCache : public QObject {
@@ -65,6 +67,8 @@ private:
   std::string url_to_filename(const std::string& url) const;
   std::optional<CachedImage> load_from_disk(const std::string& url) const;
   void save_to_disk(const std::string& url, const CachedImage& image) const;
+  void save_metadata(const std::string& url, const CachedImage& image) const;
+  void load_metadata(const std::string& url, CachedImage& image) const;
   void add_to_memory(const std::string& url, const CachedImage& image) const;
   void evict_memory_if_needed() const;
 
