@@ -10,6 +10,7 @@
 #include <QPixmap>
 #include <QVector>
 
+#include <atomic>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -106,7 +107,22 @@ private:
   std::unordered_map<std::string, QPixmap> cached_pixmaps_for(const kind::Message& msg);
   void request_images(const kind::Message& msg);
   void boost_visible_images();
-  std::vector<RenderedMessage> compute_layouts_sync(std::vector<kind::Message>& messages);
+  struct LayoutBatchInput {
+    std::vector<kind::Message> messages;
+    std::vector<std::unordered_map<std::string, QPixmap>> per_message_images;
+    int width;
+    QFont view_font;
+    EditedIndicator edited;
+    MentionContext mentions;
+    bool show_timestamps;
+    int timestamp_column_width;
+    kind::Snowflake last_read_id;
+    uint64_t sequence;
+  };
+  void compute_layouts_async(LayoutBatchInput input, std::function<void(std::vector<RenderedMessage>)> callback);
+  LayoutBatchInput prepare_layout_input(std::vector<kind::Message>& messages);
+  void insert_divider(std::vector<kind::Message>& messages, std::vector<RenderedMessage>& layouts,
+                      kind::Snowflake last_read, int width, const QFont& view_font);
   void resizeEvent(QResizeEvent* event) override;
   void updateGeometries() override;
 
@@ -128,6 +144,8 @@ private:
   QTimer* highlight_timer_{nullptr};
 
   void log_memory_stats() const;
+
+  std::atomic<uint64_t> layout_sequence_{0};
 
   kind::ImageCache* image_cache_{nullptr};
   kind::ReadStateManager* read_state_manager_{nullptr};

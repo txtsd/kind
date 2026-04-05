@@ -16,9 +16,11 @@
 #include <algorithm>
 #include <functional>
 #include <QDateTime>
+#include <QFutureWatcher>
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QTimer>
+#include <QtConcurrent>
 
 namespace kind::gui {
 
@@ -30,19 +32,12 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   resize_timer_->setSingleShot(true);
   resize_timer_->setInterval(150);
   connect(resize_timer_, &QTimer::timeout, this, [this]() {
-    // Re-compute all layouts at new width using cached pixmaps
+    // Re-compute all layouts at new width using cached pixmaps (async)
     auto msgs = model_->messages();
-    std::sort(msgs.begin(), msgs.end(),
-              [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
-    int width = viewport()->width() > 0 ? viewport()->width() : 400;
-    QFont view_font = font();
-    std::vector<RenderedMessage> layouts;
-    layouts.reserve(msgs.size());
-    for (const auto& msg : msgs) {
-      auto images = cached_pixmaps_for(msg);
-      layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
-    }
-    model_->set_messages(msgs, std::move(layouts));
+    auto input = prepare_layout_input(msgs);
+    compute_layouts_async(std::move(input), [this, msgs = std::move(msgs)](std::vector<RenderedMessage> layouts) mutable {
+      model_->set_messages(msgs, std::move(layouts));
+    });
   });
 
   loading_pill_ = new LoadingPill(this);
@@ -142,37 +137,71 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   });
 }
 
-std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind::Message>& messages) {
-  // Sort by Snowflake ID before computing layouts so they align with the
-  // model's internal order (MessageModel::set_messages also sorts by ID)
+MessageView::LayoutBatchInput MessageView::prepare_layout_input(std::vector<kind::Message>& messages) {
   std::sort(messages.begin(), messages.end(),
             [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
 
-  int width = viewport()->width() > 0 ? viewport()->width() : 400;
-  QFont view_font = font();
-  std::vector<RenderedMessage> layouts;
-  layouts.reserve(messages.size());
+  LayoutBatchInput input;
+  input.messages = messages;
+  input.width = viewport()->width() > 0 ? viewport()->width() : 400;
+  input.view_font = font();
+  input.edited = edited_indicator_;
+  input.mentions = build_mention_context();
+  input.show_timestamps = show_timestamps_;
+  input.timestamp_column_width = timestamp_column_width_;
+  input.sequence = ++layout_sequence_;
+
+  input.per_message_images.reserve(messages.size());
   for (const auto& msg : messages) {
-    auto images = cached_pixmaps_for(msg);
-    layouts.push_back(compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
+    input.per_message_images.push_back(cached_pixmaps_for(msg));
     request_images(msg);
 
-    // Try to resolve reply context from locally loaded messages
     if (msg.referenced_message_id.has_value()
         && !msg.referenced_message_author.has_value()) {
       emit fetch_referenced_message(msg.channel_id, *msg.referenced_message_id);
     }
   }
 
-  // Insert "New since" divider above the first unread message
-  kind::Snowflake last_read = 0;
+  input.last_read_id = 0;
   if (read_state_manager_ && current_channel_id_ != 0) {
-    last_read = read_state_manager_->state(current_channel_id_).last_read_id;
+    input.last_read_id = read_state_manager_->state(current_channel_id_).last_read_id;
   }
+
+  return input;
+}
+
+void MessageView::compute_layouts_async(LayoutBatchInput input, std::function<void(std::vector<RenderedMessage>)> callback) {
+  uint64_t seq = input.sequence;
+  auto* watcher = new QFutureWatcher<std::vector<RenderedMessage>>(this);
+  connect(watcher, &QFutureWatcher<std::vector<RenderedMessage>>::finished, this,
+          [this, watcher, seq, callback = std::move(callback)]() {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (seq != layout_sequence_.load()) {
+      kind::log::gui()->debug("layout_async: discarding stale result (seq={}, current={})", seq, layout_sequence_.load());
+      return;
+    }
+    callback(std::move(result));
+  });
+
+  watcher->setFuture(QtConcurrent::run([input = std::move(input)]() {
+    std::vector<RenderedMessage> layouts;
+    layouts.reserve(input.messages.size());
+    for (size_t i = 0; i < input.messages.size(); ++i) {
+      layouts.push_back(compute_layout(input.messages[i], input.width, input.view_font,
+                                        input.per_message_images[i], input.edited,
+                                        input.mentions, input.show_timestamps,
+                                        input.timestamp_column_width));
+    }
+    return layouts;
+  }));
+}
+
+void MessageView::insert_divider(std::vector<kind::Message>& messages, std::vector<RenderedMessage>& layouts,
+                                  kind::Snowflake last_read, int width, const QFont& view_font) {
   if (last_read > 0 && !messages.empty()) {
     for (size_t i = 0; i < messages.size(); ++i) {
       if (messages[i].id > last_read) {
-        // Format the divider text using the last-read message's timestamp
         auto raw_ts = QString::fromStdString(messages[i].timestamp);
         auto dt = QDateTime::fromString(raw_ts, Qt::ISODateWithMs);
         if (!dt.isValid()) {
@@ -189,8 +218,6 @@ std::vector<RenderedMessage> MessageView::compute_layouts_sync(std::vector<kind:
       }
     }
   }
-
-  return layouts;
 }
 
 void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind::Message>& messages) {
@@ -207,28 +234,38 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 
   mutating_ = true;
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  auto layouts = compute_layouts_sync(vec);
-  model_->set_messages(vec, std::move(layouts));
-  log_memory_stats();
+  auto input = prepare_layout_input(vec);
+  auto last_read = input.last_read_id;
+  int width = input.width;
+  QFont view_font = input.view_font;
 
-  auto anchor_it = scroll_anchors_.find(channel_id);
-  if (anchor_it != scroll_anchors_.end() && !anchor_it->at_bottom) {
-    auto row = model_->row_for_id(anchor_it->message_id);
-    if (row) {
-      QTimer::singleShot(0, this, [this, r = *row]() {
-        scrollTo(model_->index(r, 0), QAbstractItemView::PositionAtTop);
-        auto_scroll_ = false;
-        mutating_ = false;
-      });
-      return;
+  auto saved_anchor_it = scroll_anchors_.find(channel_id);
+  bool has_anchor = saved_anchor_it != scroll_anchors_.end() && !saved_anchor_it->at_bottom;
+  kind::Snowflake anchor_msg_id = has_anchor ? saved_anchor_it->message_id : 0;
+
+  compute_layouts_async(std::move(input), [this, vec = std::move(vec), last_read, width, view_font, has_anchor, anchor_msg_id](std::vector<RenderedMessage> layouts) mutable {
+    insert_divider(vec, layouts, last_read, width, view_font);
+    model_->set_messages(vec, std::move(layouts));
+    log_memory_stats();
+
+    if (has_anchor) {
+      auto row = model_->row_for_id(anchor_msg_id);
+      if (row) {
+        QTimer::singleShot(0, this, [this, r = *row]() {
+          scrollTo(model_->index(r, 0), QAbstractItemView::PositionAtTop);
+          auto_scroll_ = false;
+          mutating_ = false;
+        });
+        return;
+      }
     }
-  }
 
-  auto_scroll_ = true;
-  QTimer::singleShot(0, this, [this]() {
-    scrollToBottom();
-    mutating_ = false;
-    check_visible_messages();
+    auto_scroll_ = true;
+    QTimer::singleShot(0, this, [this]() {
+      scrollToBottom();
+      mutating_ = false;
+      check_visible_messages();
+    });
   });
 }
 
@@ -243,10 +280,17 @@ void MessageView::set_messages(const QVector<kind::Message>& messages) {
   }
 
   pending_images_.clear();
-  auto layouts = compute_layouts_sync(vec);
-  model_->set_messages(vec, std::move(layouts));
-  auto_scroll_ = true;
-  scroll_to_bottom();
+  auto input = prepare_layout_input(vec);
+  auto last_read = input.last_read_id;
+  int width = input.width;
+  QFont view_font = input.view_font;
+
+  compute_layouts_async(std::move(input), [this, vec = std::move(vec), last_read, width, view_font](std::vector<RenderedMessage> layouts) mutable {
+    insert_divider(vec, layouts, last_read, width, view_font);
+    model_->set_messages(vec, std::move(layouts));
+    auto_scroll_ = true;
+    scroll_to_bottom();
+  });
 }
 
 void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
@@ -265,15 +309,18 @@ void MessageView::prepend_messages(const QVector<kind::Message>& messages) {
   mutating_ = true;
 
   std::vector<kind::Message> vec(messages.begin(), messages.end());
-  auto layouts = compute_layouts_sync(vec);
-  model_->prepend_messages(vec, std::move(layouts));
+  auto input = prepare_layout_input(vec);
 
-  auto row = model_->row_for_id(anchor_id);
-  QTimer::singleShot(0, this, [this, row]() {
-    if (row) {
-      scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtTop);
-    }
-    mutating_ = false;
+  compute_layouts_async(std::move(input), [this, vec = std::move(vec), anchor_id](std::vector<RenderedMessage> layouts) mutable {
+    model_->prepend_messages(vec, std::move(layouts));
+
+    auto row = model_->row_for_id(anchor_id);
+    QTimer::singleShot(0, this, [this, row]() {
+      if (row) {
+        scrollTo(model_->index(*row, 0), QAbstractItemView::PositionAtTop);
+      }
+      mutating_ = false;
+    });
   });
 }
 
