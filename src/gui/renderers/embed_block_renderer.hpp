@@ -5,10 +5,12 @@
 #include "renderers/rich_text_layout.hpp"
 #include "workers/render_worker.hpp"
 
+#include <QColor>
 #include <QFont>
 #include <QPixmap>
 #include <QRect>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace kind::gui {
@@ -36,9 +38,10 @@ public:
 
 private:
   static constexpr int sidebar_width_ = 4;
-  static constexpr int padding_ = 12;
-  static constexpr int field_spacing_ = 8;
-  static constexpr int section_spacing_ = 6;
+  static constexpr int padding_ = 16;
+  static constexpr int field_spacing_ = 4;
+  static constexpr int section_spacing_ = 4;
+  static constexpr int field_name_value_gap_ = 2;
   static constexpr int max_embed_width_ = 520;
   static constexpr int thumbnail_size_ = 80;
   static constexpr int image_placeholder_height_ = 150;
@@ -53,12 +56,25 @@ private:
   QPixmap image_;
   QPixmap thumbnail_;
   std::vector<QPixmap> extra_images_;
-  QColor sidebar_color_;
+  std::optional<QColor> embed_color_;
 
   bool bare_image_{false};  // true for "image" and "gifv" embed types (no card)
   bool thumb_below_{false}; // true when thumbnail is wide/rectangular (shown below text)
   mutable QRect title_rect_;
   mutable QRect bare_image_rect_;
+
+  // Paint-time origins for hit test delegation (relative to block top-left).
+  // Stored during paint() so hit_test()/tooltip_at() can delegate to sub-layouts.
+  mutable QPoint title_origin_;
+  mutable QPoint description_origin_;
+  mutable QRect author_rect_;
+  mutable QRect provider_rect_;
+  struct FieldOrigin {
+    QPoint value_origin;
+    // Points into field_rows_ which lives for the renderer's lifetime.
+    const RichTextLayout* value_layout{nullptr};
+  };
+  mutable std::vector<FieldOrigin> field_origins_;
 
   // Rich text layouts for formatted content
   std::unique_ptr<RichTextLayout> title_layout_;
