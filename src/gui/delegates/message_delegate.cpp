@@ -109,6 +109,7 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
   // Hit test to find what's under the cursor
   HitResult hit_result;
   bool hit_found = false;
+  QRect hit_block_rect;
   int y = option.rect.top();
   for (const auto& block : rendered->blocks) {
     int block_h = block->height(option.rect.width());
@@ -117,6 +118,7 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
       QPoint local(click.x() - block_rect.left(), click.y() - block_rect.top());
       if (block->hit_test(local, hit_result)) {
         hit_found = true;
+        hit_block_rect = block_rect;
         break;
       }
     }
@@ -189,11 +191,23 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     }
     break;
 
-  case HitResult::SelectMenu:
+  case HitResult::SelectMenu: {
+    // Convert local component rect to global coordinates for popup positioning
+    QRect local_rect = hit_result.component_rect;
+    QRect viewport_rect(hit_block_rect.left() + local_rect.x(),
+                        hit_block_rect.top() + local_rect.y(),
+                        local_rect.width(), local_rect.height());
+    auto* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget));
+    QRect global_rect;
+    if (view && view->viewport()) {
+      QPoint tl = view->viewport()->mapToGlobal(viewport_rect.topLeft());
+      global_rect = QRect(tl, viewport_rect.size());
+    }
     emit select_menu_clicked(channel_id, message_id,
                              QString::fromStdString(hit_result.custom_id),
-                             static_cast<QMouseEvent*>(event)->globalPosition().toPoint());
+                             global_rect);
     return true;
+  }
 
   case HitResult::ChannelMention:
     if (hit_result.id != 0) {

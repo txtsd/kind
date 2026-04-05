@@ -20,6 +20,7 @@ struct HitResult {
   int button_index{-1};
   int select_menu_index{-1};
   std::string custom_id;
+  QRect component_rect;  // Local rect of the hit component (for popup positioning)
 };
 
 class BlockRenderer {

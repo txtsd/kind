@@ -224,6 +224,7 @@ bool ComponentBlockRenderer::hit_test(const QPoint& pos, HitResult& result) cons
       result.type = HitResult::SelectMenu;
       result.select_menu_index = menu.global_index;
       result.custom_id = menu.custom_id;
+      result.component_rect = menu_rect;
       return true;
     }
   }
