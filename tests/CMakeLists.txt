@@ -33,6 +33,10 @@ kind_add_test_executable(kind-test-models
   core/message_parse_test.cpp
 )
 
+kind_add_test_executable(kind-test-json-parsers
+  core/json_parsers_test.cpp
+)
+
 kind_add_test_executable(kind-test-config
   core/config_test.cpp
 )
@@ -90,6 +94,10 @@ kind_add_test_executable(kind-test-cdn-url
   core/cdn_url_test.cpp
 )
 
+kind_add_test_executable(kind-test-mute-state
+  core/mute_state_test.cpp
+)
+
 # --- GUI tests ---
 
 kind_add_test_executable(kind-test-message-model
@@ -137,6 +145,16 @@ kind_add_test_executable(kind-test-loading-pill
 kind_add_test_executable(kind-test-dm-list
   gui/dm_list_model_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/models/dm_list_model.cpp
+)
+
+kind_add_test_executable(kind-test-guild-model
+  gui/guild_model_test.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/models/guild_model.cpp
+)
+
+kind_add_test_executable(kind-test-channel-model
+  gui/channel_model_test.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/models/channel_model.cpp
 )
 
 kind_add_test_executable(kind-test-mentions
