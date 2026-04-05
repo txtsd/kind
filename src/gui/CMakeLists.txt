@@ -65,6 +65,8 @@ qt_add_executable(kind-gui WIN32 MACOSX_BUNDLE
   renderers/image_strip_renderer.cpp
   renderers/component_block_renderer.hpp
   renderers/component_block_renderer.cpp
+  renderers/component_v2_block_renderer.hpp
+  renderers/component_v2_block_renderer.cpp
   renderers/divider_renderer.hpp
   renderers/divider_renderer.cpp
   workers/render_worker.hpp
