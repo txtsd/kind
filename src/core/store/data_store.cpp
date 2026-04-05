@@ -571,7 +571,27 @@ void DataStore::set_messages(Snowflake channel_id, std::vector<Message> msgs) {
       pending_deletes_.erase(pending_it);
     }
     auto& deque = channel_messages_[channel_id];
+    // Preserve ephemeral messages (flags & 64) since they are never returned by REST
+    std::vector<Message> ephemeral;
+    for (const auto& existing : deque) {
+      if (existing.flags & 64) {
+        ephemeral.push_back(existing);
+      }
+    }
     deque.assign(msgs.begin(), msgs.end());
+    for (auto& eph : ephemeral) {
+      // Re-insert if not already present in the new set
+      bool found = false;
+      for (const auto& msg : deque) {
+        if (msg.id == eph.id) { found = true; break; }
+      }
+      if (!found) {
+        // Insert in sorted position by ID
+        auto insert_pos = std::lower_bound(deque.begin(), deque.end(), eph,
+          [](const Message& a, const Message& b) { return a.id < b.id; });
+        deque.insert(insert_pos, std::move(eph));
+      }
+    }
     if (!observers_.empty()) {
       message_snapshot.assign(deque.begin(), deque.end());
     }
