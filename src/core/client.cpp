@@ -565,16 +565,100 @@ private:
   }
 
   void handle_message_update(const std::string& data_json) {
-    auto msg = json_parse::parse_message(data_json);
-    if (!msg) {
-      return;
+    auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(data_json));
+    if (doc.isNull() || !doc.isObject()) return;
+    auto obj = doc.object();
+
+    auto channel_id = static_cast<Snowflake>(obj["channel_id"].toString().toULongLong());
+    auto message_id = static_cast<Snowflake>(obj["id"].toString().toULongLong());
+    if (channel_id == 0 || message_id == 0) return;
+    log::client()->debug("MESSAGE_UPDATE: channel={}, id={}", channel_id, message_id);
+
+    // Log which fields are present in the update for diagnostics
+    {
+      QStringList keys = obj.keys();
+      log::client()->trace("MESSAGE_UPDATE keys: {}", keys.join(", ").toStdString());
+      if (obj.contains("content"))
+        log::client()->trace("MESSAGE_UPDATE content: '{}'", obj["content"].toString().toStdString());
+      if (obj.contains("embeds"))
+        log::client()->trace("MESSAGE_UPDATE embeds count: {}", obj["embeds"].toArray().size());
+      if (obj.contains("components"))
+        log::client()->trace("MESSAGE_UPDATE components count: {}", obj["components"].toArray().size());
+      if (obj.contains("flags"))
+        log::client()->trace("MESSAGE_UPDATE flags: {}", obj["flags"].toInt());
     }
-    log::client()->debug("MESSAGE_UPDATE: channel={}, id={}", msg->channel_id, msg->id);
-    client_.store_->update_message(*msg);
+
+    // MESSAGE_UPDATE can be partial: only fields present in the JSON should
+    // be applied.  Find the existing message and merge changed fields into it,
+    // falling back to a full parse when the message is not yet cached.
+    auto existing_msgs = client_.store_->messages(channel_id);
+    Message* existing = nullptr;
+    for (auto& stored : existing_msgs) {
+      if (stored.id == message_id) {
+        existing = &stored;
+        break;
+      }
+    }
+
+    log::client()->trace("MESSAGE_UPDATE existing={}", existing != nullptr);
+
+    Message merged;
+    if (existing) {
+      merged = *existing;
+      log::client()->trace("MESSAGE_UPDATE pre-merge: content='{}', embeds={}, components={}, flags={}",
+                           existing->content.substr(0, 100), existing->embeds.size(),
+                           existing->components.size(), existing->flags);
+      // Merge only fields present in the update JSON
+      if (obj.contains("content")) merged.content = obj["content"].toString().toStdString();
+      if (obj.contains("embeds")) {
+        merged.embeds.clear();
+        auto parsed = json_parse::parse_message(data_json);
+        if (parsed) merged.embeds = std::move(parsed->embeds);
+      }
+      if (obj.contains("components")) {
+        merged.components.clear();
+        auto parsed = json_parse::parse_message(data_json);
+        if (parsed) merged.components = std::move(parsed->components);
+      }
+      if (obj.contains("reactions")) {
+        merged.reactions.clear();
+        auto parsed = json_parse::parse_message(data_json);
+        if (parsed) merged.reactions = std::move(parsed->reactions);
+      }
+      if (obj.contains("attachments")) {
+        merged.attachments.clear();
+        auto parsed = json_parse::parse_message(data_json);
+        if (parsed) merged.attachments = std::move(parsed->attachments);
+      }
+      if (obj.contains("flags")) merged.flags = obj["flags"].toInt(merged.flags);
+      if (obj.contains("edited_timestamp") && !obj["edited_timestamp"].isNull()) {
+        merged.edited_timestamp = obj["edited_timestamp"].toString().toStdString();
+      }
+      if (obj.contains("pinned")) merged.pinned = obj["pinned"].toBool(merged.pinned);
+      if (obj.contains("mention_everyone")) merged.mention_everyone = obj["mention_everyone"].toBool();
+      if (obj.contains("author")) {
+        auto author_obj = obj["author"].toObject();
+        if (author_obj.contains("username"))
+          merged.author.username = author_obj["username"].toString().toStdString();
+        if (author_obj.contains("avatar") && !author_obj["avatar"].isNull())
+          merged.author.avatar_hash = author_obj["avatar"].toString().toStdString();
+      }
+    } else {
+      // Message not cached: full parse is the only option
+      auto parsed = json_parse::parse_message(data_json);
+      if (!parsed) return;
+      merged = std::move(*parsed);
+    }
+
+    log::client()->trace("MESSAGE_UPDATE merged: content='{}', embeds={}, components={}, flags={}",
+                         merged.content.substr(0, 100), merged.embeds.size(),
+                         merged.components.size(), merged.flags);
+
+    client_.store_->update_message(merged);
     if (client_.db_writer_) {
-      emit client_.db_writer_->message_write_requested(*msg);
+      emit client_.db_writer_->message_write_requested(merged);
     }
-    client_.gateway_observers_.notify([&msg](GatewayObserver* obs) { obs->on_message_update(*msg); });
+    client_.gateway_observers_.notify([&merged](GatewayObserver* obs) { obs->on_message_update(merged); });
   }
 
   void handle_message_delete(const std::string& data_json) {

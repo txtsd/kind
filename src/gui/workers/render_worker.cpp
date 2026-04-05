@@ -404,6 +404,11 @@ RenderedMessage compute_layout(
   }
   result.valid = true;
 
+  spdlog::trace("compute_layout: id={}, blocks={}, embeds={}, components={}, height={}, content='{}'",
+                message.id, result.blocks.size(), message.embeds.size(),
+                message.components.size(), result.height,
+                message.content.substr(0, 80));
+
   return result;
 }
 
