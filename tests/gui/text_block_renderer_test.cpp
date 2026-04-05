@@ -1,6 +1,8 @@
+#include "models/message.hpp"
 #include "renderers/rich_text_layout.hpp"
 #include "renderers/text_block_renderer.hpp"
 #include "text/markdown_parser.hpp"
+#include "workers/render_worker.hpp"
 
 #include <QFont>
 #include <QImage>
@@ -12,7 +14,7 @@ class TextBlockRendererTest : public ::testing::Test {};
 
 TEST_F(TextBlockRendererTest, HeightPositive) {
   auto content = kind::markdown::parse("hello world");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   EXPECT_GT(renderer.height(400), 0);
 }
 
@@ -20,14 +22,14 @@ TEST_F(TextBlockRendererTest, HeightIncreasesWithWrapping) {
   auto content = kind::markdown::parse(
       "this is a much longer message that should wrap across multiple lines "
       "when the width is narrow");
-  kind::gui::TextBlockRenderer wide(content, 800, QFont(), "user", "12:00");
-  kind::gui::TextBlockRenderer narrow(content, 100, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer wide(content, 800, QFont(), "user: ");
+  kind::gui::TextBlockRenderer narrow(content, 100, QFont(), "user: ");
   EXPECT_GT(narrow.height(100), wide.height(800));
 }
 
 TEST_F(TextBlockRendererTest, PaintDoesNotCrash) {
   auto content = kind::markdown::parse("**bold** and *italic*");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   QImage image(400, renderer.height(400), QImage::Format_ARGB32);
   QPainter painter(&image);
   renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
@@ -36,7 +38,7 @@ TEST_F(TextBlockRendererTest, PaintDoesNotCrash) {
 
 TEST_F(TextBlockRendererTest, PaintCodeBlockDoesNotCrash) {
   auto content = kind::markdown::parse("```cpp\nint x = 42;\n```");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   QImage image(400, renderer.height(400), QImage::Format_ARGB32);
   QPainter painter(&image);
   renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
@@ -45,7 +47,7 @@ TEST_F(TextBlockRendererTest, PaintCodeBlockDoesNotCrash) {
 
 TEST_F(TextBlockRendererTest, PaintSpoilerDoesNotCrash) {
   auto content = kind::markdown::parse("visible ||spoiler|| visible");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   QImage image(400, renderer.height(400), QImage::Format_ARGB32);
   QPainter painter(&image);
   renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
@@ -54,7 +56,7 @@ TEST_F(TextBlockRendererTest, PaintSpoilerDoesNotCrash) {
 
 TEST_F(TextBlockRendererTest, HitTestLinkDoesNotCrash) {
   auto content = kind::markdown::parse("[click](https://example.com)");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   kind::gui::HitResult result;
   renderer.hit_test(QPoint(150, 5), result);
   SUCCEED();
@@ -62,7 +64,7 @@ TEST_F(TextBlockRendererTest, HitTestLinkDoesNotCrash) {
 
 TEST_F(TextBlockRendererTest, HitTestOutsideReturnsFalse) {
   auto content = kind::markdown::parse("hello");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   kind::gui::HitResult result;
   bool hit = renderer.hit_test(QPoint(9999, 9999), result);
   EXPECT_FALSE(hit);
@@ -71,13 +73,13 @@ TEST_F(TextBlockRendererTest, HitTestOutsideReturnsFalse) {
 
 TEST_F(TextBlockRendererTest, EmptyContentHeightPositive) {
   auto content = kind::markdown::parse("");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   EXPECT_GT(renderer.height(400), 0);
 }
 
 TEST_F(TextBlockRendererTest, StrikethroughDoesNotCrash) {
   auto content = kind::markdown::parse("~~struck~~");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   QImage image(400, renderer.height(400), QImage::Format_ARGB32);
   QPainter painter(&image);
   renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
@@ -87,15 +89,15 @@ TEST_F(TextBlockRendererTest, StrikethroughDoesNotCrash) {
 TEST_F(TextBlockRendererTest, NewlinesIncreaseHeight) {
   auto single = kind::markdown::parse("line one");
   auto multi = kind::markdown::parse("line one\nline two\nline three");
-  kind::gui::TextBlockRenderer single_r(single, 800, QFont(), "u: ", "");
-  kind::gui::TextBlockRenderer multi_r(multi, 800, QFont(), "u: ", "");
+  kind::gui::TextBlockRenderer single_r(single, 800, QFont(), "u: ");
+  kind::gui::TextBlockRenderer multi_r(multi, 800, QFont(), "u: ");
   // Three lines must be taller than one line
   EXPECT_GT(multi_r.height(800), single_r.height(800));
 }
 
 TEST_F(TextBlockRendererTest, MixedFormattingDoesNotCrash) {
   auto content = kind::markdown::parse("**bold** *italic* __under__ ~~strike~~ `code`");
-  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user", "12:00");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
   QImage image(400, renderer.height(400), QImage::Format_ARGB32);
   QPainter painter(&image);
   renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
@@ -350,4 +352,146 @@ TEST_F(CustomEmojiTest, NonAnimatedEmojiUsesWebpExtension) {
   QPainter painter(&surface);
   layout.paint(&painter, QPoint(0, 0));
   SUCCEED();
+}
+
+// ---------------------------------------------------------------------------
+// Timestamp Column Tests
+// ---------------------------------------------------------------------------
+
+class TimestampColumnTest : public ::testing::Test {};
+
+// ---------------------------------------------------------------------------
+// Tier 1: Normal
+// ---------------------------------------------------------------------------
+
+TEST_F(TimestampColumnTest, TextBlockHasNoTimestamp) {
+  auto content = kind::markdown::parse("hello");
+  kind::gui::TextBlockRenderer renderer(content, 400, QFont(), "user: ");
+  QImage image(400, renderer.height(400), QImage::Format_ARGB32);
+  QPainter painter(&image);
+  renderer.paint(&painter, QRect(0, 0, 400, renderer.height(400)));
+  SUCCEED();
+}
+
+TEST_F(TimestampColumnTest, RenderWorkerPopulatesTimestamp) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "test";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 400, QFont());
+  EXPECT_FALSE(result.timestamp_text.isEmpty());
+  // Format is "[HH:mm] " where HH:mm is in local time; just verify the brackets
+  EXPECT_TRUE(result.timestamp_text.contains("["));
+  EXPECT_TRUE(result.timestamp_text.contains("]"));
+}
+
+TEST_F(TimestampColumnTest, RenderWorkerTimestampTooltip) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "test";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 400, QFont());
+  EXPECT_FALSE(result.timestamp_tooltip.isEmpty());
+}
+
+TEST_F(TimestampColumnTest, RenderWorkerNarrowsWidthWhenTimestampsOn) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "a long message that might wrap differently at different widths";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+
+  auto with_ts = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Text, {}, true, 60);
+  auto without_ts = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Text, {}, false, 0);
+
+  EXPECT_GE(with_ts.height, without_ts.height);
+}
+
+TEST_F(TimestampColumnTest, SystemMessageHasNoTimestamp) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.type = 7;
+  msg.author.username = "newuser";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 400, QFont());
+  EXPECT_TRUE(result.timestamp_text.isEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// Tier 2: Extensive
+// ---------------------------------------------------------------------------
+
+TEST_F(TimestampColumnTest, EditedIconInTimestamp) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "edited msg";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  msg.edited_timestamp = "2024-01-01T12:35:00.000Z";
+
+  auto result = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Icon);
+  EXPECT_TRUE(result.timestamp_text.contains(QString::fromUtf8("\u270f")));
+}
+
+TEST_F(TimestampColumnTest, InvalidTimestampFallback) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "test";
+  msg.author.username = "user";
+  msg.timestamp = "not-a-valid-timestamp";
+  auto result = kind::gui::compute_layout(msg, 400, QFont());
+  EXPECT_FALSE(result.timestamp_text.isEmpty());
+  EXPECT_TRUE(result.timestamp_tooltip.isEmpty());
+}
+
+TEST_F(TimestampColumnTest, ReplyBlockUsesEffectiveWidth) {
+  kind::Message msg;
+  msg.id = 2;
+  msg.content = "reply content";
+  msg.author.username = "replier";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  msg.referenced_message_id = 1;
+  msg.referenced_message_author = "original_author";
+  msg.referenced_message_content = "original message content";
+
+  auto result = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Text, {}, true, 60);
+  EXPECT_GE(result.blocks.size(), 2u);
+  EXPECT_GT(result.height, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Tier 3: Absolutely unhinged
+// ---------------------------------------------------------------------------
+
+TEST_F(TimestampColumnTest, ZeroColumnWidth) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "test";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Text, {}, true, 0);
+  EXPECT_GT(result.height, 0);
+}
+
+TEST_F(TimestampColumnTest, ColumnWidthLargerThanViewport) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "test";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 100, QFont(), {}, kind::gui::EditedIndicator::Text, {}, true, 200);
+  EXPECT_GT(result.height, 0);
+}
+
+TEST_F(TimestampColumnTest, EmptyContentWithTimestamp) {
+  kind::Message msg;
+  msg.id = 1;
+  msg.content = "";
+  msg.author.username = "user";
+  msg.timestamp = "2024-01-01T12:30:00.000Z";
+  auto result = kind::gui::compute_layout(msg, 400, QFont(), {}, kind::gui::EditedIndicator::Text, {}, true, 60);
+  EXPECT_FALSE(result.timestamp_text.isEmpty());
+  EXPECT_GT(result.height, 0);
 }
