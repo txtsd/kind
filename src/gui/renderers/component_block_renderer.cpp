@@ -127,16 +127,17 @@ void ComponentBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   painter->setRenderHint(QPainter::Antialiasing);
 
   QFontMetrics fm(font_);
-  int base_x = rect.left() + padding_;
-  int base_y = rect.top() + padding_;
+  int paint_x = rect.left() + padding_;
+  int paint_y = rect.top() + padding_;
 
-  bounds_ = QRect(base_x, base_y,
+  // Store bounds in local coordinates (0,0 = block top-left) for hit testing
+  bounds_ = QRect(padding_, padding_,
                   rect.width() - 2 * padding_,
                   total_height_ - 2 * padding_);
 
   for (const auto& btn : buttons_) {
-    int btn_y = base_y + row_y_offsets_[btn.row];
-    QRectF btn_rect(base_x + btn.x, btn_y, btn.width, button_height_);
+    int btn_y = paint_y + row_y_offsets_[btn.row];
+    QRectF btn_rect(paint_x + btn.x, btn_y, btn.width, button_height_);
 
     painter->save();
     if (btn.disabled) {
@@ -162,8 +163,8 @@ void ComponentBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
   QColor select_placeholder = pal.color(QPalette::PlaceholderText);
 
   for (const auto& menu : select_menus_) {
-    int menu_y = base_y + row_y_offsets_[menu.row];
-    QRectF menu_rect(base_x + menu.x, menu_y, menu.width, select_height_);
+    int menu_y = paint_y + row_y_offsets_[menu.row];
+    QRectF menu_rect(paint_x + menu.x, menu_y, menu.width, select_height_);
 
     painter->save();
     if (menu.disabled) {
