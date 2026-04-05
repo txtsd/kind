@@ -41,6 +41,12 @@ public:
   // Set the callback used to load tokens for known accounts
   void set_token_loader(TokenLoader loader);
 
+  // Whether a known account (not "New account") is selected in the dropdown
+  bool has_selected_account() const;
+
+  // Load the token for whatever account is currently selected in the dropdown
+  void load_selected_account_token();
+
 signals:
   void token_login_requested(QString token, QString token_type);
   void credential_login_requested(QString email, QString password);

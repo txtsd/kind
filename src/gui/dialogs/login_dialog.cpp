@@ -211,4 +211,22 @@ void LoginDialog::set_token_loader(TokenLoader loader) {
   token_loader_ = std::move(loader);
 }
 
+bool LoginDialog::has_selected_account() const {
+  if (!account_combo_ || account_combo_->currentIndex() < 0) return false;
+  return account_combo_->currentData().value<qulonglong>() != 0;
+}
+
+void LoginDialog::load_selected_account_token() {
+  if (!account_combo_ || !token_loader_) return;
+  auto user_id = account_combo_->currentData().value<qulonglong>();
+  if (user_id == 0) return;
+
+  log::gui()->debug("LoginDialog: loading token for preselected account {}", user_id);
+  token_loader_(user_id, [this](const std::string& token, const std::string& token_type) {
+    QMetaObject::invokeMethod(this, [this, token, token_type]() {
+      load_saved_token(token, token_type);
+    });
+  });
+}
+
 } // namespace kind::gui

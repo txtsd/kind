@@ -988,11 +988,8 @@ int main(int argc, char* argv[]) {
   // Save cache on application exit
   QObject::connect(&qapp, &QCoreApplication::aboutToQuit, [&client]() { client.save_cache(); });
 
-  // Show the window immediately — empty, data arrives asynchronously.
-  // When --no-autologin is set, defer showing until login succeeds.
-  if (!force_dialog) {
-    main_window.show();
-  }
+  // Main window is shown by the login_success signal handler.
+  // Never show it before authentication succeeds.
 
   // Download emoji shortcode data if not cached or stale (older than 7 days)
   {
@@ -1086,6 +1083,11 @@ int main(int argc, char* argv[]) {
     } else {
       if (saved_token) {
         login_dialog.load_saved_token(saved_token->token, saved_token->token_type);
+      } else if (login_dialog.has_selected_account()) {
+        // No token from last session, but an account is preselected in the
+        // dropdown. Load its token from the keychain so the input is populated
+        // when the dialog appears.
+        login_dialog.load_selected_account_token();
       }
       login_dialog.show();
     }
