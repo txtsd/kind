@@ -59,6 +59,7 @@ kind_add_test_executable(kind-test-auth
 
 kind_add_test_executable(kind-test-permissions
   core/permissions_test.cpp
+  core/permissions_extended_test.cpp
 )
 
 kind_add_test_executable(kind-test-client
@@ -107,6 +108,10 @@ kind_add_test_executable(kind-test-renderers
   gui/component_block_renderer_test.cpp
   gui/component_v2_block_renderer_test.cpp
   gui/ephemeral_notice_renderer_test.cpp
+  gui/render_worker_test.cpp
+  gui/badge_renderer_test.cpp
+  gui/divider_renderer_test.cpp
+  gui/image_strip_renderer_test.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/reply_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/rich_text_layout.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/text_block_renderer.cpp
@@ -118,6 +123,9 @@ kind_add_test_executable(kind-test-renderers
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/component_v2_block_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/renderers/ephemeral_notice_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/badge_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/divider_renderer.cpp
+  ${CMAKE_SOURCE_DIR}/src/gui/renderers/image_strip_renderer.cpp
   ${CMAKE_SOURCE_DIR}/src/gui/workers/render_worker.cpp
 )
 
