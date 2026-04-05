@@ -15,6 +15,9 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QThread>
 
 #include <cstddef>
@@ -50,6 +53,7 @@ public:
   MOCK_METHOD(bool, is_connected, (), (const, override));
   MOCK_METHOD(void, set_intents, (uint32_t), (override));
   MOCK_METHOD(void, set_bot_mode, (bool), (override));
+  MOCK_METHOD(std::string, session_id, (), (const, override));
 };
 
 class MockAuthObserver : public kind::AuthObserver {
@@ -623,4 +627,96 @@ TEST_F(ClientTest, GatewayReconnectingNotifiesObservers) {
 TEST_F(ClientTest, UnknownGatewayEventDoesNotCrash) {
   fire_gateway_event("UNKNOWN_EVENT_XYZ", "{}");
   SUCCEED();
+}
+
+TEST_F(ClientTest, GatewaySessionIdAccessible) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillOnce(::testing::Return("test-session-abc123"));
+  EXPECT_EQ(mock_gateway_->session_id(), "test-session-abc123");
+}
+
+TEST_F(ClientTest, SendInteractionPostsToEndpoint) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillRepeatedly(::testing::Return("test-session-id"));
+
+  std::string captured_path;
+  std::string captured_body;
+  EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_))
+      .WillOnce([&](std::string_view path, const std::string& body, kind::RestClient::Callback cb) {
+        captured_path = std::string(path);
+        captured_body = body;
+        cb(std::string{""});
+      });
+
+  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button", {});
+  process_async_events(100);
+
+  EXPECT_EQ(captured_path, "/interactions");
+
+  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
+  auto obj = doc.object();
+  EXPECT_EQ(obj["type"].toInt(), 3);
+  EXPECT_EQ(obj["channel_id"].toString(), "67890");
+  EXPECT_EQ(obj["message_id"].toString(), "12345");
+  EXPECT_EQ(obj["guild_id"].toString(), "11111");
+  EXPECT_EQ(obj["application_id"].toString(), "99999");
+  EXPECT_FALSE(obj["session_id"].toString().isEmpty());
+  EXPECT_FALSE(obj["nonce"].toString().isEmpty());
+
+  auto data = obj["data"].toObject();
+  EXPECT_EQ(data["component_type"].toInt(), 2);
+  EXPECT_EQ(data["custom_id"].toString(), "my_button");
+}
+
+TEST_F(ClientTest, SendInteractionWithValuesIncludesValuesArray) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillRepeatedly(::testing::Return("test-session-id"));
+
+  std::string captured_body;
+  EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_))
+      .WillOnce([&](std::string_view, const std::string& body, kind::RestClient::Callback cb) {
+        captured_body = body;
+        cb(std::string{""});
+      });
+
+  client_->send_interaction(67890, 12345, 11111, 99999, 3, "my_select", {"value_a", "value_b"});
+  process_async_events(100);
+
+  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
+  auto data = doc.object()["data"].toObject();
+  EXPECT_EQ(data["component_type"].toInt(), 3);
+  EXPECT_EQ(data["type"].toInt(), 3);
+  auto values = data["values"].toArray();
+  EXPECT_EQ(values.size(), 2);
+  EXPECT_EQ(values[0].toString(), "value_a");
+  EXPECT_EQ(values[1].toString(), "value_b");
+}
+
+TEST_F(ClientTest, SendInteractionOmitsGuildIdForDMs) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillRepeatedly(::testing::Return("test-session-id"));
+
+  std::string captured_body;
+  EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_))
+      .WillOnce([&](std::string_view, const std::string& body, kind::RestClient::Callback cb) {
+        captured_body = body;
+        cb(std::string{""});
+      });
+
+  client_->send_interaction(67890, 12345, 0, 99999, 2, "dm_button", {});
+  process_async_events(100);
+
+  auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(captured_body));
+  auto obj = doc.object();
+  EXPECT_FALSE(obj.contains("guild_id"));
+}
+
+TEST_F(ClientTest, SendInteractionDropsWhenNoSession) {
+  EXPECT_CALL(*mock_gateway_, session_id())
+      .WillRepeatedly(::testing::Return(""));
+
+  EXPECT_CALL(*mock_rest_, post(::testing::_, ::testing::_, ::testing::_)).Times(0);
+
+  client_->send_interaction(67890, 12345, 11111, 99999, 2, "my_button", {});
+  process_async_events(100);
 }

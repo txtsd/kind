@@ -312,3 +312,103 @@ TEST(MessageParse, EmptyArraysOmitted) {
   EXPECT_FALSE(msg->mention_everyone);
   EXPECT_EQ(msg->type, 0);
 }
+
+TEST(MessageParse, ParsesApplicationId) {
+  auto obj = make_base_message();
+  obj["application_id"] = "999888777666";
+  auto msg = kind::json_parse::parse_message(obj);
+  ASSERT_TRUE(msg.has_value());
+  ASSERT_TRUE(msg->application_id.has_value());
+  EXPECT_EQ(*msg->application_id, 999888777666u);
+}
+
+TEST(MessageParse, NoApplicationIdYieldsNullopt) {
+  auto obj = make_base_message();
+  auto msg = kind::json_parse::parse_message(obj);
+  ASSERT_TRUE(msg.has_value());
+  EXPECT_FALSE(msg->application_id.has_value());
+}
+
+TEST(MessageParse, ParsesMessageFlags) {
+  auto obj = make_base_message();
+  obj["flags"] = 64;
+  auto msg = kind::json_parse::parse_message(obj);
+  ASSERT_TRUE(msg.has_value());
+  EXPECT_EQ(msg->flags, 64);
+}
+
+TEST(MessageParse, ParsesComponentUrl) {
+  auto obj = make_base_message();
+  QJsonArray components;
+  QJsonObject action_row;
+  action_row["type"] = 1;
+  QJsonArray children;
+  QJsonObject button;
+  button["type"] = 2;
+  button["style"] = 5;
+  button["label"] = "Visit";
+  button["url"] = "https://example.com";
+  children.append(button);
+  action_row["components"] = children;
+  components.append(action_row);
+  obj["components"] = components;
+
+  auto msg = kind::json_parse::parse_message(obj);
+  ASSERT_TRUE(msg.has_value());
+  ASSERT_EQ(msg->components.size(), 1u);
+  ASSERT_EQ(msg->components[0].children.size(), 1u);
+  ASSERT_TRUE(msg->components[0].children[0].url.has_value());
+  EXPECT_EQ(*msg->components[0].children[0].url, "https://example.com");
+}
+
+TEST(MessageParse, ParsesSelectMenuOptions) {
+  auto obj = make_base_message();
+  QJsonArray components;
+  QJsonObject action_row;
+  action_row["type"] = 1;
+  QJsonArray children;
+  QJsonObject select;
+  select["type"] = 3;
+  select["custom_id"] = "my_select";
+  select["placeholder"] = "Pick one";
+  select["min_values"] = 1;
+  select["max_values"] = 1;
+
+  QJsonArray options;
+  QJsonObject opt1;
+  opt1["label"] = "Option A";
+  opt1["value"] = "a";
+  opt1["description"] = "First option";
+  opt1["default"] = true;
+  options.append(opt1);
+  QJsonObject opt2;
+  opt2["label"] = "Option B";
+  opt2["value"] = "b";
+  options.append(opt2);
+  select["options"] = options;
+
+  children.append(select);
+  action_row["components"] = children;
+  components.append(action_row);
+  obj["components"] = components;
+
+  auto msg = kind::json_parse::parse_message(obj);
+  ASSERT_TRUE(msg.has_value());
+  ASSERT_EQ(msg->components.size(), 1u);
+  auto& sel = msg->components[0].children[0];
+  EXPECT_EQ(sel.type, 3);
+  ASSERT_TRUE(sel.placeholder.has_value());
+  EXPECT_EQ(*sel.placeholder, "Pick one");
+  ASSERT_TRUE(sel.min_values.has_value());
+  EXPECT_EQ(*sel.min_values, 1);
+  ASSERT_TRUE(sel.max_values.has_value());
+  EXPECT_EQ(*sel.max_values, 1);
+  ASSERT_EQ(sel.options.size(), 2u);
+  EXPECT_EQ(sel.options[0].label, "Option A");
+  EXPECT_EQ(sel.options[0].value, "a");
+  EXPECT_EQ(sel.options[0].description, "First option");
+  EXPECT_TRUE(sel.options[0].default_selected);
+  EXPECT_EQ(sel.options[1].label, "Option B");
+  EXPECT_EQ(sel.options[1].value, "b");
+  EXPECT_FALSE(sel.options[1].default_selected);
+}

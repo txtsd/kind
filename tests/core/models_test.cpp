@@ -5,7 +5,9 @@
 #include "models/message.hpp"
 #include "models/snowflake.hpp"
 #include "models/user.hpp"
+#include "utils/nonce.hpp"
 
+#include <QThread>
 #include <climits>
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -330,4 +332,34 @@ TEST(Guild, EmptyChannelList) {
   g.name = "Test Guild";
   EXPECT_TRUE(g.channels.empty());
   EXPECT_EQ(g.channels.size(), 0u);
+}
+
+// ---------------------------------------------------------------------------
+// Nonce generation
+// ---------------------------------------------------------------------------
+
+TEST(Nonce, GeneratesNonEmptyString) {
+  auto nonce = kind::generate_nonce();
+  EXPECT_FALSE(nonce.empty());
+}
+
+TEST(Nonce, GeneratesNumericString) {
+  auto nonce = kind::generate_nonce();
+  for (char ch : nonce) {
+    EXPECT_TRUE(ch >= '0' && ch <= '9') << "Non-digit in nonce: " << ch;
+  }
+}
+
+TEST(Nonce, ConsecutiveNoncesAreDifferent) {
+  auto a = kind::generate_nonce();
+  QThread::msleep(1);
+  auto b = kind::generate_nonce();
+  EXPECT_NE(a, b);
+}
+
+TEST(Nonce, NonceIsReasonableLength) {
+  auto nonce = kind::generate_nonce();
+  // Discord nonces are ~19 digits
+  EXPECT_GE(nonce.size(), 15u);
+  EXPECT_LE(nonce.size(), 22u);
 }
