@@ -38,6 +38,7 @@ public:
   std::optional<kind::Snowflake> oldest_message_id() const;
   void prepend_messages(const std::vector<kind::Message>& messages);
   void prepend_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts);
+  bool has_content_changes(const std::vector<kind::Message>& sorted_messages) const;
   std::optional<int> row_for_id(kind::Snowflake id) const;
   const std::vector<kind::Message>& messages() const { return messages_; }
   const std::vector<RenderedMessage>& rendered() const { return rendered_; }

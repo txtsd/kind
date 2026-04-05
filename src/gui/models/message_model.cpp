@@ -5,6 +5,80 @@
 #include <QDateTime>
 #include <algorithm>
 
+namespace {
+
+bool attachments_content_equal(const std::vector<kind::Attachment>& lhs,
+                               const std::vector<kind::Attachment>& rhs) {
+  if (lhs.size() != rhs.size()) return false;
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (lhs[i].id != rhs[i].id
+        || lhs[i].filename != rhs[i].filename
+        || lhs[i].size != rhs[i].size
+        || lhs[i].content_type != rhs[i].content_type
+        || lhs[i].width != rhs[i].width
+        || lhs[i].height != rhs[i].height) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Compare EmbedImage ignoring volatile url and proxy_url (signatures rotate).
+// Content identity is determined by dimensions alone.
+bool embed_images_content_equal(const std::optional<kind::EmbedImage>& lhs,
+                                const std::optional<kind::EmbedImage>& rhs) {
+  if (lhs.has_value() != rhs.has_value()) return false;
+  if (!lhs.has_value()) return true;
+  return lhs->width == rhs->width && lhs->height == rhs->height;
+}
+
+bool embeds_content_equal(const std::vector<kind::Embed>& lhs,
+                          const std::vector<kind::Embed>& rhs) {
+  if (lhs.size() != rhs.size()) return false;
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (lhs[i].type != rhs[i].type
+        || lhs[i].title != rhs[i].title
+        || lhs[i].description != rhs[i].description
+        || lhs[i].color != rhs[i].color
+        || lhs[i].provider != rhs[i].provider
+        || lhs[i].author != rhs[i].author
+        || lhs[i].footer != rhs[i].footer
+        || !embed_images_content_equal(lhs[i].image, rhs[i].image)
+        || !embed_images_content_equal(lhs[i].thumbnail, rhs[i].thumbnail)
+        || lhs[i].fields != rhs[i].fields) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool messages_content_equal(const kind::Message& lhs, const kind::Message& rhs) {
+  // Excludes volatile fields that rotate between API responses:
+  // - Attachment url/proxy_url (signature rotation)
+  // - Embed image/thumbnail url/proxy_url (proxy rotation)
+  // - referenced_message_author/content (not stored in DB)
+  return lhs.id == rhs.id
+      && lhs.channel_id == rhs.channel_id
+      && lhs.type == rhs.type
+      && lhs.author == rhs.author
+      && lhs.content == rhs.content
+      && lhs.timestamp == rhs.timestamp
+      && lhs.edited_timestamp == rhs.edited_timestamp
+      && lhs.pinned == rhs.pinned
+      && lhs.deleted == rhs.deleted
+      && lhs.referenced_message_id == rhs.referenced_message_id
+      && lhs.mentions == rhs.mentions
+      && lhs.mention_everyone == rhs.mention_everyone
+      && lhs.mention_roles == rhs.mention_roles
+      && attachments_content_equal(lhs.attachments, rhs.attachments)
+      && embeds_content_equal(lhs.embeds, rhs.embeds)
+      && lhs.reactions == rhs.reactions
+      && lhs.sticker_items == rhs.sticker_items
+      && lhs.components == rhs.components;
+}
+
+} // anonymous namespace
+
 namespace kind::gui {
 
 MessageModel::MessageModel(QObject* parent) : QAbstractListModel(parent) {}
@@ -84,6 +158,17 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages, std:
   rendered_ = std::move(layouts);
   rendered_.resize(messages_.size());
   endResetModel();
+}
+
+bool MessageModel::has_content_changes(const std::vector<kind::Message>& sorted_messages) const {
+  if (sorted_messages.size() != messages_.size()) return true;
+  for (size_t i = 0; i < sorted_messages.size(); ++i) {
+    if (!messages_content_equal(sorted_messages[i], messages_[i])) {
+      return true;
+    }
+  }
+  kind::log::gui()->debug("has_content_changes: no changes, skipping re-render");
+  return false;
 }
 
 void MessageModel::append_message(const kind::Message& msg) {

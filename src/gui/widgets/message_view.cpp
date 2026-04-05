@@ -12,6 +12,7 @@
 #include "widgets/loading_pill.hpp"
 #include "workers/render_worker.hpp"
 
+#include <algorithm>
 #include <QDateTime>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -230,9 +231,16 @@ void MessageView::switch_channel(kind::Snowflake channel_id, const QVector<kind:
 void MessageView::set_messages(const QVector<kind::Message>& messages) {
   kind::log::gui()->debug("set_messages: {} messages", messages.size());
   std::vector<kind::Message> vec(messages.begin(), messages.end());
+  std::sort(vec.begin(), vec.end(),
+            [](const kind::Message& lhs, const kind::Message& rhs) { return lhs.id < rhs.id; });
+
+  if (!model_->has_content_changes(vec)) {
+    return;
+  }
+
+  pending_images_.clear();
   auto layouts = compute_layouts_sync(vec);
   model_->set_messages(vec, std::move(layouts));
-
   auto_scroll_ = true;
   scroll_to_bottom();
 }
@@ -516,7 +524,9 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      try_get(kind::cdn_url::add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520));
+      auto [img_w, img_h] = kind::cdn_url::constrain_dimensions(
+          embed.image->width.value_or(520), embed.image->height.value_or(520), 520, 520);
+      try_get(kind::cdn_url::add_image_size(embed.image->url, img_w, img_h));
     }
     if (embed.thumbnail) {
       bool squareish = true;
@@ -526,27 +536,23 @@ std::unordered_map<std::string, QPixmap> MessageView::cached_pixmaps_for(const k
         squareish = (ratio >= 0.8 && ratio <= 1.2);
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
-      int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      try_get(kind::cdn_url::add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size));
+      int max_thumb = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
+      auto [thumb_w, thumb_h] = kind::cdn_url::constrain_dimensions(
+          embed.thumbnail->width.value_or(max_thumb), embed.thumbnail->height.value_or(max_thumb),
+          max_thumb, max_thumb);
+      try_get(kind::cdn_url::add_image_size(embed.thumbnail->url, thumb_w, thumb_h));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
       if (att.is_video()) {
-        int req_w = att.width.value_or(520);
-        int req_h = att.height.value_or(520);
-        if (req_w > 520) {
-          req_h = req_h * 520 / std::max(req_w, 1);
-          req_w = 520;
-        }
-        if (req_h > 300) {
-          req_w = req_w * 300 / std::max(req_h, 1);
-          req_h = 300;
-        }
-        try_get(kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp");
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 300);
+        try_get(kind::cdn_url::add_image_size(att.url, req_w, req_h) + "&format=webp");
       } else {
-        try_get(kind::cdn_url::add_image_size(base, 520));
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 520);
+        try_get(kind::cdn_url::add_image_size(att.url, req_w, req_h));
       }
     }
   }
@@ -586,11 +592,11 @@ void MessageView::request_images(const kind::Message& msg) {
 
   for (const auto& embed : msg.embeds) {
     if (embed.image) {
-      std::string key = embed.image->proxy_url.value_or(embed.image->url);
-      request_image(kind::cdn_url::add_image_size(key, 520));
+      auto [img_w, img_h] = kind::cdn_url::constrain_dimensions(
+          embed.image->width.value_or(520), embed.image->height.value_or(520), 520, 520);
+      request_image(kind::cdn_url::add_image_size(embed.image->url, img_w, img_h));
     }
     if (embed.thumbnail) {
-      std::string key = embed.thumbnail->proxy_url.value_or(embed.thumbnail->url);
       bool squareish = true;
       if (embed.thumbnail->width.has_value() && embed.thumbnail->height.has_value()) {
         double ratio = static_cast<double>(*embed.thumbnail->width) /
@@ -598,27 +604,23 @@ void MessageView::request_images(const kind::Message& msg) {
         squareish = (ratio >= 0.8 && ratio <= 1.2);
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
-      int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      request_image(kind::cdn_url::add_image_size(key, thumb_size));
+      int max_thumb = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
+      auto [thumb_w, thumb_h] = kind::cdn_url::constrain_dimensions(
+          embed.thumbnail->width.value_or(max_thumb), embed.thumbnail->height.value_or(max_thumb),
+          max_thumb, max_thumb);
+      request_image(kind::cdn_url::add_image_size(embed.thumbnail->url, thumb_w, thumb_h));
     }
   }
   for (const auto& att : msg.attachments) {
     if (att.width.has_value() && !att.url.empty()) {
-      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
       if (att.is_video()) {
-        int req_w = att.width.value_or(520);
-        int req_h = att.height.value_or(520);
-        if (req_w > 520) {
-          req_h = req_h * 520 / std::max(req_w, 1);
-          req_w = 520;
-        }
-        if (req_h > 300) {
-          req_w = req_w * 300 / std::max(req_h, 1);
-          req_h = 300;
-        }
-        request_image(kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp");
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 300);
+        request_image(kind::cdn_url::add_image_size(att.url, req_w, req_h) + "&format=webp");
       } else {
-        request_image(kind::cdn_url::add_image_size(base, 520));
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 520);
+        request_image(kind::cdn_url::add_image_size(att.url, req_w, req_h));
       }
     }
   }

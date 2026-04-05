@@ -216,7 +216,9 @@ RenderedMessage compute_layout(
     QPixmap embed_img;
     QPixmap embed_thumb;
     if (embed.image) {
-      std::string key = kind::cdn_url::add_image_size(embed.image->proxy_url.value_or(embed.image->url), 520);
+      auto [img_w, img_h] = kind::cdn_url::constrain_dimensions(
+          embed.image->width.value_or(520), embed.image->height.value_or(520), 520, 520);
+      std::string key = kind::cdn_url::add_image_size(embed.image->url, img_w, img_h);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -237,8 +239,11 @@ RenderedMessage compute_layout(
         }
       }
       bool is_bare = (embed.type == "image" || embed.type == "gifv");
-      int thumb_size = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
-      std::string key = kind::cdn_url::add_image_size(embed.thumbnail->proxy_url.value_or(embed.thumbnail->url), thumb_size);
+      int max_thumb = (embed.type == "video" || !squareish || is_bare) ? 520 : 128;
+      auto [thumb_w, thumb_h] = kind::cdn_url::constrain_dimensions(
+          embed.thumbnail->width.value_or(max_thumb), embed.thumbnail->height.value_or(max_thumb),
+          max_thumb, max_thumb);
+      std::string key = kind::cdn_url::add_image_size(embed.thumbnail->url, thumb_w, thumb_h);
       if (!key.empty()) {
         auto it = images.find(key);
         if (it != images.end()) {
@@ -284,7 +289,9 @@ RenderedMessage compute_layout(
     auto& first_embed = message.embeds[0]; // The first embed with a URL
     QPixmap first_img, first_thumb;
     if (first_embed.image) {
-      std::string key = kind::cdn_url::add_image_size(first_embed.image->proxy_url.value_or(first_embed.image->url), 520);
+      auto [img_w, img_h] = kind::cdn_url::constrain_dimensions(
+          first_embed.image->width.value_or(520), first_embed.image->height.value_or(520), 520, 520);
+      std::string key = kind::cdn_url::add_image_size(first_embed.image->url, img_w, img_h);
       auto img_it = images.find(key);
       if (img_it != images.end()) first_img = img_it->second;
     }
@@ -295,8 +302,12 @@ RenderedMessage compute_layout(
                        std::max(*first_embed.thumbnail->height, 1);
         sq = (ratio >= 0.8 && ratio <= 1.2);
       }
-      int ts = (first_embed.type == "video" || !sq) ? 520 : 128;
-      std::string key = kind::cdn_url::add_image_size(first_embed.thumbnail->proxy_url.value_or(first_embed.thumbnail->url), ts);
+      bool is_bare = (first_embed.type == "image" || first_embed.type == "gifv");
+      int max_thumb = (first_embed.type == "video" || !sq || is_bare) ? 520 : 128;
+      auto [thumb_w, thumb_h] = kind::cdn_url::constrain_dimensions(
+          first_embed.thumbnail->width.value_or(max_thumb), first_embed.thumbnail->height.value_or(max_thumb),
+          max_thumb, max_thumb);
+      std::string key = kind::cdn_url::add_image_size(first_embed.thumbnail->url, thumb_w, thumb_h);
       auto img_it = images.find(key);
       if (img_it != images.end()) first_thumb = img_it->second;
     }
@@ -322,21 +333,14 @@ RenderedMessage compute_layout(
     QPixmap att_img;
     if (att.width.has_value() && !att.url.empty()) {
       std::string key;
-      std::string base = att.proxy_url.empty() ? att.url : att.proxy_url;
       if (att.is_video()) {
-        int req_w = att.width.value_or(520);
-        int req_h = att.height.value_or(520);
-        if (req_w > 520) {
-          req_h = req_h * 520 / std::max(req_w, 1);
-          req_w = 520;
-        }
-        if (req_h > 300) {
-          req_w = req_w * 300 / std::max(req_h, 1);
-          req_h = 300;
-        }
-        key = kind::cdn_url::add_image_size(base, req_w, req_h) + "&format=webp";
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 300);
+        key = kind::cdn_url::add_image_size(att.url, req_w, req_h) + "&format=webp";
       } else {
-        key = kind::cdn_url::add_image_size(base, 520);
+        auto [req_w, req_h] = kind::cdn_url::constrain_dimensions(
+            att.width.value_or(520), att.height.value_or(520), 520, 520);
+        key = kind::cdn_url::add_image_size(att.url, req_w, req_h);
       }
       auto it = images.find(key);
       if (it != images.end()) {
