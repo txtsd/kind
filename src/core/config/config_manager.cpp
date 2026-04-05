@@ -48,9 +48,11 @@ ConfigManager::ConfigManager(const std::filesystem::path& config_path) {
     // Merge defaults for any keys missing from the loaded config
     auto defaults = default_config();
     merge_defaults(table_, defaults);
+    log::config()->debug("Config loaded from {}", path_.string());
   } else {
     table_ = default_config();
     save();
+    log::config()->debug("Config created with defaults at {}", path_.string());
   }
 }
 
@@ -65,6 +67,7 @@ void ConfigManager::save() {
     throw std::runtime_error(std::string("failed to open config file for writing: ") + path_.string());
   }
   out << table_;
+  log::config()->trace("Config saved to {}", path_.string());
 }
 
 void ConfigManager::reload() {
@@ -139,7 +142,7 @@ std::vector<ConfigManager::KnownAccount> ConfigManager::known_accounts() const {
     }
   }
 
-  log::config()->debug("Loaded {} known accounts", result.size());
+  log::config()->trace("Loaded {} known accounts", result.size());
   return result;
 }
 

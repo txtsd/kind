@@ -59,10 +59,10 @@ std::optional<CachedImage> ImageCache::get(const std::string& url) const {
     lru_order_.erase(it->second.lru_it);
     lru_order_.push_front(url);
     it->second.lru_it = lru_order_.begin();
-    log::cache()->debug("image memory hit: {}", url);
+    log::cache()->trace("image memory hit: {}", url);
     return it->second.image;
   }
-  log::cache()->debug("image memory miss: {}", url);
+  log::cache()->trace("image memory miss: {}", url);
   return std::nullopt;
 }
 
@@ -85,7 +85,7 @@ void ImageCache::boost_priority(const std::string& url) {
 }
 
 void ImageCache::request_impl(const std::string& url, bool priority) {
-  log::cache()->debug("image request{}: {} (queue={})",
+  log::cache()->trace("image request{}: {} (queue={})",
                       priority ? " [priority]" : "", url, download_queue_.size());
 
   // Already in memory: emit asynchronously

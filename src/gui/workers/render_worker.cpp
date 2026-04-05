@@ -45,7 +45,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
       span.is_self_mention = true;
       span.mention_bg = accent_bg_self;
     }
-    spdlog::debug("Resolved user mention: {} -> {}", uid, span.resolved_text);
+    spdlog::trace("Resolved user mention: {} -> {}", uid, span.resolved_text);
   } else if (span.mention_channel_id.has_value()) {
     auto cid = *span.mention_channel_id;
     std::string name = "unknown-channel";
@@ -58,7 +58,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
     span.resolved_text = "#" + name;
     span.mention_color = accent_fg;
     span.mention_bg = accent_bg;
-    spdlog::debug("Resolved channel mention: {} -> {}", cid, span.resolved_text);
+    spdlog::trace("Resolved channel mention: {} -> {}", cid, span.resolved_text);
   } else if (span.mention_role_id.has_value()) {
     auto rid = *span.mention_role_id;
     std::string name = "unknown-role";
@@ -82,7 +82,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
         break;
       }
     }
-    spdlog::debug("Resolved role mention: {} -> {}", rid, span.resolved_text);
+    spdlog::trace("Resolved role mention: {} -> {}", rid, span.resolved_text);
   }
 
   // Handle @everyone and @here
@@ -96,7 +96,7 @@ void resolve_mention(kind::TextSpan& span, const MentionContext& ctx) {
         span.is_self_mention = true;
         span.mention_bg = accent_bg_self;
       }
-      spdlog::debug("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
+      spdlog::trace("Resolved broadcast mention: {}, self={}", span.text, span.is_self_mention);
     }
   }
 }
@@ -115,7 +115,7 @@ RenderedMessage compute_layout(
       ? std::max(viewport_width - timestamp_column_width, 100)
       : viewport_width;
 
-  spdlog::debug("compute_layout: show_timestamps={}, column_width={}, effective_width={}",
+  spdlog::trace("compute_layout: show_timestamps={}, column_width={}, effective_width={}",
                 show_timestamps, timestamp_column_width, effective_width);
 
   // System messages: anything other than Default (0), Reply (19), ChatInputCommand (20)

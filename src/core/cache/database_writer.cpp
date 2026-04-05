@@ -89,7 +89,7 @@ void DatabaseWriteWorker::write_guild(kind::Guild guild) {
     log::cache()->warn("Writer: failed to write guild {}: {}", guild.id,
                        q.lastError().text().toStdString());
   } else {
-    log::cache()->debug("DB write: guild {} ({})", guild.id, guild.name);
+    log::cache()->trace("DB write: guild {} ({})", guild.id, guild.name);
   }
 }
 
@@ -112,7 +112,7 @@ void DatabaseWriteWorker::write_channel(kind::Channel channel) {
     log::cache()->warn("Writer: failed to write channel {}: {}", channel.id,
                        q.lastError().text().toStdString());
   } else {
-    log::cache()->debug("DB write: channel {} ({})", channel.id, channel.name);
+    log::cache()->trace("DB write: channel {} ({})", channel.id, channel.name);
   }
 }
 
@@ -325,7 +325,7 @@ void DatabaseWriteWorker::write_user(kind::User user) {
     log::cache()->warn("Writer: failed to write user {}: {}", user.id,
                        q.lastError().text().toStdString());
   } else {
-    log::cache()->debug("DB write: user {} ({})", user.id, user.username);
+    log::cache()->trace("DB write: user {} ({})", user.id, user.username);
   }
 }
 
@@ -371,7 +371,7 @@ void DatabaseWriteWorker::write_roles(kind::Snowflake guild_id, std::vector<kind
     }
   }
   db.commit();
-  log::cache()->debug("DB write: {} roles for guild {}", roles.size(), guild_id);
+  log::cache()->trace("DB write: {} roles for guild {}", roles.size(), guild_id);
 }
 
 void DatabaseWriteWorker::write_permission_overwrites(
@@ -400,7 +400,7 @@ void DatabaseWriteWorker::write_permission_overwrites(
     }
   }
   db.commit();
-  log::cache()->debug("DB write: {} overwrites for channel {}", overwrites.size(), channel_id);
+  log::cache()->trace("DB write: {} overwrites for channel {}", overwrites.size(), channel_id);
 }
 
 void DatabaseWriteWorker::write_member_roles(kind::Snowflake guild_id,
@@ -423,7 +423,7 @@ void DatabaseWriteWorker::write_member_roles(kind::Snowflake guild_id,
     log::cache()->warn("Writer: failed to write member roles for guild {}: {}", guild_id,
                        q.lastError().text().toStdString());
   } else {
-    log::cache()->debug("DB write: {} member roles for guild {}", role_ids.size(), guild_id);
+    log::cache()->trace("DB write: {} member roles for guild {}", role_ids.size(), guild_id);
   }
 }
 
@@ -508,7 +508,7 @@ void DatabaseWriteWorker::write_app_state(QString key, QString value) {
   q.bindValue(":key", key);
   q.bindValue(":value", value);
   q.exec();
-  log::cache()->debug("DB write: app_state[{}]", key.toStdString());
+  log::cache()->trace("DB write: app_state[{}]", key.toStdString());
 }
 
 void DatabaseWriteWorker::write_mute_state(kind::Snowflake id, int type, bool muted) {
@@ -524,7 +524,7 @@ void DatabaseWriteWorker::write_mute_state(kind::Snowflake id, int type, bool mu
     log::cache()->warn("Writer: failed to write mute_state for {}: {}", id,
                        q.lastError().text().toStdString());
   } else {
-    log::cache()->debug("DB write: mute_state id={} type={} muted={}", id, type, muted);
+    log::cache()->trace("DB write: mute_state id={} type={} muted={}", id, type, muted);
   }
 }
 
@@ -578,7 +578,7 @@ void DatabaseWriteWorker::write_dm_recipients(kind::Snowflake channel_id,
     }
   }
   db.commit();
-  log::cache()->debug("DB write: {} dm_recipients for channel {}", recipients.size(), channel_id);
+  log::cache()->trace("DB write: {} dm_recipients for channel {}", recipients.size(), channel_id);
 }
 
 void DatabaseWriteWorker::flush() {

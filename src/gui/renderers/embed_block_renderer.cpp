@@ -101,7 +101,7 @@ EmbedBlockRenderer::EmbedBlockRenderer(const kind::Embed& embed, int viewport_wi
     if (f.inline_field) ++inline_count; else ++non_inline_count;
   }
 
-  spdlog::debug("EmbedBlockRenderer: type={}, width={}, height={}, has_title_layout={}, has_desc_layout={}, "
+  spdlog::trace("EmbedBlockRenderer: type={}, width={}, height={}, has_title_layout={}, has_desc_layout={}, "
                 "fields={} (inline={}, full={}), field_rows={}, desc_len={}",
                 embed_.type, embed_width_, total_height_,
                 title_layout_ != nullptr, description_layout_ != nullptr,
@@ -163,26 +163,26 @@ int EmbedBlockRenderer::compute_layout(const std::unordered_map<std::string, QPi
   // Provider
   if (embed_.provider.has_value() && !embed_.provider->name.empty()) {
     y += small_fm.height() + section_spacing_;
-    spdlog::debug("  layout: after provider y={}", y);
+    spdlog::trace("  layout: after provider y={}", y);
   }
 
   // Author
   if (embed_.author.has_value()) {
     y += small_bold_fm.height() + section_spacing_;
-    spdlog::debug("  layout: after author y={}", y);
+    spdlog::trace("  layout: after author y={}", y);
   }
 
   // Title (now with RichTextLayout for markdown/mentions)
   if (embed_.title.has_value() && !embed_.title->empty()) {
     title_layout_ = parse_embed_text(*embed_.title, text_area_width, bold_font_, mentions_, images);
-    spdlog::debug("  layout: title height={}, text_area_width={}", title_layout_->height(), text_area_width);
+    spdlog::trace("  layout: title height={}, text_area_width={}", title_layout_->height(), text_area_width);
     y += title_layout_->height() + section_spacing_;
   }
 
   // Description (now with RichTextLayout for markdown/mentions)
   if (embed_.description.has_value() && !embed_.description->empty()) {
     description_layout_ = parse_embed_text(*embed_.description, text_area_width, font_, mentions_, images);
-    spdlog::debug("  layout: desc height={}, text_area_width={}, desc_len={}",
+    spdlog::trace("  layout: desc height={}, text_area_width={}, desc_len={}",
                   description_layout_->height(), text_area_width, embed_.description->size());
     y += description_layout_->height() + section_spacing_;
   }
@@ -248,7 +248,7 @@ int EmbedBlockRenderer::compute_layout(const std::unordered_map<std::string, QPi
       }
 
       field_rows_.push_back(std::move(row));
-      spdlog::debug("  layout: field row {} cols={} row_height={} y={}",
+      spdlog::trace("  layout: field row {} cols={} row_height={} y={}",
                     field_rows_.size(), field_rows_.back().columns.size(),
                     field_rows_.back().row_height, y + field_rows_.back().row_height + field_spacing_);
       y += field_rows_.back().row_height + field_spacing_;
