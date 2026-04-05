@@ -59,6 +59,8 @@ signals:
   void scroll_to_message_requested(kind::Snowflake message_id);
   void button_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
                       int button_index);
+  void select_menu_clicked(kind::Snowflake channel_id, kind::Snowflake message_id,
+                           const QString& custom_id, const QPoint& global_pos);
   void ack_requested(kind::Snowflake channel_id, kind::Snowflake message_id);
   void channel_mention_clicked(kind::Snowflake channel_id);
 

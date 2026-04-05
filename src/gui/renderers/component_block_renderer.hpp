@@ -24,6 +24,10 @@ private:
   static constexpr int row_gap_ = 4;
   static constexpr int button_padding_h_ = 16;
   static constexpr int button_radius_ = 3;
+  static constexpr int select_height_ = 36;
+  static constexpr int select_radius_ = 4;
+  static constexpr int select_padding_h_ = 12;
+  static constexpr int chevron_width_ = 20;
 
   struct ButtonInfo {
     int global_index{0};
@@ -35,8 +39,22 @@ private:
     QString label;
   };
 
+  struct SelectMenuInfo {
+    int global_index{0};
+    int row{0};
+    int x{0};
+    int width{0};
+    bool disabled{false};
+    QString placeholder;
+    QString selected_label;
+    std::string custom_id;
+  };
+
   std::vector<kind::Component> action_rows_;
   std::vector<ButtonInfo> buttons_;
+  std::vector<SelectMenuInfo> select_menus_;
+  std::vector<int> row_y_offsets_;  // Pre-computed Y offset for each row
+  std::vector<int> row_heights_;    // Height of each row
   QFont font_;
   int total_height_{0};
   int row_count_{0};

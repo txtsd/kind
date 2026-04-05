@@ -12,12 +12,14 @@
 namespace kind::gui {
 
 struct HitResult {
-  enum Type { None, Link, Mention, ChannelMention, Reaction, Button, Spoiler, ScrollToMessage };
+  enum Type { None, Link, Mention, ChannelMention, Reaction, Button, SelectMenu, Spoiler, ScrollToMessage };
   Type type{None};
   std::string url;
   kind::Snowflake id{0};
   int reaction_index{-1};
   int button_index{-1};
+  int select_menu_index{-1};
+  std::string custom_id;
 };
 
 class BlockRenderer {

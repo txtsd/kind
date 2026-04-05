@@ -21,6 +21,7 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
@@ -549,7 +550,132 @@ int main(int argc, char* argv[]) {
                      client.ack_message(channel_id, message_id);
                    });
 
-  // TODO: wire button_clicked to client.send_interaction when implemented
+  // Wire button clicks to interaction API
+  QObject::connect(message_view, &kind::gui::MessageView::button_clicked,
+                   [&client](kind::Snowflake channel_id, kind::Snowflake message_id,
+                             int button_index) {
+                     auto messages = client.messages(channel_id);
+                     const kind::Message* target = nullptr;
+                     for (const auto& msg : messages) {
+                       if (msg.id == message_id) {
+                         target = &msg;
+                         break;
+                       }
+                     }
+                     if (!target) {
+                       kind::log::gui()->warn("button_clicked: message {} not found in channel {}", message_id, channel_id);
+                       return;
+                     }
+
+                     int idx = 0;
+                     for (const auto& row : target->components) {
+                       if (row.type != 1) continue;
+                       for (const auto& child : row.children) {
+                         if (child.type == 2) {
+                           if (idx == button_index) {
+                             if (child.style == 5 && child.url.has_value()) {
+                               QDesktopServices::openUrl(QUrl(QString::fromStdString(*child.url)));
+                               return;
+                             }
+                             if (!child.custom_id.has_value()) return;
+
+                             auto app_id = target->application_id.value_or(target->author.id);
+                             auto guild_id = client.guild_id_for_channel(channel_id);
+                             client.send_interaction(channel_id, message_id, guild_id, app_id,
+                                                     2, *child.custom_id);
+                             return;
+                           }
+                           ++idx;
+                         }
+                       }
+                     }
+                     kind::log::gui()->warn("button_clicked: button index {} not found in message {}", button_index, message_id);
+                   });
+
+  // Wire select menu clicks to show popup and send interaction
+  QObject::connect(message_view, &kind::gui::MessageView::select_menu_clicked,
+                   [&client, message_view](kind::Snowflake channel_id, kind::Snowflake message_id,
+                              const QString& custom_id, const QPoint& global_pos) {
+                     auto messages = client.messages(channel_id);
+                     const kind::Message* target = nullptr;
+                     for (const auto& msg : messages) {
+                       if (msg.id == message_id) {
+                         target = &msg;
+                         break;
+                       }
+                     }
+                     if (!target) return;
+
+                     // Find the select menu component by custom_id
+                     const kind::Component* select_comp = nullptr;
+                     for (const auto& row : target->components) {
+                       if (row.type != 1) continue;
+                       for (const auto& child : row.children) {
+                         if (child.custom_id.has_value()
+                             && *child.custom_id == custom_id.toStdString()) {
+                           select_comp = &child;
+                           break;
+                         }
+                       }
+                       if (select_comp) break;
+                     }
+                     if (!select_comp) return;
+
+                     auto app_id = target->application_id.value_or(target->author.id);
+                     auto guild_id = client.guild_id_for_channel(channel_id);
+
+                     auto* menu = new QMenu(message_view);
+                     menu->setAttribute(Qt::WA_DeleteOnClose);
+
+                     int max_values = select_comp->max_values.value_or(1);
+
+                     if (max_values <= 1) {
+                       // Single-select: clicking an option immediately sends
+                       for (const auto& opt : select_comp->options) {
+                         auto* action = menu->addAction(QString::fromStdString(opt.label));
+                         if (!opt.description.empty()) {
+                           action->setToolTip(QString::fromStdString(opt.description));
+                         }
+                         action->setCheckable(true);
+                         action->setChecked(opt.default_selected);
+                         QObject::connect(action, &QAction::triggered,
+                                          [&client, channel_id, message_id, guild_id,
+                                           app_id, custom_id, value = opt.value]() {
+                                            client.send_interaction(channel_id, message_id, guild_id,
+                                                                    app_id, 3,
+                                                                    custom_id.toStdString(), {value});
+                                          });
+                       }
+                     } else {
+                       // Multi-select: checkable items with a "Done" action
+                       std::vector<QAction*> option_actions;
+                       for (const auto& opt : select_comp->options) {
+                         auto* action = menu->addAction(QString::fromStdString(opt.label));
+                         action->setCheckable(true);
+                         action->setChecked(opt.default_selected);
+                         action->setData(QString::fromStdString(opt.value));
+                         option_actions.push_back(action);
+                       }
+                       menu->addSeparator();
+                       auto* done_action = menu->addAction(QStringLiteral("Done"));
+                       QObject::connect(done_action, &QAction::triggered,
+                                        [&client, channel_id, message_id, guild_id,
+                                         app_id, custom_id, option_actions]() {
+                                          std::vector<std::string> selected;
+                                          for (auto* act : option_actions) {
+                                            if (act->isChecked()) {
+                                              selected.push_back(act->data().toString().toStdString());
+                                            }
+                                          }
+                                          client.send_interaction(channel_id, message_id, guild_id,
+                                                                  app_id, 3,
+                                                                  custom_id.toStdString(), selected);
+                                        });
+                     }
+
+                     menu->popup(global_pos);
+                   });
+
   // TODO: wire spoiler_toggled to spoiler reveal state management
 
   // Shared actions for guild/channel selection (used by signals and restore)

@@ -70,6 +70,7 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   connect(delegate_, &MessageDelegate::spoiler_toggled, this, &MessageView::spoiler_toggled);
   connect(delegate_, &MessageDelegate::scroll_to_message_requested, this, &MessageView::scroll_to_message_requested);
   connect(delegate_, &MessageDelegate::button_clicked, this, &MessageView::button_clicked);
+  connect(delegate_, &MessageDelegate::select_menu_clicked, this, &MessageView::select_menu_clicked);
   connect(delegate_, &MessageDelegate::channel_mention_clicked, this, &MessageView::channel_mention_clicked);
 
   // Handle scroll-to-message internally as well

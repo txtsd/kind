@@ -1,7 +1,9 @@
 #include "renderers/component_block_renderer.hpp"
 
 #include <QFontMetrics>
+#include <QGuiApplication>
 #include <QPainterPath>
+#include <QPalette>
 
 namespace kind::gui {
 
@@ -27,6 +29,7 @@ QColor ComponentBlockRenderer::fill_color_for_style(int style) {
 void ComponentBlockRenderer::compute_layout() {
   QFontMetrics fm(font_);
   buttons_.clear();
+  select_menus_.clear();
 
   int global_index = 0;
   int row = 0;
@@ -36,38 +39,79 @@ void ComponentBlockRenderer::compute_layout() {
 
     int x = 0;
     for (const auto& child : action_row.children) {
-      if (child.type != 2) continue; // Only handle Button
+      if (child.type == 2) {
+        // Button handling
+        QString label = child.label.has_value()
+            ? QString::fromStdString(*child.label)
+            : QString();
 
-      QString label = child.label.has_value()
-          ? QString::fromStdString(*child.label)
-          : QString();
+        if (child.style == 5) {
+          label += QString::fromUtf8(" \xe2\x86\x97"); // ↗
+        }
 
-      if (child.style == 5) {
-        label += QString::fromUtf8(" \xe2\x86\x97"); // ↗
+        int text_width = fm.horizontalAdvance(label);
+        int btn_width = text_width + 2 * button_padding_h_;
+
+        buttons_.push_back({
+          .global_index = global_index,
+          .row = row,
+          .x = x,
+          .width = btn_width,
+          .style = child.style,
+          .disabled = child.disabled,
+          .label = label,
+        });
+
+        x += btn_width + button_h_gap_;
+        ++global_index;
+      } else if (child.type == 3 || child.type == 5 || child.type == 6
+                 || child.type == 7 || child.type == 8) {
+        // Select menu handling
+        QString placeholder = child.placeholder.has_value()
+            ? QString::fromStdString(*child.placeholder)
+            : QStringLiteral("Make a selection");
+
+        QString selected_label;
+        for (const auto& opt : child.options) {
+          if (opt.default_selected) {
+            selected_label = QString::fromStdString(opt.label);
+            break;
+          }
+        }
+
+        select_menus_.push_back({
+          .global_index = global_index,
+          .row = row,
+          .x = 0,
+          .width = 400,
+          .disabled = child.disabled,
+          .placeholder = placeholder,
+          .selected_label = selected_label,
+          .custom_id = child.custom_id.value_or(""),
+        });
+
+        ++global_index;
       }
-
-      int text_width = fm.horizontalAdvance(label);
-      int btn_width = text_width + 2 * button_padding_h_;
-
-      buttons_.push_back({
-        .global_index = global_index,
-        .row = row,
-        .x = x,
-        .width = btn_width,
-        .style = child.style,
-        .disabled = child.disabled,
-        .label = label,
-      });
-
-      x += btn_width + button_h_gap_;
-      ++global_index;
     }
     ++row;
   }
 
   row_count_ = row;
+  row_y_offsets_.clear();
+  row_heights_.clear();
   if (row_count_ > 0) {
-    total_height_ = row_count_ * button_height_ + (row_count_ - 1) * row_gap_ + 2 * padding_;
+    int y_offset = 0;
+    for (int r = 0; r < row_count_; ++r) {
+      bool has_select = false;
+      for (const auto& menu : select_menus_) {
+        if (menu.row == r) { has_select = true; break; }
+      }
+      int row_h = has_select ? select_height_ : button_height_;
+      row_y_offsets_.push_back(y_offset);
+      row_heights_.push_back(row_h);
+      y_offset += row_h + row_gap_;
+    }
+    total_height_ = y_offset - row_gap_ + 2 * padding_;
   } else {
     total_height_ = 2 * padding_;
   }
@@ -88,10 +132,10 @@ void ComponentBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
 
   bounds_ = QRect(base_x, base_y,
                   rect.width() - 2 * padding_,
-                  row_count_ * button_height_ + (row_count_ - 1) * row_gap_);
+                  total_height_ - 2 * padding_);
 
   for (const auto& btn : buttons_) {
-    int btn_y = base_y + btn.row * (button_height_ + row_gap_);
+    int btn_y = base_y + row_y_offsets_[btn.row];
     QRectF btn_rect(base_x + btn.x, btn_y, btn.width, button_height_);
 
     painter->save();
@@ -111,6 +155,40 @@ void ComponentBlockRenderer::paint(QPainter* painter, const QRect& rect) const {
     painter->restore();
   }
 
+  // Select menu rendering
+  const QPalette& pal = QGuiApplication::palette();
+  QColor select_bg = pal.color(QPalette::Base).lighter(150);
+  QColor select_text = pal.color(QPalette::Text);
+  QColor select_placeholder = pal.color(QPalette::PlaceholderText);
+
+  for (const auto& menu : select_menus_) {
+    int menu_y = base_y + row_y_offsets_[menu.row];
+    QRectF menu_rect(base_x + menu.x, menu_y, menu.width, select_height_);
+
+    painter->save();
+    if (menu.disabled) {
+      painter->setOpacity(0.5);
+    }
+
+    QPainterPath menu_path;
+    menu_path.addRoundedRect(menu_rect, select_radius_, select_radius_);
+    painter->fillPath(menu_path, select_bg);
+
+    QString display_text = menu.selected_label.isEmpty()
+        ? menu.placeholder
+        : menu.selected_label;
+    painter->setPen(menu.selected_label.isEmpty() ? select_placeholder : select_text);
+    QRectF text_rect = menu_rect.adjusted(select_padding_h_, 0, -(select_padding_h_ + chevron_width_), 0);
+    painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, display_text);
+
+    painter->setPen(select_text);
+    QRectF chevron_rect(menu_rect.right() - chevron_width_ - 4, menu_rect.top(),
+                        chevron_width_, select_height_);
+    painter->drawText(chevron_rect, Qt::AlignCenter, QStringLiteral("\u25BE"));
+
+    painter->restore();
+  }
+
   painter->restore();
 }
 
@@ -123,7 +201,7 @@ bool ComponentBlockRenderer::hit_test(const QPoint& pos, HitResult& result) cons
   int base_y = bounds_.top();
 
   for (const auto& btn : buttons_) {
-    int btn_y = base_y + btn.row * (button_height_ + row_gap_);
+    int btn_y = base_y + row_y_offsets_[btn.row];
     QRect btn_rect(base_x + btn.x, btn_y, btn.width, button_height_);
 
     if (btn_rect.contains(pos)) {
@@ -132,6 +210,19 @@ bool ComponentBlockRenderer::hit_test(const QPoint& pos, HitResult& result) cons
       }
       result.type = HitResult::Button;
       result.button_index = btn.global_index;
+      return true;
+    }
+  }
+
+  for (const auto& menu : select_menus_) {
+    int menu_y = base_y + row_y_offsets_[menu.row];
+    QRect menu_rect(base_x + menu.x, menu_y, menu.width, select_height_);
+
+    if (menu_rect.contains(pos)) {
+      if (menu.disabled) return false;
+      result.type = HitResult::SelectMenu;
+      result.select_menu_index = menu.global_index;
+      result.custom_id = menu.custom_id;
       return true;
     }
   }

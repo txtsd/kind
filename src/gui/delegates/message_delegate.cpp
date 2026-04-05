@@ -189,6 +189,12 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* /*model*/,
     }
     break;
 
+  case HitResult::SelectMenu:
+    emit select_menu_clicked(channel_id, message_id,
+                             QString::fromStdString(hit_result.custom_id),
+                             static_cast<QMouseEvent*>(event)->globalPosition().toPoint());
+    return true;
+
   case HitResult::ChannelMention:
     if (hit_result.id != 0) {
       emit channel_mention_clicked(hit_result.id);
