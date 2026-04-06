@@ -33,7 +33,11 @@ MessageView::MessageView(QWidget* parent) : QListView(parent) {
   resize_timer_->setInterval(150);
   connect(resize_timer_, &QTimer::timeout, this, [this]() {
     // Re-compute all layouts at new width using cached pixmaps (async)
-    auto msgs = model_->messages();
+    std::vector<kind::Message> msgs;
+    msgs.reserve(model_->messages().size());
+    for (const auto& m : model_->messages()) {
+      msgs.push_back(*m);
+    }
     auto input = prepare_layout_input(msgs);
     compute_layouts_async(std::move(input), [this, msgs = std::move(msgs)](std::vector<RenderedMessage> layouts) mutable {
       model_->set_messages(msgs, std::move(layouts));
@@ -550,7 +554,7 @@ void MessageView::set_image_cache(kind::ImageCache* cache) {
               opt.rect = QRect(0, 0, width, 0);
               int old_height = itemDelegate()->sizeHint(opt, model_->index(*row)).height();
 
-              const auto& msg = model_->messages()[row_idx];
+              const auto& msg = *model_->messages()[row_idx];
               auto images = cached_pixmaps_for(msg);
               model_->on_layout_ready(msg_id, compute_layout(msg, width, view_font, images, edited_indicator_, build_mention_context(), show_timestamps_, timestamp_column_width_));
 
@@ -910,9 +914,9 @@ void MessageView::log_memory_stats() const {
 
   const auto& rendered = model_->rendered();
   for (const auto& rm : rendered) {
-    if (!rm.valid) continue;
+    if (!rm || !rm->valid) continue;
     ++rendered_valid;
-    for (const auto& block : rm.blocks) {
+    for (const auto& block : rm->blocks) {
       ++total_blocks;
       auto bytes = block->pixmap_bytes();
       if (bytes > 0) {

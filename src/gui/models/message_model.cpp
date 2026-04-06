@@ -77,9 +77,27 @@ bool messages_content_equal(const kind::Message& lhs, const kind::Message& rhs) 
       && lhs.components == rhs.components;
 }
 
+std::vector<std::shared_ptr<kind::Message>> wrap_messages(const std::vector<kind::Message>& messages) {
+  std::vector<std::shared_ptr<kind::Message>> result;
+  result.reserve(messages.size());
+  for (const auto& msg : messages) {
+    result.push_back(std::make_shared<kind::Message>(msg));
+  }
+  return result;
+}
+
 } // anonymous namespace
 
 namespace kind::gui {
+
+static std::vector<std::shared_ptr<RenderedMessage>> wrap_layouts(std::vector<RenderedMessage>&& layouts) {
+  std::vector<std::shared_ptr<RenderedMessage>> result;
+  result.reserve(layouts.size());
+  for (auto& layout : layouts) {
+    result.push_back(std::make_shared<RenderedMessage>(std::move(layout)));
+  }
+  return result;
+}
 
 MessageModel::MessageModel(QObject* parent) : QAbstractListModel(parent) {}
 
@@ -95,7 +113,7 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return {};
   }
 
-  const auto& msg = messages_[static_cast<size_t>(index.row())];
+  const auto& msg = *messages_[static_cast<size_t>(index.row())];
 
   switch (role) {
   case Qt::DisplayRole: {
@@ -128,8 +146,8 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
     return QVariant::fromValue(static_cast<const void*>(&msg.reactions));
   case RenderedLayoutRole: {
     auto row_idx = static_cast<size_t>(index.row());
-    if (row_idx < rendered_.size() && rendered_[row_idx].valid) {
-      return QVariant::fromValue(static_cast<const void*>(&rendered_[row_idx]));
+    if (row_idx < rendered_.size() && rendered_[row_idx] && rendered_[row_idx]->valid) {
+      return QVariant::fromValue(static_cast<const void*>(rendered_[row_idx].get()));
     }
     return {};
   }
@@ -141,9 +159,9 @@ QVariant MessageModel::data(const QModelIndex& index, int role) const {
 void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
   kind::log::gui()->debug("set_messages: {} messages", messages.size());
   beginResetModel();
-  messages_ = messages;
+  messages_ = wrap_messages(messages);
   std::sort(messages_.begin(), messages_.end(),
-            [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+            [](const auto& a, const auto& b) { return a->id < b->id; });
   rendered_.clear();
   rendered_.resize(messages_.size());
   endResetModel();
@@ -152,10 +170,10 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages) {
 void MessageModel::set_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts) {
   kind::log::gui()->debug("set_messages: {} messages", messages.size());
   beginResetModel();
-  messages_ = messages;
+  messages_ = wrap_messages(messages);
   std::sort(messages_.begin(), messages_.end(),
-            [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
-  rendered_ = std::move(layouts);
+            [](const auto& a, const auto& b) { return a->id < b->id; });
+  rendered_ = wrap_layouts(std::move(layouts));
   rendered_.resize(messages_.size());
   endResetModel();
 }
@@ -163,7 +181,7 @@ void MessageModel::set_messages(const std::vector<kind::Message>& messages, std:
 bool MessageModel::has_content_changes(const std::vector<kind::Message>& sorted_messages) const {
   if (sorted_messages.size() != messages_.size()) return true;
   for (size_t i = 0; i < sorted_messages.size(); ++i) {
-    if (!messages_content_equal(sorted_messages[i], messages_[i])) {
+    if (!messages_content_equal(sorted_messages[i], *messages_[i])) {
       return true;
     }
   }
@@ -175,19 +193,19 @@ void MessageModel::append_message(const kind::Message& msg) {
   kind::log::gui()->debug("append_message: id={}", msg.id);
   // Guard against duplicates
   for (const auto& existing : messages_) {
-    if (existing.id == msg.id) {
+    if (existing->id == msg.id) {
       return;
     }
   }
 
   // Insert at the correct position by Snowflake ID (chronological order)
-  auto it = std::lower_bound(messages_.begin(), messages_.end(), msg,
-                             [](const kind::Message& a, const kind::Message& b) { return a.id < b.id; });
+  auto it = std::lower_bound(messages_.begin(), messages_.end(), msg.id,
+                             [](const auto& a, kind::Snowflake id) { return a->id < id; });
   int row = static_cast<int>(std::distance(messages_.begin(), it));
 
   beginInsertRows(QModelIndex(), row, row);
-  messages_.insert(it, msg);
-  rendered_.insert(rendered_.begin() + row, RenderedMessage{});
+  messages_.insert(it, std::make_shared<kind::Message>(msg));
+  rendered_.insert(rendered_.begin() + row, std::make_shared<RenderedMessage>());
   endInsertRows();
 
   // Trim from the front if over capacity
@@ -203,10 +221,10 @@ void MessageModel::append_message(const kind::Message& msg) {
 void MessageModel::update_message(const kind::Message& msg) {
   kind::log::gui()->debug("update_message: id={}", msg.id);
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
-    if (messages_[static_cast<size_t>(i)].id == msg.id) {
-      messages_[static_cast<size_t>(i)] = msg;
-      if (static_cast<size_t>(i) < rendered_.size()) {
-        rendered_[static_cast<size_t>(i)].valid = false;
+    if (messages_[static_cast<size_t>(i)]->id == msg.id) {
+      *messages_[static_cast<size_t>(i)] = msg;
+      if (static_cast<size_t>(i) < rendered_.size() && rendered_[static_cast<size_t>(i)]) {
+        rendered_[static_cast<size_t>(i)]->valid = false;
       }
       auto idx = index(i);
       emit dataChanged(idx, idx);
@@ -220,10 +238,10 @@ void MessageModel::update_message(const kind::Message& msg) {
 void MessageModel::mark_deleted(kind::Snowflake message_id) {
   kind::log::gui()->debug("mark_deleted: id={}", message_id);
   for (int i = 0; i < static_cast<int>(messages_.size()); ++i) {
-    if (messages_[static_cast<size_t>(i)].id == message_id) {
-      messages_[static_cast<size_t>(i)].deleted = true;
-      if (static_cast<size_t>(i) < rendered_.size()) {
-        rendered_[static_cast<size_t>(i)].valid = false;
+    if (messages_[static_cast<size_t>(i)]->id == message_id) {
+      messages_[static_cast<size_t>(i)]->deleted = true;
+      if (static_cast<size_t>(i) < rendered_.size() && rendered_[static_cast<size_t>(i)]) {
+        rendered_[static_cast<size_t>(i)]->valid = false;
       }
       auto idx = index(i);
       emit dataChanged(idx, idx);
@@ -236,7 +254,7 @@ std::optional<kind::Snowflake> MessageModel::oldest_message_id() const {
   if (messages_.empty()) {
     return std::nullopt;
   }
-  return messages_.front().id;
+  return messages_.front()->id;
 }
 
 void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) {
@@ -245,8 +263,16 @@ void MessageModel::prepend_messages(const std::vector<kind::Message>& messages) 
     return;
   }
   beginInsertRows(QModelIndex(), 0, static_cast<int>(messages.size()) - 1);
-  messages_.insert(messages_.begin(), messages.begin(), messages.end());
-  rendered_.insert(rendered_.begin(), messages.size(), RenderedMessage{});
+  auto wrapped = wrap_messages(messages);
+  messages_.insert(messages_.begin(), std::make_move_iterator(wrapped.begin()), std::make_move_iterator(wrapped.end()));
+  std::vector<std::shared_ptr<RenderedMessage>> empty_rendered;
+  empty_rendered.reserve(messages.size());
+  for (size_t i = 0; i < messages.size(); ++i) {
+    empty_rendered.push_back(std::make_shared<RenderedMessage>());
+  }
+  rendered_.insert(rendered_.begin(),
+                   std::make_move_iterator(empty_rendered.begin()),
+                   std::make_move_iterator(empty_rendered.end()));
   endInsertRows();
 }
 
@@ -256,15 +282,17 @@ void MessageModel::prepend_messages(const std::vector<kind::Message>& messages, 
     return;
   }
   beginInsertRows(QModelIndex(), 0, static_cast<int>(messages.size()) - 1);
-  messages_.insert(messages_.begin(), messages.begin(), messages.end());
-  rendered_.insert(rendered_.begin(), std::make_move_iterator(layouts.begin()), std::make_move_iterator(layouts.end()));
+  auto wrapped_msgs = wrap_messages(messages);
+  messages_.insert(messages_.begin(), std::make_move_iterator(wrapped_msgs.begin()), std::make_move_iterator(wrapped_msgs.end()));
+  auto wrapped_layouts = wrap_layouts(std::move(layouts));
+  rendered_.insert(rendered_.begin(), std::make_move_iterator(wrapped_layouts.begin()), std::make_move_iterator(wrapped_layouts.end()));
   endInsertRows();
 }
 
 std::optional<int> MessageModel::row_for_id(kind::Snowflake id) const {
   auto it = std::lower_bound(messages_.begin(), messages_.end(), id,
-                             [](const kind::Message& msg, kind::Snowflake target) { return msg.id < target; });
-  if (it != messages_.end() && it->id == id) {
+                             [](const auto& msg, kind::Snowflake target) { return msg->id < target; });
+  if (it != messages_.end() && (*it)->id == id) {
     return static_cast<int>(std::distance(messages_.begin(), it));
   }
   return std::nullopt;
@@ -280,7 +308,7 @@ void MessageModel::on_layout_ready(kind::Snowflake message_id, kind::gui::Render
   if (idx >= rendered_.size()) {
     return;
   }
-  rendered_[idx] = std::move(layout);
+  rendered_[idx] = std::make_shared<RenderedMessage>(std::move(layout));
   auto model_idx = index(*row);
   emit dataChanged(model_idx, model_idx);
 }

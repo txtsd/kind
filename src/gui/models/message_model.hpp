@@ -3,6 +3,7 @@
 #include "models/message.hpp"
 #include "models/rendered_message.hpp"
 
+#include <memory>
 #include <optional>
 #include <QAbstractListModel>
 #include <vector>
@@ -40,15 +41,15 @@ public:
   void prepend_messages(const std::vector<kind::Message>& messages, std::vector<RenderedMessage> layouts);
   bool has_content_changes(const std::vector<kind::Message>& sorted_messages) const;
   std::optional<int> row_for_id(kind::Snowflake id) const;
-  const std::vector<kind::Message>& messages() const { return messages_; }
-  const std::vector<RenderedMessage>& rendered() const { return rendered_; }
+  const std::vector<std::shared_ptr<kind::Message>>& messages() const { return messages_; }
+  const std::vector<std::shared_ptr<RenderedMessage>>& rendered() const { return rendered_; }
 
 public slots:
   void on_layout_ready(kind::Snowflake message_id, kind::gui::RenderedMessage layout);
 
 private:
-  std::vector<kind::Message> messages_;
-  std::vector<RenderedMessage> rendered_;
+  std::vector<std::shared_ptr<kind::Message>> messages_;
+  std::vector<std::shared_ptr<RenderedMessage>> rendered_;
   static constexpr int max_messages_ = 500;
 };
 
