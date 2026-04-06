@@ -35,6 +35,15 @@ target_link_libraries(kind-core-proto
   PUBLIC Qt6::ProtobufWellKnownTypes
 )
 
+set_source_files_properties(${CMAKE_SOURCE_DIR}/data/emoji.json
+  PROPERTIES QT_RESOURCE_ALIAS emoji.json
+)
+qt_add_resources(kind-core "emoji_data"
+  PREFIX "/"
+  FILES
+    ${CMAKE_SOURCE_DIR}/data/emoji.json
+)
+
 target_include_directories(kind-core
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
