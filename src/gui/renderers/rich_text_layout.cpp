@@ -14,7 +14,7 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
                                const QFont& font,
                                const std::unordered_map<std::string, QPixmap>& images,
                                int prefix_width)
-    : width_(width) {
+    : font_(font), prefix_width_(prefix_width), width_(width) {
   QFontMetrics base_fm(font);
 
   // Concatenate all block text and track per-span ranges
@@ -194,23 +194,31 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
   // QTextLayout uses QChar::LineSeparator for line breaks, not \n
   full_text.replace('\n', QChar::LineSeparator);
 
-  // Build the QTextLayout
-  layout_ = std::make_shared<QTextLayout>();
-  layout_->setFont(font);
-  layout_->setText(full_text);
-  layout_->setFormats(format_ranges);
+  // Store construction parameters for deferred UI-thread rebuild.
+  // The QTextLayout is created here for height computation, then discarded.
+  // It will be recreated on the UI thread in ensure_layout() before painting,
+  // because QFontEngineFT caches glyph data per-thread and drawing a layout
+  // created on a different thread causes SIGSEGV in recalcAdvances.
+  full_text_ = full_text;
+  format_ranges_ = format_ranges;
+
+  // Build a temporary QTextLayout to compute accurate height and span rects
+  QTextLayout temp_layout;
+  temp_layout.setFont(font);
+  temp_layout.setText(full_text);
+  temp_layout.setFormats(format_ranges);
 
   QTextOption text_option;
   text_option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-  layout_->setTextOption(text_option);
+  temp_layout.setTextOption(text_option);
 
   int usable_width = width_;
 
-  layout_->beginLayout();
+  temp_layout.beginLayout();
   int y_offset = 0;
   bool first_line = true;
   while (true) {
-    QTextLine line = layout_->createLine();
+    QTextLine line = temp_layout.createLine();
     if (!line.isValid()) break;
 
     if (first_line && prefix_width > 0) {
@@ -231,17 +239,82 @@ RichTextLayout::RichTextLayout(const kind::ParsedContent& content, int width,
     }
     y_offset += static_cast<int>(line.height());
   }
-  layout_->endLayout();
+  temp_layout.endLayout();
 
   total_height_ = y_offset;
   if (total_height_ < base_fm.height()) {
     total_height_ = base_fm.height();
   }
 
-  compute_span_rects();
+  // Compute span/emoji rects using the temporary layout
+  for (auto& si : span_rects_) {
+    auto line = temp_layout.lineForTextPosition(si.start);
+    if (!line.isValid()) continue;
+    qreal x1 = line.cursorToX(si.start);
+    qreal x2 = line.cursorToX(si.start + si.length);
+    si.rect = QRectF(x1, line.position().y(), x2 - x1, line.height());
+  }
+  for (auto& ei : emoji_infos_) {
+    auto line = temp_layout.lineForTextPosition(ei.text_position);
+    if (!line.isValid()) continue;
+    qreal x = line.cursorToX(ei.text_position);
+    qreal y = line.position().y();
+    qreal h = line.height();
+    ei.rect = QRectF(x, y, h, h);
+    kind::log::gui()->trace("RichTextLayout: emoji '{}' rect=({}, {}, {}, {})",
+                  ei.emoji_name, x, y, h, h);
+  }
+
+  // temp_layout is destroyed here; layout_ remains null until ensure_layout()
 
   kind::log::gui()->trace("RichTextLayout: built layout with {} spans, {} emoji, {} code blocks, height={}",
                 span_rects_.size(), emoji_infos_.size(), code_blocks_.size(), total_height_);
+}
+
+void RichTextLayout::ensure_layout() const {
+  if (layout_ready_) return;
+
+  layout_ = std::make_shared<QTextLayout>();
+  layout_->setFont(font_);
+  layout_->setText(full_text_);
+  layout_->setFormats(format_ranges_);
+
+  QTextOption text_option;
+  text_option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+  layout_->setTextOption(text_option);
+
+  QFontMetrics base_fm(font_);
+  int usable_width = width_;
+
+  layout_->beginLayout();
+  int y_offset = 0;
+  bool first_line = true;
+  while (true) {
+    QTextLine line = layout_->createLine();
+    if (!line.isValid()) break;
+
+    if (first_line && prefix_width_ > 0) {
+      int first_line_width = usable_width - prefix_width_;
+      if (first_line_width > 0) {
+        line.setLineWidth(first_line_width);
+        line.setPosition(QPointF(prefix_width_, y_offset));
+      } else {
+        line.setLineWidth(usable_width);
+        y_offset += base_fm.height();
+        line.setPosition(QPointF(0, y_offset));
+      }
+      first_line = false;
+    } else {
+      line.setLineWidth(usable_width);
+      line.setPosition(QPointF(0, y_offset));
+      first_line = false;
+    }
+    y_offset += static_cast<int>(line.height());
+  }
+  layout_->endLayout();
+
+  layout_ready_ = true;
+  kind::log::gui()->trace("RichTextLayout::ensure_layout: rebuilt QTextLayout on UI thread");
 }
 
 int RichTextLayout::height() const {
@@ -249,6 +322,7 @@ int RichTextLayout::height() const {
 }
 
 void RichTextLayout::paint(QPainter* painter, const QPoint& origin) const {
+  ensure_layout();
   painter->save();
 
   QFont base_font = layout_->font();

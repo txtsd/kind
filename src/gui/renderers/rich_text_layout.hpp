@@ -45,7 +45,18 @@ private:
     QRectF rect;
   };
 
-  std::shared_ptr<QTextLayout> layout_;
+  // Rebuilds the QTextLayout on the calling thread (must be UI thread).
+  // Called lazily on first paint to avoid cross-thread font engine corruption.
+  void ensure_layout() const;
+
+  // Stored construction parameters for deferred UI-thread rebuild
+  QString full_text_;
+  QList<QTextLayout::FormatRange> format_ranges_;
+  QFont font_;
+  int prefix_width_{0};
+
+  mutable std::shared_ptr<QTextLayout> layout_;
+  mutable bool layout_ready_{false};
   std::vector<SpanInfo> span_rects_;
   std::vector<CodeBlockInfo> code_blocks_;
   std::vector<EmojiInfo> emoji_infos_;
