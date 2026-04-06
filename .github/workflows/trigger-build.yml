@@ -1,0 +1,18 @@
+name: Trigger Build
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger kind-build
+        env:
+          GH_TOKEN: ${{ secrets.KIND_PAT }}
+        run: |
+          gh api repos/txtsd/kind-build/dispatches \
+            -f event_type=tag-push \
+            -f "client_payload[ref]=${{ github.ref_name }}"
