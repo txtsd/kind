@@ -98,6 +98,10 @@ kind_add_test_executable(kind-test-mute-state
   core/mute_state_test.cpp
 )
 
+kind_add_test_executable(kind-test-emoji-map
+  core/emoji_map_test.cpp
+)
+
 # --- GUI tests ---
 
 kind_add_test_executable(kind-test-message-model

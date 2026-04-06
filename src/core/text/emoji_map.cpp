@@ -67,10 +67,12 @@ void replace_emoji_shortcodes(std::string& text) {
         if (name.find(' ') == std::string::npos) {
           auto it = emoji_map.find(name);
           if (it != emoji_map.end()) {
+            log::client()->trace("emoji: :{}: -> {}", name, it->second);
             result += it->second;
             i = end + 1;
             continue;
           }
+          log::client()->trace("emoji: :{}: not found, leaving as-is", name);
         }
       }
     }
@@ -81,6 +83,7 @@ void replace_emoji_shortcodes(std::string& text) {
 }
 
 void reload_emoji_map() {
+  log::client()->debug("emoji: reloading shortcode map");
   {
     std::unique_lock lock(emoji_mutex);
     loaded = false;
