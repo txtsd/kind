@@ -37,17 +37,13 @@ If you find a bug or have a suggestion, issues are welcome.
 
 ## On AI
 
-This project is built with AI assistance. All of it.
+This project is built with AI assistance. All of it. I set the architecture,
+make design decisions, define quality standards, and evaluate the result. The AI
+writes code to a standard I enforce through testing, MVC compliance, logging,
+and refusing to accept anything that blocks the UI or cuts corners.
 
-I do not review individual lines of code. What I do is set the architecture, make design decisions, define quality standards, and evaluate how the result feels to use. The AI writes code to a standard I enforce through extensive testing, strict MVC compliance, aggressive logging, and a general refusal to accept anything that blocks the UI or cuts corners. If something is wrong, I catch it in use and it gets fixed.
-
-I understand why people dismiss AI-generated projects. Most of them are slop. I also understand the broader objection: AI infrastructure is burning electricity and water at a scale that hurts real people, and corporations are strip-mining open source labour to train these models. I publish most of my code under copyleft licenses because software freedom is not negotiable to me. I am not confused about what these companies are doing.
-
-But I also want to build something that makes my daily life better before the window closes. My communities are on Discord, a proprietary platform whose values I do not share, and I am not going to suffer through their Electron client when I can build something native that respects my hardware and my time. That is what kind is. Not the ideal solution, but the practical one.
-
-I think the distinction that matters is whether someone is vibe-coding and shipping whatever comes out, or whether they actually care about what they are building. I care about this one.
-
-You can form your own opinion by reading the source.
+I have [more to say about this](https://kind.ihavea.quest/on-ai/) if you are
+interested.
 
 ## License
 
